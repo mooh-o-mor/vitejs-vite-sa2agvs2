@@ -231,7 +231,7 @@ export default function App() {
     setLoading(false);
   }
 
-  async function save() {
+ async function save() {
     if (!form.counterparty || !form.start || !form.end) return;
     setSyncing(true);
     const data = {
@@ -244,15 +244,16 @@ export default function App() {
       demob: +form.demob||0,
     };
     if (editId) {
-      await supabase.from("contracts").update(data).eq("id", editId);
+      const { error } = await supabase.from("contracts").update(data).eq("id", editId);
+      if (error) alert("Ошибка обновления: " + error.message);
     } else {
-      await supabase.from("contracts").insert({ ...data });
+      const { error } = await supabase.from("contracts").insert({ ...data });
+      if (error) alert("Ошибка добавления: " + error.message);
     }
     setSyncing(false);
     setShowForm(false);
     await loadData();
   }
-
   async function delC(id: number) {
     setSyncing(true);
     await supabase.from("contracts").delete().eq("id", id);
