@@ -247,7 +247,9 @@ export default function App() {
       const { error } = await supabase.from("contracts").update(data).eq("id", editId);
       if (error) alert("Ошибка обновления: " + error.message);
     } else {
-      const { error } = await supabase.from("contracts").insert({ ...data });
+      const { data: result, error } = await supabase.from("contracts").insert({ ...data }).select();
+console.log("result:", result, "error:", error);
+alert(JSON.stringify({ result, error }));
       if (error) alert("Ошибка добавления: " + error.message);
     }
     setSyncing(false);
