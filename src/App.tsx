@@ -14,29 +14,6 @@ const COLORS = [
 
 const MONTHS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 
-const initialVessels = [
-  {id:1,name:"МФАСС Балтика",branch:""},{id:2,name:"МФАСС Берингов Пролив",branch:""},
-  {id:3,name:"МФАСС Мурман",branch:""},{id:4,name:"МФАСС Спасатель Карев",branch:""},
-  {id:5,name:"МФАСС Спасатель Кавдейкин",branch:""},{id:6,name:"МФАСС Спасатель Заборщиков",branch:""},
-  {id:7,name:"МФАСС Спасатель Демидов",branch:""},{id:8,name:"МФАСС Спасатель Ильин",branch:""},
-  {id:9,name:"ТБС Умка",branch:""},{id:10,name:"ТБС Нарвал",branch:""},
-  {id:11,name:"ТБС Сивуч",branch:""},{id:12,name:"ТБС Финвал",branch:""},
-  {id:13,name:"ТБС Сейвал",branch:""},{id:14,name:"ССН Балтийский Исследователь",branch:""},
-  {id:15,name:"МФАСС Бахтемир",branch:""},{id:16,name:"МФАСС Бейсуг",branch:""},
-  {id:17,name:"МФАСС Калас",branch:""},{id:18,name:"МФАСС Пильтун",branch:""},
-  {id:19,name:"ССН Артемис Оффшор",branch:""},{id:20,name:"ТБС Нефтегаз-55",branch:""},
-  {id:21,name:"ТБС Отто Шмидт",branch:""},{id:22,name:"ТБС Капитан Мартышкин",branch:""},
-  {id:23,name:"ТБС Ясный",branch:""},{id:24,name:"МБС Капитан Беклемишев",branch:""},
-  {id:25,name:"МБС Эпрон",branch:""},{id:26,name:"МБС Атлас",branch:""},
-  {id:27,name:"МБС Рубин",branch:""},{id:28,name:"МБС Лазурит",branch:""},
-  {id:29,name:"ТБС Светломор-3",branch:""},{id:30,name:"МВС Ст. Град Ярославль",branch:""},
-  {id:31,name:"МВС Углич",branch:""},{id:32,name:"МВС Ростов Великий",branch:""},
-  {id:33,name:"МВС Рыбинск",branch:""},{id:34,name:"МБ Амбер",branch:""},
-  {id:35,name:"МБ Руби",branch:""},{id:36,name:"МБ Бэй",branch:""},
-  {id:37,name:"ССН Игорь Ильин",branch:""},{id:38,name:"МБ Пенай",branch:""},
-  {id:39,name:"НИС Виктор Буйницкий",branch:""},{id:40,name:"НИС Импульс",branch:""},
-];
-
 const YEAR = 2026;
 const yearStart = new Date(YEAR, 0, 1);
 const yearEnd = new Date(YEAR, 11, 31);
@@ -165,8 +142,6 @@ interface FormState {
   rate: string; mob: string; demob: string;
 }
 
-let nextId = 1000;
-
 export default function App() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -182,7 +157,8 @@ export default function App() {
   const [editVesselId, setEditVesselId] = useState<number|null>(null);
   const [editId, setEditId] = useState<number|null>(null);
   const [activeVessel, setActiveVessel] = useState<number|null>(null);
-  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState(typeOrder[0]);
+  const [newShortName, setNewShortName] = useState("");
   const [newBranch, setNewBranch] = useState("");
   const [editingBranch, setEditingBranch] = useState("");
   const [editingName, setEditingName] = useState("");
@@ -190,18 +166,14 @@ export default function App() {
     counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`, rate:"", mob:"", demob:""
   });
 
-  // Загрузка данных из Supabase
   useEffect(() => {
     loadData();
-
-    // Подписка на изменения в реальном времени
     const vesselsSub = supabase.channel("vessels-changes")
       .on("postgres_changes", { event:"*", schema:"public", table:"vessels" }, () => loadData())
       .subscribe();
     const contractsSub = supabase.channel("contracts-changes")
       .on("postgres_changes", { event:"*", schema:"public", table:"contracts" }, () => loadData())
       .subscribe();
-
     return () => {
       supabase.removeChannel(vesselsSub);
       supabase.removeChannel(contractsSub);
@@ -214,15 +186,7 @@ export default function App() {
       supabase.from("vessels").select("*").order("id"),
       supabase.from("contracts").select("*").order("id"),
     ]);
-
-    if (vData && vData.length === 0) {
-      // Первый запуск — заполняем начальными данными
-      await supabase.from("vessels").insert(initialVessels);
-      setVessels(initialVessels);
-    } else {
-      setVessels((vData || []).map((v: any) => ({ id:v.id, name:v.name, branch:v.branch||"" })));
-    }
-
+    setVessels((vData || []).map((v: any) => ({ id:v.id, name:v.name, branch:v.branch||"" })));
     setContracts((cData || []).map((c: any) => ({
       id: c.id, vesselId: c.vessel_id, counterparty: c.counterparty,
       start: c.start_date, end: c.end_date,
@@ -231,7 +195,7 @@ export default function App() {
     setLoading(false);
   }
 
- async function save() {
+  async function save() {
     if (!form.counterparty || !form.start || !form.end) return;
     setSyncing(true);
     const data = {
@@ -245,17 +209,16 @@ export default function App() {
     };
     if (editId) {
       const { error } = await supabase.from("contracts").update(data).eq("id", editId);
-      if (error) alert("Ошибка обновления: " + error.message);
+      if (error) alert("Ошибка: " + error.message);
     } else {
-      const { data: result, error } = await supabase.from("contracts").insert({ ...data }).select();
-console.log("result:", result, "error:", error);
-alert(JSON.stringify({ result, error }));
-      if (error) alert("Ошибка добавления: " + error.message);
+      const { error } = await supabase.from("contracts").insert(data);
+      if (error) alert("Ошибка: " + error.message);
     }
     setSyncing(false);
     setShowForm(false);
     await loadData();
   }
+
   async function delC(id: number) {
     setSyncing(true);
     await supabase.from("contracts").delete().eq("id", id);
@@ -265,11 +228,13 @@ alert(JSON.stringify({ result, error }));
   }
 
   async function addV() {
-    if (!newName.trim()) return;
+    if (!newShortName.trim()) return;
     setSyncing(true);
+    const fullName = `${newType} ${newShortName.trim()}`;
     const maxId = vessels.reduce((m, v) => Math.max(m, v.id), 0);
-    await supabase.from("vessels").insert({ id: maxId+1, name: newName.trim(), branch: newBranch.trim() });
-    setNewName(""); setNewBranch("");
+    const { error } = await supabase.from("vessels").insert({ id: maxId+1, name: fullName, branch: newBranch.trim() });
+    if (error) alert("Ошибка: " + error.message);
+    setNewShortName(""); setNewBranch("");
     setSyncing(false);
     await loadData();
   }
@@ -347,7 +312,7 @@ alert(JSON.stringify({ result, error }));
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
-      <div style={{ background:T.header, borderBottom:`1px solid ${T.border}`, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
+      <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
         <span style={{ fontSize:18, fontWeight:700, color:"#ffffff" }}>⚓ Флот МСС — {YEAR}</span>
         <span style={{ fontSize:12, color:"#bfdbfe" }}>{vessels.length} судов · {contracts.length} контрактов</span>
         {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
@@ -519,13 +484,31 @@ alert(JSON.stringify({ result, error }));
 
         {activeTab==="vessels" && (
           <div>
-            <div style={{ display:"flex", gap:8, marginBottom:14 }}>
-              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Название судна..."
-                style={{ flex:2, padding:"8px 12px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13 }} />
-              <input value={newBranch} onChange={e => setNewBranch(e.target.value)} onKeyDown={e => e.key==="Enter" && addV()} placeholder="Филиал..."
-                style={{ flex:1, padding:"8px 12px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13 }} />
-              <button onClick={addV} style={{ padding:"8px 16px", borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer" }}>+ Добавить</button>
+            <div style={{ background:T.bg2, borderRadius:8, padding:16, marginBottom:16, border:`1px solid ${T.border}` }}>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:12 }}>Добавить судно</div>
+              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Тип</div>
+                  <select value={newType} onChange={e => setNewType(e.target.value)}
+                    style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13 }}>
+                    {typeOrder.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex:2 }}>
+                  <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Название</div>
+                  <input value={newShortName} onChange={e => setNewShortName(e.target.value)} placeholder="Например: Балтика"
+                    style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13, boxSizing:"border-box" }} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Филиал</div>
+                  <input value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="БФ, СевФ..."
+                    style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13, boxSizing:"border-box" }} />
+                </div>
+              </div>
+              {newShortName && <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>Будет добавлено: <b style={{ color:T.text }}>{newType} {newShortName}</b></div>}
+              <button onClick={addV} style={{ padding:"8px 20px", borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer" }}>+ Добавить судно</button>
             </div>
+
             {typeOrder.map(type => {
               const grp = vessels.filter(v => getType(v.name)===type);
               if (!grp.length) return null;
@@ -589,7 +572,7 @@ alert(JSON.stringify({ result, error }));
             </div>
             <div style={{ marginBottom:16 }}>
               <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Филиал</div>
-              <input value={editingBranch} onChange={e => setEditingBranch(e.target.value)} placeholder="Например: Северо-Западный"
+              <input value={editingBranch} onChange={e => setEditingBranch(e.target.value)} placeholder="Например: БФ"
                 style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13, boxSizing:"border-box" }} />
             </div>
             <div style={{ display:"flex", gap:8 }}>
