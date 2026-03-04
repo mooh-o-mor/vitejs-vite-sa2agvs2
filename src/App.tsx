@@ -468,7 +468,7 @@ export default function App() {
                     {vc.map(c => {
                       const left = (dayOffset(c.start)/totalDays)*100;
                       const width = (contractDaysGantt(c.start,c.end)/totalDays)*100;
-                      const color = isAdmin ? (colorMap[c.counterparty]||COLORS[0]) : T.accent;
+                      const color = colorMap[c.counterparty]||COLORS[0];
                       return (
                         <div key={c.id}
                           title={isAdmin ? `${c.counterparty}\n${fdate(c.start)} → ${fdate(c.end)}\n${fmoney(c.rate)}/сут` : `${fdate(c.start)} → ${fdate(c.end)}`}
