@@ -6,6 +6,8 @@ const supabase = createClient(
   "sb_publishable_P2rqYUz4DyEuwEiFGs3nBQ_s1DK3JXh"
 );
 
+const ADMIN_PASSWORD = "mss2026";
+
 const COLORS = [
   "#1D4ED8","#059669","#D97706","#DC2626","#7C3AED",
   "#DB2777","#0891B2","#65A30D","#EA580C","#4F46E5",
@@ -62,7 +64,7 @@ function unformat(val: string): string {
   return val.replace(/\D/g, "");
 }
 
-async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contract[], filterCp: string) {
+async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contract[], filterCp: string, isAdmin: boolean) {
   const pptxgen = (await import("pptxgenjs")).default;
   const prs = new pptxgen();
   prs.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
@@ -74,12 +76,16 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
   const LEFT=2.2, TOP=1.0, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
   const cpList = [...new Set(filteredContracts.map(c => c.counterparty))];
   const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, COLORS[i%COLORS.length].replace("#","")]));
-  let legendX = LEFT;
-  cpList.forEach(cp => {
-    slide.addShape(prs.ShapeType.rect, { x:legendX, y:0.48, w:0.12, h:0.12, fill:{color:colorMap[cp]}, line:{color:colorMap[cp]} });
-    slide.addText(cp, { x:legendX+0.15, y:0.46, w:1.8, h:0.16, fontSize:7, color:"0f172a", fontFace:"Arial" });
-    legendX += 1.8;
-  });
+
+  if (isAdmin) {
+    let legendX = LEFT;
+    cpList.forEach(cp => {
+      slide.addShape(prs.ShapeType.rect, { x:legendX, y:0.55, w:0.12, h:0.12, fill:{color:colorMap[cp]}, line:{color:colorMap[cp]} });
+      slide.addText(cp, { x:legendX+0.15, y:0.53, w:1.8, h:0.16, fontSize:7, color:"0f172a", fontFace:"Arial" });
+      legendX += 2.0;
+    });
+  }
+
   let mx = LEFT;
   MONTHS.forEach((m,i) => {
     const daysInMonth = new Date(YEAR,i+1,0).getDate();
@@ -88,6 +94,7 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
     slide.addShape(prs.ShapeType.line, { x:mx, y:TOP-0.18, w:0, h:vesselsToExport.length*(ROW_H+ROW_GAP)+0.2, line:{color:"cbd5e1",width:0.5} });
     mx += w;
   });
+
   vesselsToExport.forEach((v,idx) => {
     const y = TOP + idx*(ROW_H+ROW_GAP);
     const vc = filteredContracts.filter(c => c.vesselId === v.id);
@@ -104,11 +111,15 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
       const bw = Math.max((duration/TOTAL)*CHART_W, 0.05);
       const color = colorMap[c.counterparty]||"1D4ED8";
       slide.addShape(prs.ShapeType.rect, { x:bx, y:y+0.025, w:bw, h:ROW_H-0.05, fill:{color}, line:{color} });
-      if (bw>0.4) slide.addText(c.counterparty, { x:bx+0.03, y:y+0.025, w:bw-0.04, h:ROW_H-0.05, fontSize:5.5, color:"ffffff", fontFace:"Arial", valign:"middle", bold:true });
+      if (isAdmin && bw>0.4) slide.addText(c.counterparty, { x:bx+0.03, y:y+0.025, w:bw-0.04, h:ROW_H-0.05, fontSize:5.5, color:"ffffff", fontFace:"Arial", valign:"middle", bold:true });
     });
   });
-  const totalRev = filteredContracts.reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
-  slide.addText(`Выручка: ${fmoney(totalRev)}`, { x:0.2, y:11.3, w:16, h:0.3, fontSize:10, bold:true, color:"059669", fontFace:"Arial" });
+
+  if (isAdmin) {
+    const totalRev = filteredContracts.reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
+    slide.addText(`Выручка: ${fmoney(totalRev)}`, { x:0.2, y:11.3, w:16, h:0.3, fontSize:10, bold:true, color:"059669", fontFace:"Arial" });
+  }
+
   await prs.writeFile({ fileName:`флот_МСС_${YEAR}.pptx` });
 }
 
@@ -147,6 +158,10 @@ export default function App() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
   const [activeTab, setActiveTab] = useState("gantt");
   const [filterType, setFilterType] = useState("Все");
   const [filterBranch, setFilterBranch] = useState("Все");
@@ -193,6 +208,17 @@ export default function App() {
       rate: c.rate, mob: c.mob, demob: c.demob
     })));
     setLoading(false);
+  }
+
+  function tryLogin() {
+    if (passwordInput === ADMIN_PASSWORD) {
+      setIsAdmin(true);
+      setShowLoginForm(false);
+      setPasswordInput("");
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+    }
   }
 
   async function save() {
@@ -256,11 +282,13 @@ export default function App() {
   }
 
   function openAdd(vid: number) {
+    if (!isAdmin) return;
     setEditId(null);
     setForm({ counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`, rate:"", mob:"", demob:"" });
     setActiveVessel(vid); setShowForm(true);
   }
   function openEdit(c: Contract) {
+    if (!isAdmin) return;
     setEditId(c.id);
     setForm({ counterparty:c.counterparty, start:c.start, end:c.end, rate:String(c.rate), mob:String(c.mob), demob:String(c.demob) });
     setActiveVessel(c.vesselId); setShowForm(true);
@@ -312,56 +340,72 @@ export default function App() {
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
+      {/* Шапка */}
       <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
         <span style={{ fontSize:18, fontWeight:700, color:"#ffffff" }}>⚓ Флот МСС — {YEAR}</span>
         <span style={{ fontSize:12, color:"#bfdbfe" }}>{vessels.length} судов · {contracts.length} контрактов</span>
         {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
+
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
-          Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b>
+          {isAdmin && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
         </span>
-        <div style={{ position:"relative" }}>
-          <button onClick={() => setShowExportMenu(v => !v)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600 }}>
-            ⬇ Экспорт PPTX ▾
+
+        {/* Кнопка входа/выхода */}
+        {isAdmin ? (
+          <button onClick={() => setIsAdmin(false)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>
+            🔓 Выйти
           </button>
-          {showExportMenu && (
-            <div style={{ position:"absolute", right:0, top:"110%", background:T.bg2, border:`1px solid ${T.border}`, borderRadius:8, padding:16, zIndex:50, width:300, boxShadow:"0 8px 32px rgba(0,0,0,0.15)" }}>
-              <div style={{ fontSize:12, color:T.text2, marginBottom:10 }}>Выберите что экспортировать:</div>
-              <div style={{ marginBottom:8 }}>
-                <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Тип судна</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                  {allTypes.map(t => <button key={t} onClick={() => setFilterType(t)} style={btnFilter(filterType===t)}>{t}</button>)}
-                </div>
-              </div>
-              {allBranches.length>1 && (
+        ) : (
+          <button onClick={() => setShowLoginForm(true)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>
+            🔒 Войти
+          </button>
+        )}
+
+        {isAdmin && (
+          <div style={{ position:"relative" }}>
+            <button onClick={() => setShowExportMenu(v => !v)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600 }}>
+              ⬇ Экспорт PPTX ▾
+            </button>
+            {showExportMenu && (
+              <div style={{ position:"absolute", right:0, top:"110%", background:T.bg2, border:`1px solid ${T.border}`, borderRadius:8, padding:16, zIndex:50, width:300, boxShadow:"0 8px 32px rgba(0,0,0,0.15)" }}>
+                <div style={{ fontSize:12, color:T.text2, marginBottom:10 }}>Выберите что экспортировать:</div>
                 <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Филиал</div>
+                  <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Тип судна</div>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                    {allBranches.map(b => <button key={b} onClick={() => setFilterBranch(b)} style={btnFilter(filterBranch===b, true)}>{b||"Без филиала"}</button>)}
+                    {allTypes.map(t => <button key={t} onClick={() => setFilterType(t)} style={btnFilter(filterType===t)}>{t}</button>)}
                   </div>
                 </div>
-              )}
-              {allCps.length>1 && (
-                <div style={{ marginBottom:12 }}>
-                  <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Контрагент</div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                    {allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp===cp)}>{cp}</button>)}
+                {allBranches.length>1 && (
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Филиал</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                      {allBranches.map(b => <button key={b} onClick={() => setFilterBranch(b)} style={btnFilter(filterBranch===b, true)}>{b||"Без филиала"}</button>)}
+                    </div>
                   </div>
+                )}
+                {allCps.length>1 && (
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Контрагент</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                      {allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp===cp)}>{cp}</button>)}
+                    </div>
+                  </div>
+                )}
+                <div style={{ fontSize:11, color:T.text2, marginBottom:8 }}>
+                  Будет экспортировано: <b style={{ color:T.text }}>{filtered.length} судов</b>
                 </div>
-              )}
-              <div style={{ fontSize:11, color:T.text2, marginBottom:8 }}>
-                Будет экспортировано: <b style={{ color:T.text }}>{filtered.length} судов</b>
-                {filterCp!=="Все" && <span style={{ color:T.accent }}> · только {filterCp}</span>}
+                <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, isAdmin); setShowExportMenu(false); }} style={{ width:"100%", padding:9, borderRadius:6, border:"none", background:T.accent, color:"#ffffff", fontWeight:700, cursor:"pointer", fontSize:13 }}>
+                  ⬇ Скачать PPTX
+                </button>
               </div>
-              <button onClick={() => { exportToPPTX(filtered, contracts, filterCp); setShowExportMenu(false); }} style={{ width:"100%", padding:9, borderRadius:6, border:"none", background:T.accent, color:"#ffffff", fontWeight:700, cursor:"pointer", fontSize:13 }}>
-                ⬇ Скачать PPTX
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Табы — экономика и суда только для админа */}
       <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 16px" }}>
-        {[["gantt","📊 Ганта"],["economics","💰 Экономика"],["vessels","🚢 Суда"]].map(([k,l]) => (
+        {[["gantt","📊 Ганта"], ...(isAdmin ? [["economics","💰 Экономика"],["vessels","🚢 Суда"]] : [])].map(([k,l]) => (
           <button key={k} onClick={() => setActiveTab(k)} style={{
             padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent",
             color: activeTab===k ? T.accent : T.text2,
@@ -381,7 +425,7 @@ export default function App() {
                 {allBranches.map(b => <button key={b} onClick={() => setFilterBranch(b)} style={btnFilter(filterBranch===b, true)}>{b||"Без филиала"}</button>)}
               </div>
             )}
-            {allCps.length>1 && (
+            {isAdmin && allCps.length>1 && (
               <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
                 <span style={{ fontSize:11, color:T.text3 }}>Контрагент:</span>
                 {allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp===cp)}>{cp}</button>)}
@@ -390,9 +434,10 @@ export default function App() {
           </>
         )}
 
+        {/* ГАНТА */}
         {activeTab==="gantt" && (
           <div style={{ background:T.bg2, borderRadius:8, padding:12, border:`1px solid ${T.border}` }}>
-            {cpList.length>0 && (
+            {isAdmin && cpList.length>0 && (
               <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
                 {cpList.map(cp => (
                   <div key={cp} style={{ display:"flex", alignItems:"center", gap:5, background:T.bg3, padding:"2px 10px", borderRadius:20, fontSize:11, border:`1px solid ${T.border2}` }}>
@@ -415,7 +460,7 @@ export default function App() {
                     {v.name}
                     {v.branch && <span style={{ color:T.amber, marginLeft:4, fontSize:10 }}>{v.branch}</span>}
                   </div>
-                  <div style={{ flex:1, height:28, background:idx%2===0?T.bg3:T.bg2, borderRadius:4, position:"relative", border:`1px solid ${T.border2}`, cursor:"pointer" }} onClick={() => openAdd(v.id)}>
+                  <div style={{ flex:1, height:28, background:idx%2===0?T.bg3:T.bg2, borderRadius:4, position:"relative", border:`1px solid ${T.border2}`, cursor: isAdmin ? "pointer" : "default" }} onClick={() => openAdd(v.id)}>
                     {MONTHS.map((_,i) => {
                       const off = (new Date(YEAR,i,1).getTime()-yearStart.getTime())/86400000;
                       return <div key={i} style={{ position:"absolute", left:`${(off/totalDays)*100}%`, top:0, bottom:0, width:1, background:T.border2, pointerEvents:"none" }}/>;
@@ -423,26 +468,28 @@ export default function App() {
                     {vc.map(c => {
                       const left = (dayOffset(c.start)/totalDays)*100;
                       const width = (contractDaysGantt(c.start,c.end)/totalDays)*100;
-                      const color = colorMap[c.counterparty]||COLORS[0];
+                      const color = isAdmin ? (colorMap[c.counterparty]||COLORS[0]) : T.accent;
                       return (
-                        <div key={c.id} title={`${c.counterparty}\n${fdate(c.start)} → ${fdate(c.end)}\n${fmoney(c.rate)}/сут`}
+                        <div key={c.id}
+                          title={isAdmin ? `${c.counterparty}\n${fdate(c.start)} → ${fdate(c.end)}\n${fmoney(c.rate)}/сут` : `${fdate(c.start)} → ${fdate(c.end)}`}
                           onClick={e => { e.stopPropagation(); openEdit(c); }}
-                          style={{ position:"absolute", left:`${left}%`, width:`${Math.max(width,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:"pointer", display:"flex", alignItems:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", paddingLeft:5, boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}>
-                          <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.counterparty}</span>
+                          style={{ position:"absolute", left:`${left}%`, width:`${Math.max(width,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor: isAdmin ? "pointer" : "default", display:"flex", alignItems:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", paddingLeft:5, boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}>
+                          {isAdmin && <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.counterparty}</span>}
                         </div>
                       );
                     })}
-                    {vc.length===0 && <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", paddingLeft:8, fontSize:10, color:T.text3 }}>+ добавить контракт</div>}
+                    {isAdmin && vc.length===0 && <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", paddingLeft:8, fontSize:10, color:T.text3 }}>+ добавить контракт</div>}
                   </div>
-                  <button onClick={() => openAdd(v.id)} style={{ marginLeft:5, width:22, height:22, borderRadius:4, border:`1px solid ${T.border}`, background:T.bg2, color:T.accent, cursor:"pointer", fontSize:15, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>+</button>
+                  {isAdmin && <button onClick={() => openAdd(v.id)} style={{ marginLeft:5, width:22, height:22, borderRadius:4, border:`1px solid ${T.border}`, background:T.bg2, color:T.accent, cursor:"pointer", fontSize:15, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>+</button>}
                 </div>
               );
             })}
-            <div style={{ fontSize:10, color:T.text3, marginTop:6 }}>Нажмите строку или «+» для добавления · Нажмите блок для редактирования</div>
+            {!isAdmin && <div style={{ marginTop:8, fontSize:11, color:T.text3 }}>🔒 Войдите чтобы увидеть контрагентов и редактировать данные</div>}
           </div>
         )}
 
-        {activeTab==="economics" && (
+        {/* ЭКОНОМИКА — только для админа */}
+        {activeTab==="economics" && isAdmin && (
           <div>
             {filtered.map(v => {
               const ec = econ(v.id);
@@ -482,7 +529,8 @@ export default function App() {
           </div>
         )}
 
-        {activeTab==="vessels" && (
+        {/* СУДА — только для админа */}
+        {activeTab==="vessels" && isAdmin && (
           <div>
             <div style={{ background:T.bg2, borderRadius:8, padding:16, marginBottom:16, border:`1px solid ${T.border}` }}>
               <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:12 }}>Добавить судно</div>
@@ -508,7 +556,6 @@ export default function App() {
               {newShortName && <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>Будет добавлено: <b style={{ color:T.text }}>{newType} {newShortName}</b></div>}
               <button onClick={addV} style={{ padding:"8px 20px", borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer" }}>+ Добавить судно</button>
             </div>
-
             {typeOrder.map(type => {
               const grp = vessels.filter(v => getType(v.name)===type);
               if (!grp.length) return null;
@@ -532,7 +579,34 @@ export default function App() {
         )}
       </div>
 
-      {showForm && (
+      {/* Модал входа */}
+      {showLoginForm && (
+        <div style={modal}>
+          <div style={{ ...modalBox, width:320 }}>
+            <div style={{ fontSize:16, fontWeight:700, color:T.accent, marginBottom:4 }}>🔒 Вход</div>
+            <div style={{ fontSize:12, color:T.text2, marginBottom:16 }}>Введите пароль для доступа к финансовым данным</div>
+            <div style={{ marginBottom:12 }}>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={e => { setPasswordInput(e.target.value); setPasswordError(false); }}
+                onKeyDown={e => e.key==="Enter" && tryLogin()}
+                placeholder="Пароль"
+                autoFocus
+                style={{ width:"100%", padding:"10px 12px", borderRadius:6, border:`1px solid ${passwordError ? T.red : T.border}`, background:T.bg2, color:T.text, fontSize:14, boxSizing:"border-box" }}
+              />
+              {passwordError && <div style={{ fontSize:11, color:T.red, marginTop:4 }}>Неверный пароль</div>}
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={tryLogin} style={{ flex:1, padding:10, borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>Войти</button>
+              <button onClick={() => { setShowLoginForm(false); setPasswordInput(""); setPasswordError(false); }} style={{ padding:"10px 14px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text2, cursor:"pointer" }}>✕</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модал контракта */}
+      {showForm && isAdmin && (
         <div style={modal}>
           <div style={{ ...modalBox, width:430 }}>
             <div style={{ fontSize:15, fontWeight:700, color:T.accent, marginBottom:4 }}>{editId?"✏️ Редактировать контракт":"➕ Новый контракт"}</div>
@@ -561,7 +635,8 @@ export default function App() {
         </div>
       )}
 
-      {showVesselForm && (
+      {/* Модал судна */}
+      {showVesselForm && isAdmin && (
         <div style={modal}>
           <div style={{ ...modalBox, width:380 }}>
             <div style={{ fontSize:15, fontWeight:700, color:T.accent, marginBottom:16 }}>✏️ Редактировать судно</div>
