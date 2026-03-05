@@ -1,4 +1,5 @@
-import { Vessel, Contract, YEAR, MONTHS, COLORS, SPECIAL_COLORS, totalDays, yearStart, yearEnd } from "../lib/types";
+import type { Vessel, Contract } from "../lib/types";
+import { YEAR, MONTHS, COLORS, SPECIAL_COLORS, totalDays, yearStart, yearEnd } from "../lib/types";
 import { cpKey, contractDays, addDays, fmoney } from "../lib/utils";
 
 export async function exportToPPTX(
