@@ -143,7 +143,11 @@ export default function App() {
     return typeOk && branchOk;
   }).sort((a, b) => {
     if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
-    if (sortBy==="name") return a.name.localeCompare(b.name, "ru");
+    if (sortBy==="name") {
+  const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+  const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+  return nameA.localeCompare(nameB, "ru");
+}
     if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
     return 0;
   });
