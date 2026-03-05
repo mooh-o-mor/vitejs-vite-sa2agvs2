@@ -131,7 +131,7 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
         if (optE >= optS) {
           const obx = LEFT+((optS.getTime()-yearStart.getTime())/86400000/TOTAL)*CHART_W;
           const obw = Math.max(((optE.getTime()-optS.getTime())/86400000+1)/TOTAL*CHART_W, 0.05);
-          slide.addShape(prs.ShapeType.rect, { x:obx, y:y+0.04, w:obw, h:ROW_H-0.08, fill:{color}, line:{color:"ffffff", width:1}, transparency:40 });
+          slide.addShape(prs.ShapeType.rect, { x:obx, y:y+0.04, w:obw, h:ROW_H-0.08, fill:{color, transparency:40}, line:{color:"ffffff", width:1} });
         }
       }
       if (!c.firmDays) {
