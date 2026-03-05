@@ -34,8 +34,8 @@ export const yearEnd = new Date(YEAR, 11, 31);
 export const totalDays = (yearEnd.getTime() - yearStart.getTime()) / 86400000 + 1;
 export const typeOrder = ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС"];
 export const MONTHS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-export const ADMIN_PASSWORD = "mss2026";
-export const VIEWER_PASSWORD = "mss2026view";
+export const ADMIN_PASSWORD = "morspas75";
+export const VIEWER_PASSWORD = "mss75";
 
 export const COLORS = [
   "#1D4ED8","#059669","#D97706","#DC2626","#7C3AED",
