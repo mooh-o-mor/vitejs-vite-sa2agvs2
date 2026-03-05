@@ -1,6 +1,3 @@
-Вот полный код. Замените весь `src/App.tsx` на GitHub:
-
-```tsx
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -108,7 +105,6 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
     vc.forEach(c => {
       const key = cpKey(c.counterparty);
       const color = colorMapPptx[key]||"1D4ED8";
-      const isAsg = key === "АСГ";
       const firmEnd = c.firmDays>0 ? addDays(c.start, c.firmDays) : c.end;
       const firmS = new Date(Math.max(new Date(c.start).getTime(), yearStart.getTime()));
       const firmE = new Date(Math.min(new Date(firmEnd).getTime(), yearEnd.getTime()));
@@ -135,7 +131,7 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
           const bx = LEFT+((s2.getTime()-yearStart.getTime())/86400000/TOTAL)*CHART_W;
           const bw = Math.max(((e2.getTime()-s2.getTime())/86400000+1)/TOTAL*CHART_W, 0.05);
           slide.addShape(prs.ShapeType.rect, { x:bx, y:y+0.025, w:bw, h:ROW_H-0.05, fill:{color}, line:{color} });
-          if (isAdmin && bw>0.3) slide.addText(c.counterparty, { x:bx+0.03, y:y+0.025, w:bw-0.04, h:ROW_H-0.05, fontSize:5.5, color: isAsg?"ffffff":"ffffff", fontFace:"Arial", valign:"middle", bold:true });
+          if (isAdmin && bw>0.3) slide.addText(c.counterparty, { x:bx+0.03, y:y+0.025, w:bw-0.04, h:ROW_H-0.05, fontSize:5.5, color:"ffffff", fontFace:"Arial", valign:"middle", bold:true });
         }
       }
     });
@@ -468,7 +464,7 @@ export default function App() {
               const vc = visibleContracts.filter(c => c.vesselId===v.id);
               return (
                 <div key={v.id} style={{ display:"flex", alignItems:"center", marginBottom:3 }}>
-                  <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${v.name}${v.branch?` (${v.branch})`:""}`}>
+                  <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${v.name}${v.branch ? ` (${v.branch})` : ""}`}>
                     {v.name}
                     {v.branch && <span style={{ color:T.amber, marginLeft:4, fontSize:10 }}>{v.branch}</span>}
                   </div>
@@ -489,19 +485,19 @@ export default function App() {
                       const optLeft = optStart ? (dayOffset(optStart)/totalDays)*100 : 0;
                       const optWidth = hasOption && optStart ? (contractDaysGantt(optStart, c.end)/totalDays)*100 : 0;
                       const bgStyle = isAsg
-                        ? `repeating-linear-gradient(45deg, #dc2626, #dc2626 4px, #ef4444 4px, #ef4444 8px)`
+                        ? "repeating-linear-gradient(45deg, #dc2626, #dc2626 4px, #ef4444 4px, #ef4444 8px)"
                         : color;
                       return (
                         <div key={c.id} onClick={e => { e.stopPropagation(); openEdit(c); }} style={{ position:"absolute", left:0, right:0, top:0, bottom:0, pointerEvents:"none" }}>
                           <div
-                            title={isAdmin?`${c.counterparty}\n${fdate(c.start)} → ${fdate(firmEnd)}`:`${fdate(c.start)} → ${fdate(firmEnd)}`}
+                            title={isAdmin ? `${c.counterparty}\n${fdate(c.start)} -> ${fdate(firmEnd)}` : `${fdate(c.start)} -> ${fdate(firmEnd)}`}
                             onClick={e => { e.stopPropagation(); openEdit(c); }}
                             style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}>
                             {isAdmin && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>{c.counterparty}</span>}
                           </div>
                           {hasOption && optStart && (
                             <div
-                              title={isAdmin?`${c.counterparty} (опцион)\n${fdate(optStart)} → ${fdate(c.end)}`:`${fdate(optStart)} → ${fdate(c.end)}`}
+                              title={isAdmin ? `${c.counterparty} (опцион)\n${fdate(optStart)} -> ${fdate(c.end)}` : `${fdate(optStart)} -> ${fdate(c.end)}`}
                               onClick={e => { e.stopPropagation(); openEdit(c); }}
                               style={{ position:"absolute", left:`${optLeft}%`, width:`${Math.max(optWidth,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:isAdmin?"pointer":"default", opacity:0.4, pointerEvents:"all" }}/>
                           )}
@@ -624,7 +620,7 @@ export default function App() {
       {showForm && isAdmin && (
         <div style={modal}>
           <div style={{ ...modalBox, width:460 }}>
-            <div style={{ fontSize:15, fontWeight:700, color:T.accent, marginBottom:4 }}>{editId?"✏️ Редактировать контракт":"➕ Новый контракт"}</div>
+            <div style={{ fontSize:15, fontWeight:700, color:T.accent, marginBottom:4 }}>{editId ? "✏️ Редактировать контракт" : "➕ Новый контракт"}</div>
             <div style={{ fontSize:11, color:T.text2, marginBottom:14 }}>{activeVesselName}</div>
             <Field label="Контрагент" value={form.counterparty} type="text" placeholder="Например: СМНГШ (буровая Охотское море)" onChange={v => setForm(f => ({...f, counterparty:v}))} />
             <div style={{ display:"flex", gap:10 }}>
@@ -646,7 +642,7 @@ export default function App() {
             </div>
             {(firmN>0 || optN>0) && (
               <div style={{ background:T.bg3, borderRadius:6, padding:"6px 10px", marginBottom:12, fontSize:11, color:T.text2, border:`1px solid ${T.border2}` }}>
-                📅 Твёрдый: <b>{firmN} дн.</b> · Опцион: <b>{optN} дн.</b> · Итого: <b>{firmN+optN} дн.</b> → до <b>{fdate(form.end)}</b>
+                Твёрдый: <b>{firmN} дн.</b> · Опцион: <b>{optN} дн.</b> · Итого: <b>{firmN+optN} дн.</b> до <b>{fdate(form.end)}</b>
               </div>
             )}
             <Field label="Суточная ставка (₽)" value={form.rate} type="number" placeholder="0" onChange={v => setForm(f => ({...f, rate:v}))} />
@@ -656,11 +652,11 @@ export default function App() {
             </div>
             {days_>0 && (
               <div style={{ background:"#f0fdf4", borderRadius:6, padding:"7px 10px", marginBottom:12, fontSize:11, color:T.green, border:"1px solid #bbf7d0" }}>
-                📊 {days_} дней · Выручка: <b>{fmoney(preview)}</b>
+                {days_} дней · Выручка: <b>{fmoney(preview)}</b>
               </div>
             )}
             <div style={{ display:"flex", gap:8 }}>
-              <button onClick={save} style={{ flex:1, padding:9, borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>{editId?"Сохранить":"Добавить"}</button>
+              <button onClick={save} style={{ flex:1, padding:9, borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>{editId ? "Сохранить" : "Добавить"}</button>
               {editId && <button onClick={() => delC(editId)} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.red}`, background:"transparent", color:T.red, cursor:"pointer" }}>Удалить</button>}
               <button onClick={() => setShowForm(false)} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text2, cursor:"pointer" }}>✕</button>
             </div>
@@ -692,4 +688,3 @@ export default function App() {
     </div>
   );
 }
-```
