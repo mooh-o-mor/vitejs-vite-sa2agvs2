@@ -39,7 +39,7 @@ export function GanttChart({ vessels, contracts, isAdmin, onAddContract, onEditC
         const vc = contracts.filter(c => c.vesselId===v.id);
         return (
           <div key={v.id} style={{ display:"flex", alignItems:"center", marginBottom:3 }}>
-            <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${v.name}${v.branch ? ` (${v.branch})` : ""}`}>
+            <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, paddingLeft:4, textAlign:"left", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${v.name}${v.branch ? ` (${v.branch})` : ""}`}>
               {v.name}
               {v.branch && <span style={{ color:T.amber, marginLeft:4, fontSize:10 }}>{v.branch}</span>}
             </div>
@@ -72,7 +72,7 @@ export function GanttChart({ vessels, contracts, isAdmin, onAddContract, onEditC
                     <div
                       title={isAdmin ? `${c.counterparty}\n${fdate(c.start)} -> ${fdate(firmEnd)}` : `${fdate(c.start)} -> ${fdate(firmEnd)}`}
                       onClick={e => { e.stopPropagation(); if (isAdmin) onEditContract(c); }}
-                      style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}
+                      style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}
                     >
                       {isAdmin && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 5px" }}>{c.counterparty}</span>}
                     </div>
