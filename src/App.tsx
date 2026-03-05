@@ -486,7 +486,7 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
                           {/* Твёрдый период */}
                           <div title={isAdmin?`${c.counterparty} (твёрдый)\n${fdate(c.start)} → ${fdate(firmEnd)}`:`${fdate(c.start)} → ${fdate(firmEnd)}`}
                             onClick={e => { e.stopPropagation(); openEdit(c); }}
-                            style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", paddingLeft:5, boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}>
+                            style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background: c.counterparty==="АСГ" ? `repeating-linear-gradient(45deg, #dc2626, #dc2626 4px, #ef4444 4px, #ef4444 8px)` : color, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}>
                             {isAdmin && <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.counterparty}</span>}
                           </div>
                           {/* Опцион — полупрозрачный */}
