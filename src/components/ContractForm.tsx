@@ -6,15 +6,16 @@ interface Props {
   form: FormState;
   editId: number | null;
   vesselName: string;
+  readOnly?: boolean;
   onChange: (form: FormState) => void;
   onSave: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-function Field({ label, value, type, placeholder, half, onChange }: {
+function Field({ label, value, type, placeholder, half, readOnly, onChange }: {
   label: string; value: string; type: string;
-  placeholder?: string; half?: boolean; onChange: (v: string) => void;
+  placeholder?: string; half?: boolean; readOnly?: boolean; onChange: (v: string) => void;
 }) {
   const isNumeric = type === "number";
   return (
@@ -24,14 +25,15 @@ function Field({ label, value, type, placeholder, half, onChange }: {
         type={isNumeric ? "text" : type}
         value={isNumeric ? formatInput(value) : value}
         placeholder={placeholder}
-        onChange={e => onChange(isNumeric ? unformat(e.target.value) : e.target.value)}
-        style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13, boxSizing:"border-box" }}
+        readOnly={readOnly}
+        onChange={e => !readOnly && onChange(isNumeric ? unformat(e.target.value) : e.target.value)}
+        style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background: readOnly ? T.bg3 : T.bg2, color:T.text, fontSize:13, boxSizing:"border-box", cursor: readOnly ? "default" : "text" }}
       />
     </div>
   );
 }
 
-export function ContractForm({ form, editId, vesselName, onChange, onSave, onDelete, onClose }: Props) {
+export function ContractForm({ form, editId, vesselName, readOnly, onChange, onSave, onDelete, onClose }: Props) {
   const modal = { position:"fixed" as const, inset:0, background:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 };
   const modalBox = { background:T.bg2, borderRadius:10, padding:22, border:`1px solid ${T.border}`, boxShadow:"0 8px 40px rgba(0,0,0,0.15)" };
 
@@ -52,27 +54,30 @@ export function ContractForm({ form, editId, vesselName, onChange, onSave, onDel
     <div style={modal}>
       <div style={{ ...modalBox, width:460 }}>
         <div style={{ fontSize:15, fontWeight:700, color:T.accent, marginBottom:4 }}>
-          {editId ? "✏️ Редактировать контракт" : "➕ Новый контракт"}
+          {readOnly ? "📋 Контракт" : editId ? "✏️ Редактировать контракт" : "➕ Новый контракт"}
         </div>
+        {readOnly && (
+          <div style={{ fontSize:11, color:T.amber, marginBottom:8 }}>👁 Режим просмотра — редактирование недоступно</div>
+        )}
         <div style={{ fontSize:11, color:T.text2, marginBottom:14 }}>{vesselName}</div>
 
-        <Field label="Контрагент" value={form.counterparty} type="text" placeholder="Например: СМНГШ (буровая Охотское море)"
+        <Field label="Контрагент" value={form.counterparty} type="text" readOnly={readOnly}
           onChange={v => onChange({...form, counterparty:v})} />
 
         <div style={{ display:"flex", gap:10 }}>
-          <Field label="Начало" value={form.start} type="date" half onChange={v => {
+          <Field label="Начало" value={form.start} type="date" half readOnly={readOnly} onChange={v => {
             const newEnd = recalcEnd(v, form.firmDays, form.optionDays);
             onChange({...form, start:v, end:newEnd});
           }} />
-          <Field label="Конец" value={form.end} type="date" half onChange={v => onChange({...form, end:v})} />
+          <Field label="Конец" value={form.end} type="date" half readOnly={readOnly} onChange={v => onChange({...form, end:v})} />
         </div>
 
         <div style={{ display:"flex", gap:10 }}>
-          <Field label="Твёрдый период (дней)" value={form.firmDays} type="number" placeholder="0" half onChange={v => {
+          <Field label="Твёрдый период (дней)" value={form.firmDays} type="number" placeholder="0" half readOnly={readOnly} onChange={v => {
             const newEnd = recalcEnd(form.start, v, form.optionDays);
             onChange({...form, firmDays:v, end:newEnd});
           }} />
-          <Field label="Опционы (дней)" value={form.optionDays} type="number" placeholder="0" half onChange={v => {
+          <Field label="Опционы (дней)" value={form.optionDays} type="number" placeholder="0" half readOnly={readOnly} onChange={v => {
             const newEnd = recalcEnd(form.start, form.firmDays, v);
             onChange({...form, optionDays:v, end:newEnd});
           }} />
@@ -84,12 +89,12 @@ export function ContractForm({ form, editId, vesselName, onChange, onSave, onDel
           </div>
         )}
 
-        <Field label="Суточная ставка (₽)" value={form.rate} type="number" placeholder="0"
+        <Field label="Суточная ставка (₽)" value={form.rate} type="number" placeholder="0" readOnly={readOnly}
           onChange={v => onChange({...form, rate:v})} />
 
         <div style={{ display:"flex", gap:10 }}>
-          <Field label="Мобилизация (₽)" value={form.mob} type="number" placeholder="0" half onChange={v => onChange({...form, mob:v})} />
-          <Field label="Демобилизация (₽)" value={form.demob} type="number" placeholder="0" half onChange={v => onChange({...form, demob:v})} />
+          <Field label="Мобилизация (₽)" value={form.mob} type="number" placeholder="0" half readOnly={readOnly} onChange={v => onChange({...form, mob:v})} />
+          <Field label="Демобилизация (₽)" value={form.demob} type="number" placeholder="0" half readOnly={readOnly} onChange={v => onChange({...form, demob:v})} />
         </div>
 
         {days_>0 && (
@@ -99,13 +104,19 @@ export function ContractForm({ form, editId, vesselName, onChange, onSave, onDel
         )}
 
         <div style={{ display:"flex", gap:8 }}>
-          <button onClick={onSave} style={{ flex:1, padding:9, borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>
-            {editId ? "Сохранить" : "Добавить"}
-          </button>
-          {editId && (
-            <button onClick={onDelete} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.red}`, background:"transparent", color:T.red, cursor:"pointer" }}>Удалить</button>
+          {!readOnly && (
+            <>
+              <button onClick={onSave} style={{ flex:1, padding:9, borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>
+                {editId ? "Сохранить" : "Добавить"}
+              </button>
+              {editId && (
+                <button onClick={onDelete} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.red}`, background:"transparent", color:T.red, cursor:"pointer" }}>Удалить</button>
+              )}
+            </>
           )}
-          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text2, cursor:"pointer" }}>✕</button>
+          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text2, cursor:"pointer" }}>
+            {readOnly ? "Закрыть" : "✕"}
+          </button>
         </div>
       </div>
     </div>
