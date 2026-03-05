@@ -81,7 +81,8 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
   slide.addText(`Флот МСС — Диаграмма Ганта ${YEAR}`, { x:0.2, y:0.1, w:16, h:0.4, fontSize:18, bold:true, color:"1e40af", fontFace:"Arial" });
  const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
   const cpList = [...new Set(filteredContracts.map(c => c.counterparty))];
-  const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, COLORS[i%COLORS.length].replace("#","")]));
+ const specialColors: Record<string,string> = { "Ремонт": "9ca3af", "АСГ": "dc2626" };
+const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, specialColors[cp] || COLORS[i%COLORS.length].replace("#","")]));
   if (isAdmin) {
     const legendY = TOP + vesselsToExport.length * (ROW_H + ROW_GAP) + 0.15;
     let legendX = LEFT;
@@ -334,7 +335,8 @@ export default function App() {
   }
 
   const cpList = [...new Set(contracts.map(c => c.counterparty))];
-  const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, COLORS[i%COLORS.length]]));
+  const specialColors: Record<string,string> = { "Ремонт": "#9ca3af", "АСГ": "#dc2626" };
+const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, specialColors[cp] || COLORS[i%COLORS.length]]));
   const allTypes = ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name)===t))];
   const allBranches = ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))];
   const allCps = ["Все", ...cpList];
