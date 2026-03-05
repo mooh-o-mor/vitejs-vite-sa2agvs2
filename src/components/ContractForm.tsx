@@ -1,4 +1,5 @@
-import { FormState, T, YEAR } from "../lib/types";
+import type { FormState } from "../lib/types";
+import { T } from "../lib/types";
 import { fmoney, fdate, formatInput, unformat, contractDays, addDays } from "../lib/utils";
 
 interface Props {

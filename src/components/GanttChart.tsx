@@ -1,4 +1,5 @@
-import { Vessel, Contract, MONTHS, COLORS, SPECIAL_COLORS, YEAR, totalDays, T } from "../lib/types";
+import type { Vessel, Contract } from "../lib/types";
+import { MONTHS, COLORS, SPECIAL_COLORS, YEAR, totalDays, T } from "../lib/types";
 import { cpKey, dayOffset, contractDaysGantt, fdate, addDays } from "../lib/utils";
 
 interface Props {

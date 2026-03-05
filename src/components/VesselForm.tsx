@@ -1,4 +1,5 @@
-import { Vessel, T } from "../lib/types";
+import type { Vessel } from "../lib/types";
+import { T } from "../lib/types";
 
 interface Props {
   vessel: Vessel;

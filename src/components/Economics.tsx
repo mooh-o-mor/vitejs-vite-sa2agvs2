@@ -1,4 +1,5 @@
-import { Vessel, Contract, COLORS, SPECIAL_COLORS, T } from "../lib/types";
+import type { Vessel, Contract } from "../lib/types";
+import { COLORS, SPECIAL_COLORS, T } from "../lib/types";
 import { cpKey, contractDays, fmoney, fdate } from "../lib/utils";
 
 interface Props {

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Vessel, Contract, T, typeOrder } from "../lib/types";
+import type { Vessel, Contract } from "../lib/types";
+import { T, typeOrder } from "../lib/types";
 import { getType } from "../lib/utils";
 
 interface Props {
