@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
-import { Vessel, Contract, FormState, T, YEAR, typeOrder, COLORS, SPECIAL_COLORS } from "./lib/types";
+import { Vessel, Contract, FormState, T, YEAR, typeOrder } from "./lib/types";
 import { getType, cpKey, contractDays } from "./lib/utils";
 import { exportToPPTX } from "./lib/exportPPTX";
 import { GanttChart } from "./components/GanttChart";
