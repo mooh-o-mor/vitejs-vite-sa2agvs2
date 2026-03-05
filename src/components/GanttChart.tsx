@@ -45,7 +45,7 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
               {v.branch && <span style={{ color:T.amber, marginLeft:4, fontSize:10 }}>{v.branch}</span>}
             </div>
             <div
-              style={{ flex:1, minHeight:28, background:idx%2===0?T.bg3:T.bg2, borderRadius:4, position:"relative", border:`1px solid ${T.border2}`, cursor:isAdmin?"pointer":"default" }}
+              style={{ flex:1, minHeight:28, background:idx%2===0?T.bg3:T.bg2, borderRadius:4, position:"relative", border:`1px solid ${T.border2}`, cursor:canView?"pointer":"default" }}
               onClick={() => isAdmin && onAddContract(v.id)}
             >
               {MONTHS.map((_,i) => {
@@ -72,16 +72,16 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
                   <div key={c.id} style={{ position:"absolute", left:0, right:0, top:0, bottom:0, pointerEvents:"none" }}>
                     <div
                       title={canView ? `${c.counterparty}\n${fdate(c.start)} -> ${fdate(firmEnd)}` : `${fdate(c.start)} -> ${fdate(firmEnd)}`}
-                      onClick={e => { e.stopPropagation(); if (isAdmin) onEditContract(c); }}
-                      style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}
+                      onClick={e => { e.stopPropagation(); if (canView) onEditContract(c); }}
+                      style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:canView?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}
                     >
                       {canView && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>{c.counterparty}</span>}
                     </div>
                     {hasOption && optStart && (
                       <div
                         title={canView ? `${c.counterparty} (опцион)\n${fdate(optStart)} -> ${fdate(c.end)}` : `${fdate(optStart)} -> ${fdate(c.end)}`}
-                        onClick={e => { e.stopPropagation(); if (isAdmin) onEditContract(c); }}
-                        style={{ position:"absolute", left:`${optLeft}%`, width:`${Math.max(optWidth,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:isAdmin?"pointer":"default", opacity:0.4, pointerEvents:"all" }}
+                        onClick={e => { e.stopPropagation(); if (canView) onEditContract(c); }}
+                        style={{ position:"absolute", left:`${optLeft}%`, width:`${Math.max(optWidth,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:canView?"pointer":"default", opacity:0.4, pointerEvents:"all" }}
                       />
                     )}
                   </div>
