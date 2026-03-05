@@ -79,14 +79,15 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
   slide.background = { color: "ffffff" };
   const filteredContracts = filterCp === "Все" ? contractsToExport : contractsToExport.filter(c => c.counterparty === filterCp);
   slide.addText(`Флот МСС — Диаграмма Ганта ${YEAR}`, { x:0.2, y:0.1, w:16, h:0.4, fontSize:18, bold:true, color:"1e40af", fontFace:"Arial" });
-  const LEFT=2.2, TOP=1.0, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
+ const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
   const cpList = [...new Set(filteredContracts.map(c => c.counterparty))];
   const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, COLORS[i%COLORS.length].replace("#","")]));
   if (isAdmin) {
+    const legendY = TOP + vesselsToExport.length * (ROW_H + ROW_GAP) + 0.15;
     let legendX = LEFT;
     cpList.forEach(cp => {
-      slide.addShape(prs.ShapeType.rect, { x:legendX, y:0.55, w:0.12, h:0.12, fill:{color:colorMap[cp]}, line:{color:colorMap[cp]} });
-      slide.addText(cp, { x:legendX+0.15, y:0.53, w:1.8, h:0.16, fontSize:7, color:"0f172a", fontFace:"Arial" });
+      slide.addShape(prs.ShapeType.rect, { x:legendX, y:legendY, w:0.12, h:0.12, fill:{color:colorMap[cp]}, line:{color:colorMap[cp]} });
+      slide.addText(cp, { x:legendX+0.15, y:legendY-0.02, w:1.8, h:0.16, fontSize:7, color:"0f172a", fontFace:"Arial" });
       legendX += 2.0;
     });
   }
