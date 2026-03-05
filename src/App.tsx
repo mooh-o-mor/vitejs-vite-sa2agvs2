@@ -286,11 +286,12 @@ export default function App() {
         />
       )}
 
-      {showContractForm && isAdmin && (
+      {showContractForm && canView && (
         <ContractForm
           form={contractForm}
           editId={editContractId}
           vesselName={vessels.find(v => v.id===activeVesselId)?.name||""}
+          readOnly={!isAdmin}
           onChange={setContractForm}
           onSave={saveContract}
           onDelete={deleteContract}
