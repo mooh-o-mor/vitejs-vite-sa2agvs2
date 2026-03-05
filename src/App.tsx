@@ -21,7 +21,12 @@ export default function App() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Уровни доступа: "guest" | "viewer" | "admin"
+  const [access, setAccess] = useState<"guest"|"viewer"|"admin">("guest");
+  const isAdmin = access === "admin";
+  const canView = access === "admin" || access === "viewer";
+
   const [showLogin, setShowLogin] = useState(false);
   const [activeTab, setActiveTab] = useState("gantt");
   const [filterType, setFilterType] = useState("Все");
@@ -155,6 +160,13 @@ export default function App() {
     return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
   }
 
+  // Метка уровня доступа в шапке
+  function accessLabel() {
+    if (access === "admin") return "👤 Админ";
+    if (access === "viewer") return "👁 Просмотр";
+    return null;
+  }
+
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
       <div style={{ fontSize:32 }}>⚓</div>
@@ -173,8 +185,11 @@ export default function App() {
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
           {isAdmin && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
         </span>
-        {isAdmin ? (
-          <button onClick={() => setIsAdmin(false)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔓 Выйти</button>
+        {access !== "guest" && (
+          <span style={{ fontSize:11, color:"#bfdbfe", marginRight:8 }}>{accessLabel()}</span>
+        )}
+        {access !== "guest" ? (
+          <button onClick={() => { setAccess("guest"); setActiveTab("gantt"); }} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔓 Выйти</button>
         ) : (
           <button onClick={() => setShowLogin(true)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔒 Войти</button>
         )}
@@ -229,7 +244,7 @@ export default function App() {
                 {allBranches.map(b => <button key={b} onClick={() => setFilterBranch(b)} style={btnFilter(filterBranch===b, true)}>{b||"Без филиала"}</button>)}
               </div>
             )}
-            {isAdmin && allCps.length>1 && (
+            {canView && allCps.length>1 && (
               <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
                 <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Контрагент:</span>
                 {allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp===cp)}>{cp}</button>)}
@@ -244,6 +259,7 @@ export default function App() {
             vessels={filtered}
             contracts={visibleContracts}
             isAdmin={isAdmin}
+            canView={canView}
             onAddContract={openAddContract}
             onEditContract={openEditContract}
           />
@@ -263,7 +279,12 @@ export default function App() {
       </div>
 
       {/* Модалы */}
-      {showLogin && <LoginForm onLogin={() => { setIsAdmin(true); setShowLogin(false); }} onClose={() => setShowLogin(false)} />}
+      {showLogin && (
+        <LoginForm
+          onLogin={level => { setAccess(level); setShowLogin(false); }}
+          onClose={() => setShowLogin(false)}
+        />
+      )}
 
       {showContractForm && isAdmin && (
         <ContractForm
