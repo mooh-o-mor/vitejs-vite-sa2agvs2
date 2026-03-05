@@ -1,3 +1,6 @@
+Вот полный код. Замените весь `src/App.tsx` на GitHub:
+
+```tsx
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -21,6 +24,7 @@ const yearStart = new Date(YEAR, 0, 1);
 const yearEnd = new Date(YEAR, 11, 31);
 const totalDays = (yearEnd.getTime() - yearStart.getTime()) / 86400000 + 1;
 const typeOrder = ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС"];
+const SPECIAL_COLORS: Record<string,string> = { "Ремонт": "#9ca3af", "АСГ": "#dc2626" };
 
 const T = {
   bg:"#f8fafc", bg2:"#ffffff", bg3:"#f1f5f9",
@@ -33,6 +37,9 @@ const T = {
 function getType(name: string) {
   for (const t of typeOrder) if (name.startsWith(t)) return t;
   return "Другие";
+}
+function cpKey(cp: string) {
+  return cp.replace(/\s*\(.*$/g, "").trim();
 }
 function dayOffset(dateStr: string) {
   const d = new Date(dateStr);
@@ -77,21 +84,12 @@ async function exportToPPTX(vesselsToExport: Vessel[], contractsToExport: Contra
   prs.layout = "A3";
   const slide = prs.addSlide();
   slide.background = { color: "ffffff" };
-  const filteredContracts = filterCp === "Все" ? contractsToExport : contractsToExport.filter(c => c.counterparty === filterCp);
+  const filteredContracts = filterCp === "Все" ? contractsToExport : contractsToExport.filter(c => cpKey(c.counterparty) === filterCp);
   slide.addText(`Флот МСС — Диаграмма Ганта ${YEAR}`, { x:0.2, y:0.1, w:16, h:0.4, fontSize:18, bold:true, color:"1e40af", fontFace:"Arial" });
- const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
-  const cpList = [...new Set(filteredContracts.map(c => c.counterparty))];
- const specialColors: Record<string,string> = { "Ремонт": "9ca3af", "АСГ": "dc2626" };
-const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, specialColors[cp] || COLORS[i%COLORS.length].replace("#","")]));
-  if (isAdmin) {
-    const legendY = TOP + vesselsToExport.length * (ROW_H + ROW_GAP) + 0.15;
-    let legendX = LEFT;
-    cpList.forEach(cp => {
-      slide.addShape(prs.ShapeType.rect, { x:legendX, y:legendY, w:0.12, h:0.12, fill:{color:colorMap[cp]}, line:{color:colorMap[cp]} });
-      slide.addText(cp, { x:legendX+0.15, y:legendY-0.02, w:1.8, h:0.16, fontSize:7, color:"0f172a", fontFace:"Arial" });
-      legendX += 2.0;
-    });
-  }
+  const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
+  const cpKeys = [...new Set(filteredContracts.map(c => cpKey(c.counterparty)))];
+  const colorMapPptx: Record<string,string> = Object.fromEntries(cpKeys.map((cp,i) => [cp, (SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]).replace("#","")]));
+
   let mx = LEFT;
   MONTHS.forEach((m,i) => {
     const daysInMonth = new Date(YEAR,i+1,0).getDate();
@@ -100,6 +98,7 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
     slide.addShape(prs.ShapeType.line, { x:mx, y:TOP-0.18, w:0, h:vesselsToExport.length*(ROW_H+ROW_GAP)+0.2, line:{color:"cbd5e1",width:0.5} });
     mx += w;
   });
+
   vesselsToExport.forEach((v,idx) => {
     const y = TOP + idx*(ROW_H+ROW_GAP);
     const vc = filteredContracts.filter(c => c.vesselId === v.id);
@@ -107,27 +106,20 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
     slide.addText(v.name, { x:0.12, y:y+0.01, w:LEFT-0.15, h:ROW_H-0.02, fontSize:6.5, color:"0f172a", fontFace:"Arial", valign:"middle" });
     if (v.branch) slide.addText(v.branch, { x:0.12, y:y+0.01, w:LEFT-0.15, h:ROW_H-0.02, fontSize:5.5, color:"d97706", fontFace:"Arial", valign:"middle", align:"right" });
     vc.forEach(c => {
-      const s = new Date(Math.max(new Date(c.start).getTime(), yearStart.getTime()));
-      const e = new Date(Math.min(new Date(c.end).getTime(), yearEnd.getTime()));
-      if (e < s) return;
-      const startOff = (s.getTime()-yearStart.getTime())/86400000;
-      const duration = (e.getTime()-s.getTime())/86400000+1;
-      const bx = LEFT+(startOff/TOTAL)*CHART_W;
-      const bw = Math.max((duration/TOTAL)*CHART_W, 0.05);
-      const color = colorMap[c.counterparty]||"1D4ED8";
-      // Твёрдый период
-      const firmEnd = c.firmDays > 0 ? addDays(c.start, c.firmDays) : c.end;
+      const key = cpKey(c.counterparty);
+      const color = colorMapPptx[key]||"1D4ED8";
+      const isAsg = key === "АСГ";
+      const firmEnd = c.firmDays>0 ? addDays(c.start, c.firmDays) : c.end;
       const firmS = new Date(Math.max(new Date(c.start).getTime(), yearStart.getTime()));
       const firmE = new Date(Math.min(new Date(firmEnd).getTime(), yearEnd.getTime()));
       if (firmE >= firmS) {
-        const fbx = LEFT+(( firmS.getTime()-yearStart.getTime())/86400000/TOTAL)*CHART_W;
+        const fbx = LEFT+((firmS.getTime()-yearStart.getTime())/86400000/TOTAL)*CHART_W;
         const fbw = Math.max(((firmE.getTime()-firmS.getTime())/86400000+1)/TOTAL*CHART_W, 0.05);
         slide.addShape(prs.ShapeType.rect, { x:fbx, y:y+0.025, w:fbw, h:ROW_H-0.05, fill:{color}, line:{color} });
-        if (isAdmin && fbw>0.4) slide.addText(c.counterparty, { x:fbx+0.03, y:y+0.025, w:fbw-0.04, h:ROW_H-0.05, fontSize:5.5, color:"ffffff", fontFace:"Arial", valign:"middle", bold:true });
+        if (isAdmin && fbw>0.3) slide.addText(c.counterparty, { x:fbx+0.03, y:y+0.025, w:fbw-0.04, h:ROW_H-0.05, fontSize:5.5, color:"ffffff", fontFace:"Arial", valign:"middle", bold:true });
       }
-      // Опционы — более светлый цвет
-      if (c.optionDays > 0) {
-        const optStart = addDays(c.start, c.firmDays + 1);
+      if (c.optionDays>0) {
+        const optStart = addDays(c.start, c.firmDays+1);
         const optS = new Date(Math.max(new Date(optStart).getTime(), yearStart.getTime()));
         const optE = new Date(Math.min(new Date(c.end).getTime(), yearEnd.getTime()));
         if (optE >= optS) {
@@ -137,26 +129,46 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
         }
       }
       if (!c.firmDays) {
-        slide.addShape(prs.ShapeType.rect, { x:bx, y:y+0.025, w:bw, h:ROW_H-0.05, fill:{color}, line:{color} });
-        if (isAdmin && bw>0.4) slide.addText(c.counterparty, { x:bx+0.03, y:y+0.025, w:bw-0.04, h:ROW_H-0.05, fontSize:5.5, color:"ffffff", fontFace:"Arial", valign:"middle", bold:true });
+        const s2 = new Date(Math.max(new Date(c.start).getTime(), yearStart.getTime()));
+        const e2 = new Date(Math.min(new Date(c.end).getTime(), yearEnd.getTime()));
+        if (e2 >= s2) {
+          const bx = LEFT+((s2.getTime()-yearStart.getTime())/86400000/TOTAL)*CHART_W;
+          const bw = Math.max(((e2.getTime()-s2.getTime())/86400000+1)/TOTAL*CHART_W, 0.05);
+          slide.addShape(prs.ShapeType.rect, { x:bx, y:y+0.025, w:bw, h:ROW_H-0.05, fill:{color}, line:{color} });
+          if (isAdmin && bw>0.3) slide.addText(c.counterparty, { x:bx+0.03, y:y+0.025, w:bw-0.04, h:ROW_H-0.05, fontSize:5.5, color: isAsg?"ffffff":"ffffff", fontFace:"Arial", valign:"middle", bold:true });
+        }
       }
     });
   });
+
   if (isAdmin) {
+    const legendY = TOP + vesselsToExport.length*(ROW_H+ROW_GAP)+0.15;
+    let legendX = LEFT;
+    let legendRow = 0;
+    cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).forEach(cp => {
+      if (legendX + 2.0 > LEFT + CHART_W) { legendX = LEFT; legendRow += 1; }
+      const ly = legendY + legendRow*0.22;
+      const col = colorMapPptx[cp]||"1D4ED8";
+      slide.addShape(prs.ShapeType.rect, { x:legendX, y:ly, w:0.12, h:0.12, fill:{color:col}, line:{color:col} });
+      slide.addText(cp, { x:legendX+0.15, y:ly-0.02, w:1.8, h:0.16, fontSize:7, color:"0f172a", fontFace:"Arial" });
+      legendX += 2.0;
+    });
     const totalRev = filteredContracts.reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
-    slide.addText(`Выручка: ${fmoney(totalRev)}`, { x:0.2, y:11.3, w:16, h:0.3, fontSize:10, bold:true, color:"059669", fontFace:"Arial" });
+    const revY = legendY + (legendRow+1)*0.22 + 0.05;
+    slide.addText(`Выручка: ${fmoney(totalRev)}`, { x:0.2, y:revY, w:16, h:0.3, fontSize:10, bold:true, color:"059669", fontFace:"Arial" });
   }
+
   await prs.writeFile({ fileName:`флот_МСС_${YEAR}.pptx` });
 }
 
 interface FieldProps {
   label: string; value: string; type: string;
-  placeholder?: string; half?: boolean; third?: boolean; onChange: (v: string) => void;
+  placeholder?: string; half?: boolean; onChange: (v: string) => void;
 }
-function Field({ label, value, type, placeholder, half, third, onChange }: FieldProps) {
+function Field({ label, value, type, placeholder, half, onChange }: FieldProps) {
   const isNumeric = type === "number";
   return (
-    <div style={{ marginBottom:12, flex: third ? "1 1 30%" : half ? 1 : "unset" as any }}>
+    <div style={{ marginBottom:12, flex: half ? 1 : "unset" as any }}>
       <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>{label}</div>
       <input
         type={isNumeric ? "text" : type}
@@ -240,7 +252,6 @@ export default function App() {
     setLoading(false);
   }
 
-  // Пересчёт даты конца при изменении начала, твёрдого периода или опционов
   function recalcEnd(start: string, firmDays: string, optionDays: string): string {
     const firm = parseInt(firmDays)||0;
     const option = parseInt(optionDays)||0;
@@ -260,15 +271,10 @@ export default function App() {
     if (!form.counterparty || !form.start || !form.end) return;
     setSyncing(true);
     const data = {
-      vessel_id: activeVessel,
-      counterparty: form.counterparty,
-      start_date: form.start,
-      end_date: form.end,
-      rate: +form.rate||0,
-      mob: +form.mob||0,
-      demob: +form.demob||0,
-      firm_days: +form.firmDays||0,
-      option_days: +form.optionDays||0,
+      vessel_id: activeVessel, counterparty: form.counterparty,
+      start_date: form.start, end_date: form.end,
+      rate: +form.rate||0, mob: +form.mob||0, demob: +form.demob||0,
+      firm_days: +form.firmDays||0, option_days: +form.optionDays||0,
     };
     if (editId) {
       const { error } = await supabase.from("contracts").update(data).eq("id", editId);
@@ -277,15 +283,13 @@ export default function App() {
       const { error } = await supabase.from("contracts").insert(data);
       if (error) alert("Ошибка: " + error.message);
     }
-    setSyncing(false); setShowForm(false);
-    await loadData();
+    setSyncing(false); setShowForm(false); await loadData();
   }
 
   async function delC(id: number) {
     setSyncing(true);
     await supabase.from("contracts").delete().eq("id", id);
-    setSyncing(false); setShowForm(false);
-    await loadData();
+    setSyncing(false); setShowForm(false); await loadData();
   }
 
   async function addV() {
@@ -334,18 +338,17 @@ export default function App() {
     });
   }
 
-  const cpList = [...new Set(contracts.map(c => c.counterparty))];
-  const specialColors: Record<string,string> = { "Ремонт": "#9ca3af", "АСГ": "#dc2626" };
-const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => [cp, specialColors[cp] || COLORS[i%COLORS.length]]));
+  const cpKeys = [...new Set(contracts.map(c => cpKey(c.counterparty)))];
+  const colorMap: Record<string,string> = Object.fromEntries(cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]]));
   const allTypes = ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name)===t))];
   const allBranches = ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))];
-  const allCps = ["Все", ...cpList];
+  const allCps = ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))];
   const filtered = vessels.filter(v => {
     const typeOk = filterType==="Все" || getType(v.name)===filterType;
     const branchOk = filterBranch==="Все" || v.branch===filterBranch;
     return typeOk && branchOk;
   });
-  const visibleContracts = filterCp==="Все" ? contracts : contracts.filter(c => c.counterparty===filterCp);
+  const visibleContracts = filterCp==="Все" ? contracts : contracts.filter(c => cpKey(c.counterparty)===filterCp);
   const totalRev = visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
     .reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
   const firmN = parseInt(form.firmDays)||0;
@@ -425,17 +428,19 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
       <div style={{ padding:16 }}>
         {(activeTab==="gantt"||activeTab==="economics") && (
           <>
-            <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap" }}>
+            <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Тип судна:</span>
               {allTypes.map(t => <button key={t} onClick={() => setFilterType(t)} style={btnFilter(filterType===t)}>{t}</button>)}
             </div>
             {allBranches.length>1 && (
-              <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap", alignItems:"center" }}>
+                <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Филиал:</span>
                 {allBranches.map(b => <button key={b} onClick={() => setFilterBranch(b)} style={btnFilter(filterBranch===b, true)}>{b||"Без филиала"}</button>)}
               </div>
             )}
             {isAdmin && allCps.length>1 && (
               <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
-                <span style={{ fontSize:11, color:T.text3 }}>Контрагент:</span>
+                <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Контрагент:</span>
                 {allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp===cp)}>{cp}</button>)}
               </div>
             )}
@@ -444,9 +449,9 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
 
         {activeTab==="gantt" && (
           <div style={{ background:T.bg2, borderRadius:8, padding:12, border:`1px solid ${T.border}` }}>
-            {isAdmin && cpList.length>0 && (
+            {isAdmin && cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).length>0 && (
               <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
-                {cpList.map(cp => (
+                {cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).map(cp => (
                   <div key={cp} style={{ display:"flex", alignItems:"center", gap:5, background:T.bg3, padding:"2px 10px", borderRadius:20, fontSize:11, border:`1px solid ${T.border2}` }}>
                     <div style={{ width:9, height:9, borderRadius:2, background:colorMap[cp] }}/>{cp}
                   </div>
@@ -467,33 +472,38 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
                     {v.name}
                     {v.branch && <span style={{ color:T.amber, marginLeft:4, fontSize:10 }}>{v.branch}</span>}
                   </div>
-                  <div style={{ flex:1, height:28, background:idx%2===0?T.bg3:T.bg2, borderRadius:4, position:"relative", border:`1px solid ${T.border2}`, cursor:isAdmin?"pointer":"default" }} onClick={() => openAdd(v.id)}>
+                  <div style={{ flex:1, minHeight:28, background:idx%2===0?T.bg3:T.bg2, borderRadius:4, position:"relative", border:`1px solid ${T.border2}`, cursor:isAdmin?"pointer":"default" }} onClick={() => openAdd(v.id)}>
                     {MONTHS.map((_,i) => {
                       const off = (new Date(YEAR,i,1).getTime()-yearStart.getTime())/86400000;
                       return <div key={i} style={{ position:"absolute", left:`${(off/totalDays)*100}%`, top:0, bottom:0, width:1, background:T.border2, pointerEvents:"none" }}/>;
                     })}
                     {vc.map(c => {
-                      const color = colorMap[c.counterparty]||COLORS[0];
+                      const key = cpKey(c.counterparty);
+                      const color = colorMap[key]||COLORS[0];
+                      const isAsg = key === "АСГ";
                       const firmEnd = c.firmDays>0 ? addDays(c.start, c.firmDays) : c.end;
                       const firmLeft = (dayOffset(c.start)/totalDays)*100;
                       const firmWidth = (contractDaysGantt(c.start, firmEnd)/totalDays)*100;
-                      const hasOption = c.optionDays > 0;
+                      const hasOption = c.optionDays>0;
                       const optStart = c.firmDays>0 ? addDays(c.start, c.firmDays+1) : null;
                       const optLeft = optStart ? (dayOffset(optStart)/totalDays)*100 : 0;
                       const optWidth = hasOption && optStart ? (contractDaysGantt(optStart, c.end)/totalDays)*100 : 0;
+                      const bgStyle = isAsg
+                        ? `repeating-linear-gradient(45deg, #dc2626, #dc2626 4px, #ef4444 4px, #ef4444 8px)`
+                        : color;
                       return (
                         <div key={c.id} onClick={e => { e.stopPropagation(); openEdit(c); }} style={{ position:"absolute", left:0, right:0, top:0, bottom:0, pointerEvents:"none" }}>
-                          {/* Твёрдый период */}
-                          <div title={isAdmin?`${c.counterparty} (твёрдый)\n${fdate(c.start)} → ${fdate(firmEnd)}`:`${fdate(c.start)} → ${fdate(firmEnd)}`}
+                          <div
+                            title={isAdmin?`${c.counterparty}\n${fdate(c.start)} → ${fdate(firmEnd)}`:`${fdate(c.start)} → ${fdate(firmEnd)}`}
                             onClick={e => { e.stopPropagation(); openEdit(c); }}
-                            style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background: c.counterparty==="АСГ" ? `repeating-linear-gradient(45deg, #dc2626, #dc2626 4px, #ef4444 4px, #ef4444 8px)` : color, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}>
-                            {isAdmin && <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{c.counterparty}</span>}
+                            style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}>
+                            {isAdmin && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>{c.counterparty}</span>}
                           </div>
-                          {/* Опцион — полупрозрачный */}
                           {hasOption && optStart && (
-                            <div title={isAdmin?`${c.counterparty} (опцион)\n${fdate(optStart)} → ${fdate(c.end)}`:`${fdate(optStart)} → ${fdate(c.end)}`}
+                            <div
+                              title={isAdmin?`${c.counterparty} (опцион)\n${fdate(optStart)} → ${fdate(c.end)}`:`${fdate(optStart)} → ${fdate(c.end)}`}
                               onClick={e => { e.stopPropagation(); openEdit(c); }}
-                              style={{ position:"absolute", left:`${optLeft}%`, width:`${Math.max(optWidth,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:isAdmin?"pointer":"default", opacity:0.4, borderTop:`2px dashed ${color}`, borderBottom:`2px dashed ${color}`, pointerEvents:"all" }}/>
+                              style={{ position:"absolute", left:`${optLeft}%`, width:`${Math.max(optWidth,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:isAdmin?"pointer":"default", opacity:0.4, pointerEvents:"all" }}/>
                           )}
                         </div>
                       );
@@ -526,7 +536,7 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
                         </tr></thead>
                         <tbody>{ec.map((c,i) => (
                           <tr key={c.id} style={{ borderBottom:`1px solid ${T.border2}`, background:i%2===0?T.bg2:T.bg3 }}>
-                            <td style={{ padding:"4px 6px" }}><span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:colorMap[c.counterparty]||"#888", marginRight:4 }}/>{c.counterparty}</td>
+                            <td style={{ padding:"4px 6px" }}><span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:colorMap[cpKey(c.counterparty)]||"#888", marginRight:4 }}/>{c.counterparty}</td>
                             <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.start)}</td>
                             <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.end)}</td>
                             <td style={{ padding:"4px 6px" }}>{c.firmDays||"—"}</td>
@@ -616,7 +626,7 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
           <div style={{ ...modalBox, width:460 }}>
             <div style={{ fontSize:15, fontWeight:700, color:T.accent, marginBottom:4 }}>{editId?"✏️ Редактировать контракт":"➕ Новый контракт"}</div>
             <div style={{ fontSize:11, color:T.text2, marginBottom:14 }}>{activeVesselName}</div>
-            <Field label="Контрагент" value={form.counterparty} type="text" placeholder="Название компании" onChange={v => setForm(f => ({...f, counterparty:v}))} />
+            <Field label="Контрагент" value={form.counterparty} type="text" placeholder="Например: СМНГШ (буровая Охотское море)" onChange={v => setForm(f => ({...f, counterparty:v}))} />
             <div style={{ display:"flex", gap:10 }}>
               <Field label="Начало" value={form.start} type="date" half onChange={v => {
                 const newEnd = recalcEnd(v, form.firmDays, form.optionDays);
@@ -682,3 +692,4 @@ const colorMap: Record<string,string> = Object.fromEntries(cpList.map((cp,i) => 
     </div>
   );
 }
+```
