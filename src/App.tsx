@@ -180,7 +180,7 @@ export default function App() {
       {/* Шапка */}
       <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
         <span style={{ fontSize:18, fontWeight:700, color:"#ffffff" }}>⚓ Флот МСС — {YEAR}</span>
-        <span style={{ fontSize:12, color:"#bfdbfe" }}>{vessels.length} судов · {contracts.length} контрактов</span>
+        <span style={{ fontSize:12, color:"#bfdbfe" }}>{contracts.filter(c => !["Ремонт","АСГ"].includes(cpKey(c.counterparty))).length} контрактов</span>
         {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
           {isAdmin && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
@@ -225,7 +225,7 @@ export default function App() {
 
       {/* Табы */}
       <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 16px" }}>
-        {[["gantt","📊 Ганта"], ...(isAdmin ? [["economics","💰 Экономика"],["vessels","🚢 Суда"]] : [])].map(([k,l]) => (
+        {[["gantt","📊 Расстановка"], ...(isAdmin ? [["economics","💰 Экономика"],["vessels","🚢 Суда"]] : [])].map(([k,l]) => (
           <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent" }}>{l}</button>
         ))}
       </div>
