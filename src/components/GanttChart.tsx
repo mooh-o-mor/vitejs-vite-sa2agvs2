@@ -72,9 +72,9 @@ export function GanttChart({ vessels, contracts, isAdmin, onAddContract, onEditC
                     <div
                       title={isAdmin ? `${c.counterparty}\n${fdate(c.start)} -> ${fdate(firmEnd)}` : `${fdate(c.start)} -> ${fdate(firmEnd)}`}
                       onClick={e => { e.stopPropagation(); if (isAdmin) onEditContract(c); }}
-                      style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}
+                      style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}
                     >
-                      {isAdmin && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>{c.counterparty}</span>}
+                      {isAdmin && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 5px" }}>{c.counterparty}</span>}
                     </div>
                     {hasOption && optStart && (
                       <div
