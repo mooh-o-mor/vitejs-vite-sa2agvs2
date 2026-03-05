@@ -6,11 +6,12 @@ interface Props {
   vessels: Vessel[];
   contracts: Contract[];
   isAdmin: boolean;
+  canView: boolean;
   onAddContract: (vesselId: number) => void;
   onEditContract: (contract: Contract) => void;
 }
 
-export function GanttChart({ vessels, contracts, isAdmin, onAddContract, onEditContract }: Props) {
+export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract, onEditContract }: Props) {
   const cpKeys = [...new Set(contracts.map(c => cpKey(c.counterparty)))];
   const colorMap: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
@@ -18,7 +19,7 @@ export function GanttChart({ vessels, contracts, isAdmin, onAddContract, onEditC
 
   return (
     <div style={{ background:T.bg2, borderRadius:8, padding:12, border:`1px solid ${T.border}` }}>
-      {isAdmin && cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).length>0 && (
+      {canView && cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).length>0 && (
         <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
           {cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).map(cp => (
             <div key={cp} style={{ display:"flex", alignItems:"center", gap:5, background:T.bg3, padding:"2px 10px", borderRadius:20, fontSize:11, border:`1px solid ${T.border2}` }}>
@@ -70,15 +71,15 @@ export function GanttChart({ vessels, contracts, isAdmin, onAddContract, onEditC
                 return (
                   <div key={c.id} style={{ position:"absolute", left:0, right:0, top:0, bottom:0, pointerEvents:"none" }}>
                     <div
-                      title={isAdmin ? `${c.counterparty}\n${fdate(c.start)} -> ${fdate(firmEnd)}` : `${fdate(c.start)} -> ${fdate(firmEnd)}`}
+                      title={canView ? `${c.counterparty}\n${fdate(c.start)} -> ${fdate(firmEnd)}` : `${fdate(c.start)} -> ${fdate(firmEnd)}`}
                       onClick={e => { e.stopPropagation(); if (isAdmin) onEditContract(c); }}
                       style={{ position:"absolute", left:`${firmLeft}%`, width:`${Math.max(firmWidth,0.4)}%`, top:3, bottom:3, background:bgStyle, borderRadius:3, cursor:isAdmin?"pointer":"default", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:10, fontWeight:600, color:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,0.2)", pointerEvents:"all" }}
                     >
-                      {isAdmin && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 5px" }}>{c.counterparty}</span>}
+                      {canView && <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>{c.counterparty}</span>}
                     </div>
                     {hasOption && optStart && (
                       <div
-                        title={isAdmin ? `${c.counterparty} (опцион)\n${fdate(optStart)} -> ${fdate(c.end)}` : `${fdate(optStart)} -> ${fdate(c.end)}`}
+                        title={canView ? `${c.counterparty} (опцион)\n${fdate(optStart)} -> ${fdate(c.end)}` : `${fdate(optStart)} -> ${fdate(c.end)}`}
                         onClick={e => { e.stopPropagation(); if (isAdmin) onEditContract(c); }}
                         style={{ position:"absolute", left:`${optLeft}%`, width:`${Math.max(optWidth,0.4)}%`, top:3, bottom:3, background:color, borderRadius:3, cursor:isAdmin?"pointer":"default", opacity:0.4, pointerEvents:"all" }}
                       />
@@ -98,7 +99,7 @@ export function GanttChart({ vessels, contracts, isAdmin, onAddContract, onEditC
         );
       })}
 
-      {!isAdmin && (
+      {!canView && (
         <div style={{ marginTop:8, fontSize:11, color:T.text3 }}>🔒 Войдите чтобы увидеть контрагентов и редактировать данные</div>
       )}
     </div>

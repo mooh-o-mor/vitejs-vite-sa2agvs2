@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { T, ADMIN_PASSWORD } from "../lib/types";
+import { T, ADMIN_PASSWORD, VIEWER_PASSWORD } from "../lib/types";
 
 interface Props {
-  onLogin: () => void;
+  onLogin: (level: "admin" | "viewer") => void;
   onClose: () => void;
 }
 
@@ -15,7 +15,9 @@ export function LoginForm({ onLogin, onClose }: Props) {
 
   function tryLogin() {
     if (password === ADMIN_PASSWORD) {
-      onLogin();
+      onLogin("admin");
+    } else if (password === VIEWER_PASSWORD) {
+      onLogin("viewer");
     } else {
       setError(true);
     }
@@ -25,7 +27,7 @@ export function LoginForm({ onLogin, onClose }: Props) {
     <div style={modal}>
       <div style={{ ...modalBox, width:320 }}>
         <div style={{ fontSize:16, fontWeight:700, color:T.accent, marginBottom:4 }}>🔒 Вход</div>
-        <div style={{ fontSize:12, color:T.text2, marginBottom:16 }}>Введите пароль для доступа к финансовым данным</div>
+        <div style={{ fontSize:12, color:T.text2, marginBottom:16 }}>Введите пароль для доступа к данным</div>
         <input
           type="password"
           value={password}
