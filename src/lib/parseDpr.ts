@@ -141,20 +141,29 @@ export function parseFilial(rows: any[][]): DprVessel[] {
     C.pos = C.stat + 1;
   }
 
-  // Extract report date
+ // Extract report date — prefer Excel serial numbers, skip regulatory headers
   let date: Date | null = null;
+  // Pass 1: Excel serial numbers only (most reliable)
   for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
     for (const v of rows[i] || []) {
-      if (v == null) continue;
       if (typeof v === "number" && v > 45000 && v < 47000) {
         const d = xlSerialToDate(v);
         if (d.getFullYear() >= 2025) { date = d; break; }
       }
-      const s = String(v);
-      const m1 = s.match(/(\d{1,2})[./](\d{1,2})[./](202[5-9])/);
-      if (m1) { date = new Date(+m1[3], +m1[2] - 1, +m1[1]); break; }
-      const m2 = s.match(/(202[5-9])[-./](\d{1,2})[-./](\d{1,2})/);
-      if (m2) { date = new Date(+m2[1], +m2[2] - 1, +m2[3]); break; }
+    }
+  }
+  // Pass 2: string dates (skip "Приложение"/"Распоряжение" lines)
+  if (!date) {
+    for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
+      for (const v of rows[i] || []) {
+        if (v == null) continue;
+        const s = String(v);
+        if (/приложени|распоряжени/i.test(s)) continue;
+        const m1 = s.match(/(\d{1,2})[./](\d{1,2})[./](202[5-9])/);
+        if (m1) { date = new Date(+m1[3], +m1[2] - 1, +m1[1]); break; }
+        const m2 = s.match(/(202[5-9])[-./](\d{1,2})[-./](\d{1,2})/);
+        if (m2) { date = new Date(+m2[1], +m2[2] - 1, +m2[3]); break; }
+      }
     }
   }
 
