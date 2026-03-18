@@ -149,8 +149,8 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      marker.bindTooltip(v.vessel_name, {
-        permanent: true, direction: "bottom", offset: [0, 4],
+     marker.bindTooltip(v.vessel_name, {
+        permanent: false, direction: "bottom", offset: [0, 4],
         className: "vessel-label-map",
       });
       marker.on("click", () => {
