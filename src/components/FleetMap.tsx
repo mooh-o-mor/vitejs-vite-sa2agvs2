@@ -252,7 +252,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
   });
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 140px)", gap: 0, borderRadius: 8, overflow: "hidden", border: `1px solid ${T.border}`, position: "relative", zIndex: 0 }}>
+    <div style={{ display: "flex", height: "calc(100vh - 90px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
 
       {/* ── SIDEBAR ── */}
       <div style={{ width: 280, minWidth: 280, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column" }}>
