@@ -239,7 +239,7 @@ export default function App() {
       </div>
 
       {/* ── TAB BAR ── */}
-      <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 16px" }}>
+      <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 8px" }}>
         {tabs.map(([k, l]) => (
           <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent" }}>{l}</button>
         ))}
