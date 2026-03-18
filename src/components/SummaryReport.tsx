@@ -13,6 +13,7 @@ interface DprRow {
   supplies: DprSupply[];
 }
 
+/* ── Helpers ── */
 function getSupply(supplies: DprSupply[], keyword: string): string {
   if (!supplies || !Array.isArray(supplies)) return "";
   const s = supplies.find(
@@ -25,17 +26,62 @@ function shortStatus(stat: string): string {
   const s = stat.toUpperCase();
   if (s.startsWith("АСГ")) return "АСГ";
   if (s.startsWith("АСД")) return "АСД";
-  if (s.startsWith("РЕМ")) return "РЕМ";
+  if (s.includes("РЕМОНТ") || s.startsWith("РЕМ") || s.includes("ОСВИДЕТ") || s.includes("НЕТ В ГРАФИКЕ")) return "РЕМ";
+  if (s.includes("ВОССТАНОВЛЕН")) return "РЕМ";
+  if (s.includes("ОФОРМЛЕН")) return "РЕМ";
   return stat;
 }
 
-const BRANCHES_ORDER = ["АЧФ", "АЗЧФ", "БЛТФ", "БФ", "СХЛФ", "СахФ", "СФ", "СВРФ", "ПРМФ", "ПримФ", "КМЧФ", "АРХФ"];
+function statusCls(stat: string): "asg" | "asd" | "rem" | "oth" {
+  const s = stat.toUpperCase();
+  if (s.startsWith("АСГ")) return "asg";
+  if (s.startsWith("АСД")) return "asd";
+  if (s.includes("РЕМОНТ") || s.startsWith("РЕМ") || s.includes("ОСВИДЕТ") || s.includes("НЕТ В ГРАФИКЕ") || s.includes("ВОССТАНОВЛЕН") || s.includes("ОФОРМЛЕН")) return "rem";
+  return "oth";
+}
+
+/* ── Branch colors (pastel, distinct per branch) ── */
+const BRANCH_COLORS: Record<string, string> = {
+  "АЧФ":  "#FFF3E0",  // warm orange
+  "АЗЧФ": "#FFF3E0",
+  "БЛТФ": "#E3F2FD",  // light blue
+  "БФ":   "#E3F2FD",
+  "КСПФ": "#F3E5F5",  // light purple
+  "СВРФ": "#E8F5E9",  // light green
+  "СевФ": "#E8F5E9",
+  "ПРМФ": "#FFF9C4",  // light yellow
+  "ПримФ":"#FFF9C4",
+  "СХЛФ": "#FCE4EC",  // light pink
+  "СахФ": "#FCE4EC",
+  "КМЧФ": "#E0F7FA",  // light cyan
+  "АРХФ": "#F1F8E9",  // light lime
+};
+
+const STATUS_BG = {
+  asg: "#FFCDD2",  // red tint
+  asd: "#C8E6C9",  // green tint
+  rem: "#F5F5F5",  // grey
+  oth: "#F5F5F5",
+};
+const STATUS_COLOR = {
+  asg: "#C62828",
+  asd: "#1B5E20",
+  rem: "#424242",
+  oth: "#616161",
+};
+
+const BRANCHES_ORDER = ["АЧФ", "АЗЧФ", "БЛТФ", "БФ", "КСПФ", "СВРФ", "СевФ", "ПРМФ", "ПримФ", "СХЛФ", "СахФ", "КМЧФ", "АРХФ"];
 
 function branchOrder(b: string): number {
   const idx = BRANCHES_ORDER.findIndex((x) => b.toUpperCase().includes(x.toUpperCase()));
   return idx >= 0 ? idx : 99;
 }
 
+function branchBg(b: string): string {
+  return BRANCH_COLORS[b] || "#FFFFFF";
+}
+
+/* ── Component ── */
 export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
@@ -86,9 +132,9 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
       return a.vessel_name.localeCompare(b.vessel_name, "ru");
     });
 
-  const cAsg = filtered.filter((v) => v.status.toUpperCase().startsWith("АСГ")).length;
-  const cAsd = filtered.filter((v) => v.status.toUpperCase().startsWith("АСД")).length;
-  const cRem = filtered.filter((v) => v.status.toUpperCase().startsWith("РЕМ") || v.status.toUpperCase().includes("РЕМОНТ")).length;
+  const cAsg = filtered.filter((v) => statusCls(v.status) === "asg").length;
+  const cAsd = filtered.filter((v) => statusCls(v.status) === "asd").length;
+  const cRem = filtered.filter((v) => statusCls(v.status) === "rem").length;
 
   function exportXlsx() {
     const header = ["№", "Название судна", "Филиал", "Статус", "Местоположение", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ", "Масло", "Вода", "Продукты"];
@@ -107,37 +153,55 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const thStyle: React.CSSProperties = {
-    padding: "6px 8px", textAlign: "left", fontSize: 11, fontWeight: 600,
-    color: T.text2, borderBottom: `2px solid ${T.border}`, whiteSpace: "nowrap",
-    position: "sticky", top: 0, background: "#fff", zIndex: 1,
+    padding: "8px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
+    color: "#1a2a3a", borderBottom: "2px solid #90a4ae", borderRight: "1px solid #cfd8dc",
+    whiteSpace: "nowrap", position: "sticky", top: 0, background: "#ECEFF1", zIndex: 1,
   };
-  const tdStyle: React.CSSProperties = {
-    padding: "5px 8px", fontSize: 12, borderBottom: `1px solid ${T.border}`, verticalAlign: "top",
+
+  const tdBase: React.CSSProperties = {
+    padding: "5px 8px", fontSize: 12, borderBottom: "1px solid #cfd8dc",
+    borderRight: "1px solid #e8eaed", verticalAlign: "top",
   };
-  const fbtn = (active: boolean): React.CSSProperties => ({
-    padding: "4px 12px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 11, fontWeight: 600,
-    borderColor: active ? T.accent : T.border, background: active ? T.accent : "transparent", color: active ? "#fff" : T.text2,
+
+  const fbtn = (active: boolean, color?: string): React.CSSProperties => ({
+    padding: "4px 12px", borderRadius: 20, border: "1px solid",
+    cursor: "pointer", fontSize: 11, fontWeight: 600,
+    borderColor: active ? (color || T.accent) : T.border,
+    background: active ? (color || T.accent) : "transparent",
+    color: active ? "#fff" : T.text2,
   });
 
   return (
     <div>
+      {/* Title */}
+      <div style={{ textAlign: "center", fontSize: 18, fontWeight: 700, margin: "4px 0 10px", color: "#1a2a3a" }}>
+        Сводная таблица судов МСС
+      </div>
+
+      {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
         <select value={selDate} onChange={(e) => setSelDate(e.target.value)}
-          style={{ padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12, fontFamily: "monospace" }}>
+          style={{ padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>
           {dates.length === 0 && <option value="">— нет данных —</option>}
-          {dates.map((d) => <option key={d} value={d}>{fmtDateRu(d)}</option>)}
+          {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
         </select>
+
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {branches.map((b) => (
-            <button key={b} onClick={() => setFilterBranch(b)} style={fbtn(filterBranch === b)}>{b}</button>
+            <button key={b} onClick={() => setFilterBranch(b)}
+              style={fbtn(filterBranch === b, BRANCH_COLORS[b] ? "#546E7A" : undefined)}>
+              {b}
+            </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 10, fontSize: 12 }}>
-          <span><b style={{ color: "#e53935" }}>{cAsg}</b> АСГ</span>
-          <span><b style={{ color: "#2e7d32" }}>{cAsd}</b> АСД</span>
-          <span><b style={{ color: "#757575" }}>{cRem}</b> РЕМ</span>
-          <span><b>{filtered.length}</b> всего</span>
+
+        <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
+          <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
+          <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
+          <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
+          <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
         </div>
+
         {isAdmin && (
           <button onClick={exportXlsx}
             style={{ marginLeft: "auto", padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
@@ -146,47 +210,91 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 200px)", border: `1px solid ${T.border}`, borderRadius: 6, background: "#fff" }}>
+      {/* Table */}
+      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 220px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
-              <th style={thStyle}>№</th>
-              <th style={thStyle}>Судно</th>
+              <th style={{ ...thStyle, width: 36 }}>№ п/п</th>
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Название судна</th>
               <th style={thStyle}>Филиал</th>
-              <th style={thStyle}>Статус</th>
-              <th style={thStyle}>Местоположение</th>
-              {isAdmin && <th style={thStyle}>Примечание</th>}
-              {isAdmin && <th style={thStyle}>ДТ</th>}
-              {isAdmin && <th style={thStyle}>Мазут/ТТ</th>}
-              {isAdmin && <th style={thStyle}>Масло</th>}
-              {isAdmin && <th style={thStyle}>Вода</th>}
-              {isAdmin && <th style={thStyle}>Продукты</th>}
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Статус по План-графику</th>
+              {isAdmin && <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Сведения о контракте</th>}
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Местоположение судна</th>
+              {isAdmin && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
+              {isAdmin && <th style={{ ...thStyle, width: 70 }}>Топливо ДТ</th>}
+              {isAdmin && <th style={{ ...thStyle, width: 70 }}>Топливо Мазут</th>}
             </tr>
           </thead>
           <tbody>
             {filtered.map((v, i) => {
-              const st = v.status.toUpperCase();
-              const statColor = st.startsWith("АСГ") ? "#e53935" : st.startsWith("АСД") ? "#2e7d32" : "#757575";
+              const sc = statusCls(v.status);
+              const rowBg = branchBg(v.branch);
+
+              // Extract contract info from status for АСД
+              let statusDisplay = v.status;
+              let contractInfo = "";
+              if (isAdmin && sc === "asd") {
+                // Try to split status from contract details
+                const parts = v.status.split(/[,/]/);
+                if (parts.length > 1) {
+                  statusDisplay = parts[0].trim();
+                  contractInfo = parts.slice(1).join(", ").trim();
+                }
+              }
+              if (!isAdmin) {
+                statusDisplay = shortStatus(v.status);
+                contractInfo = "";
+              }
+
               return (
-                <tr key={v.vessel_name} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                  <td style={{ ...tdStyle, color: T.text2, fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
-                  <td style={{ ...tdStyle, fontWeight: 500 }}>{v.vessel_name}</td>
-                  <td style={{ ...tdStyle, color: T.text2, fontSize: 11 }}>{v.branch}</td>
-                  <td style={tdStyle}>
-                    <span style={{
-                      display: "inline-block", padding: "1px 6px", borderRadius: 3,
-                      fontFamily: "monospace", fontSize: 10, fontWeight: 600,
-                      background: st.startsWith("АСГ") ? "#ffebee" : st.startsWith("АСД") ? "#e8f5e9" : "#f5f5f5",
-                      color: statColor,
-                    }}>{isAdmin ? v.status : shortStatus(v.status)}</span>
+                <tr key={v.vessel_name} style={{ background: rowBg }}>
+                  {/* № */}
+                  <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
+
+                  {/* Name */}
+                  <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{v.vessel_name}</td>
+
+                  {/* Branch */}
+                  <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
+
+                  {/* Status */}
+                  <td style={{
+                    ...tdBase,
+                    background: STATUS_BG[sc],
+                    color: STATUS_COLOR[sc],
+                    fontWeight: 600,
+                    fontSize: 11,
+                  }}>
+                    {statusDisplay}
                   </td>
-                  <td style={{ ...tdStyle, fontSize: 11, fontFamily: "monospace", maxWidth: 200 }}>{v.coord_raw || "—"}</td>
-                  {isAdmin && <td style={{ ...tdStyle, fontSize: 11, maxWidth: 200, color: T.text2 }}>{v.note || ""}</td>}
-                  {isAdmin && <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11, color: T.accent }}>{getSupply(v.supplies, "ДТ")}</td>}
-                  {isAdmin && <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11, color: T.accent }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ")}</td>}
-                  {isAdmin && <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11 }}>{getSupply(v.supplies, "Масло")}</td>}
-                  {isAdmin && <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11 }}>{getSupply(v.supplies, "Вода")}</td>}
-                  {isAdmin && <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 11 }}>{getSupply(v.supplies, "Продукт")}</td>}
+
+                  {/* Contract (admin) */}
+                  {isAdmin && (
+                    <td style={{ ...tdBase, fontSize: 11, color: "#37474F" }}>
+                      {contractInfo || (sc === "asd" ? "" : "")}
+                    </td>
+                  )}
+
+                  {/* Location */}
+                  <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{v.coord_raw || "—"}</td>
+
+                  {/* Note (admin) */}
+                  {isAdmin && <td style={{ ...tdBase, fontSize: 11, color: "#546E7A", maxWidth: 220 }}>{v.note || ""}</td>}
+
+                  {/* Fuel DT (admin) */}
+                  {isAdmin && (
+                    <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#1a2a3a", fontWeight: 500 }}>
+                      {getSupply(v.supplies, "ДТ") || ""}
+                    </td>
+                  )}
+
+                  {/* Fuel Mazut (admin) */}
+                  {isAdmin && (
+                    <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#1a2a3a", fontWeight: 500 }}>
+                      {getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}
+                    </td>
+                  )}
                 </tr>
               );
             })}
