@@ -202,12 +202,18 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
 
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
+      // Fetch branch lookup from vessels table
+      const { data: vesselList } = await supabase.from("vessels").select("name, branch");
+      const branchMap = new Map<string, string>();
+      (vesselList || []).forEach((v: any) => {
+        if (v.branch) branchMap.set(v.name.toUpperCase().trim(), v.branch);
+      });
 
       let ok = 0, fail = 0;
       for (const v of parsed) {
         const row = {
-          vessel_name: v.name,
-          branch: v.branch,
+         vessel_name: v.name,
+          branch: v.branch || branchMap.get(v.name.toUpperCase().trim()) || "",
           report_date: dateStr,
           status: v.status,
           coord_raw: v.coordRaw,
