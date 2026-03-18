@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { supabase } from "../lib/supabase";
-import { parseMsgFiles, type DprVessel, type DprSupply } from "../lib/parseDpr";
+import { parseMsgFiles, type DprSupply } from "../lib/parseDpr";
 import { T } from "../lib/types";
 
 /* ── Status helpers ── */
@@ -15,7 +15,6 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8aa8" };
-const CLR_LABEL = { asg: "АСГ", asd: "АСД", rem: "РЕМ", oth: "—" };
 
 function mkIcon(c: string) {
   const color = CLR[c as keyof typeof CLR] || CLR.oth;
