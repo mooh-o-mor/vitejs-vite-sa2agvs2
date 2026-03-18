@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
 import { supabase } from "../lib/supabase";
 import { T } from "../lib/types";
 import type { DprSupply } from "../lib/parseDpr";
@@ -40,35 +40,34 @@ function statusCls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
-/* ── Branch colors (pastel, distinct per branch) ── */
+/* ── Branch colors ── */
 const BRANCH_COLORS: Record<string, string> = {
-  "АЧФ":  "#FFF3E0",  // warm orange
-  "АЗЧФ": "#FFF3E0",
-  "БЛТФ": "#E3F2FD",  // light blue
-  "БФ":   "#E3F2FD",
-  "КСПФ": "#F3E5F5",  // light purple
-  "СВРФ": "#E8F5E9",  // light green
-  "СевФ": "#E8F5E9",
-  "ПРМФ": "#FFF9C4",  // light yellow
-  "ПримФ":"#FFF9C4",
-  "СХЛФ": "#FCE4EC",  // light pink
-  "СахФ": "#FCE4EC",
-  "КМЧФ": "#E0F7FA",  // light cyan
-  "АРХФ": "#F1F8E9",  // light lime
+  "АЧФ":  "#FFF3E0", "АЗЧФ": "#FFF3E0",
+  "БЛТФ": "#E3F2FD", "БФ":   "#E3F2FD",
+  "КСПФ": "#F3E5F5",
+  "СВРФ": "#E8F5E9", "СевФ": "#E8F5E9",
+  "ПРМФ": "#FFF9C4", "ПримФ":"#FFF9C4",
+  "СХЛФ": "#FCE4EC", "СахФ": "#FCE4EC",
+  "КМЧФ": "#E0F7FA",
+  "АРХФ": "#F1F8E9",
 };
 
-const STATUS_BG = {
-  asg: "#FFCDD2",  // red tint
-  asd: "#C8E6C9",  // green tint
-  rem: "#F5F5F5",  // grey
-  oth: "#F5F5F5",
+// Excel hex (without #)
+const BRANCH_XL: Record<string, string> = {
+  "АЧФ":  "FFF3E0", "АЗЧФ": "FFF3E0",
+  "БЛТФ": "E3F2FD", "БФ":   "E3F2FD",
+  "КСПФ": "F3E5F5",
+  "СВРФ": "E8F5E9", "СевФ": "E8F5E9",
+  "ПРМФ": "FFF9C4", "ПримФ":"FFF9C4",
+  "СХЛФ": "FCE4EC", "СахФ": "FCE4EC",
+  "КМЧФ": "E0F7FA",
+  "АРХФ": "F1F8E9",
 };
-const STATUS_COLOR = {
-  asg: "#C62828",
-  asd: "#1B5E20",
-  rem: "#424242",
-  oth: "#616161",
-};
+
+const STATUS_BG: Record<string, string> = { asg: "#FFCDD2", asd: "#C8E6C9", rem: "#F5F5F5", oth: "#F5F5F5" };
+const STATUS_COLOR: Record<string, string> = { asg: "#C62828", asd: "#1B5E20", rem: "#424242", oth: "#616161" };
+const STATUS_XL_BG: Record<string, string> = { asg: "FFCDD2", asd: "C8E6C9", rem: "F5F5F5", oth: "F5F5F5" };
+const STATUS_XL_FG: Record<string, string> = { asg: "C62828", asd: "1B5E20", rem: "424242", oth: "616161" };
 
 const BRANCHES_ORDER = ["АЧФ", "АЗЧФ", "БЛТФ", "БФ", "КСПФ", "СВРФ", "СевФ", "ПРМФ", "ПримФ", "СХЛФ", "СахФ", "КМЧФ", "АРХФ"];
 
@@ -136,26 +135,110 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
   const cAsd = filtered.filter((v) => statusCls(v.status) === "asd").length;
   const cRem = filtered.filter((v) => statusCls(v.status) === "rem").length;
 
+  /* ── Styled Excel export ── */
   function exportXlsx() {
-    const header = ["№", "Название судна", "Филиал", "Статус", "Местоположение", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ", "Масло", "Вода", "Продукты"];
-    const rows = filtered.map((v, i) => [
-      i + 1, v.vessel_name, v.branch, v.status, v.coord_raw || "", v.note || "",
-      getSupply(v.supplies, "ДТ"), getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ"),
-      getSupply(v.supplies, "Масло"), getSupply(v.supplies, "Вода"), getSupply(v.supplies, "Продукт"),
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([
-      [`Сводная таблица судов МСС на ${fmtDateRu(selDate)}`], [], header, ...rows,
-    ]);
-    ws["!cols"] = [{ wch: 4 }, { wch: 30 }, { wch: 10 }, { wch: 25 }, { wch: 30 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
     const wb = XLSX.utils.book_new();
+
+    const headers = ["№ п/п", "Название судна", "Филиал", "Статус по План-графику", "Местоположение судна", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
+    const colWidths = [6, 30, 10, 28, 28, 35, 12, 12];
+
+    // Build data array with styles
+    const aoa: any[][] = [];
+
+    // Row 0: Title (merged later)
+    aoa.push([{ v: `Сводная таблица судов МСС`, t: "s", s: {
+      font: { bold: true, sz: 16, color: { rgb: "1A2A3A" } },
+      alignment: { horizontal: "center", vertical: "center" },
+    }}]);
+
+    // Row 1: Date
+    aoa.push([{ v: `на ${fmtDateRu(selDate)}`, t: "s", s: {
+      font: { bold: true, sz: 12, color: { rgb: "546E7A" } },
+      alignment: { horizontal: "center", vertical: "center" },
+    }}]);
+
+    // Row 2: Headers
+    const headerRow = headers.map((h) => ({
+      v: h, t: "s",
+      s: {
+        font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: "37474F" } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "90A4AE" } },
+          bottom: { style: "thin", color: { rgb: "90A4AE" } },
+          left: { style: "thin", color: { rgb: "90A4AE" } },
+          right: { style: "thin", color: { rgb: "90A4AE" } },
+        },
+      },
+    }));
+    aoa.push(headerRow);
+
+    // Data rows
+    filtered.forEach((v, i) => {
+      const sc = statusCls(v.status);
+      const brXl = BRANCH_XL[v.branch] || "FFFFFF";
+
+      const baseBorder = {
+        top: { style: "thin" as const, color: { rgb: "CFD8DC" } },
+        bottom: { style: "thin" as const, color: { rgb: "CFD8DC" } },
+        left: { style: "thin" as const, color: { rgb: "CFD8DC" } },
+        right: { style: "thin" as const, color: { rgb: "CFD8DC" } },
+      };
+
+      const rowFill = { fgColor: { rgb: brXl } };
+      const wrap = { wrapText: true, vertical: "center" as const };
+
+      const statusFill = { fgColor: { rgb: STATUS_XL_BG[sc] || "FFFFFF" } };
+      const statusFont = { bold: true, sz: 10, color: { rgb: STATUS_XL_FG[sc] || "424242" } };
+
+      aoa.push([
+        // №
+        { v: i + 1, t: "n", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
+        // Судно
+        { v: v.vessel_name, t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "1A2A3A" } } } },
+        // Филиал
+        { v: v.branch, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "37474F" } } } },
+        // Статус
+        { v: v.status, t: "s", s: { fill: statusFill, alignment: { ...wrap }, border: baseBorder, font: statusFont } },
+        // Местоположение
+        { v: v.coord_raw || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
+        // Примечание
+        { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
+        // ДТ
+        { v: getSupply(v.supplies, "ДТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
+        // Мазут
+        { v: getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Merges: title and date rows across all columns
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
+    ];
+
+    // Column widths
+    ws["!cols"] = colWidths.map((w) => ({ wch: w }));
+
+    // Row heights: header row taller
+    ws["!rows"] = [
+      { hpt: 30 }, // title
+      { hpt: 20 }, // date
+      { hpt: 36 }, // headers
+    ];
+
     XLSX.utils.book_append_sheet(wb, ws, "Сводная");
     XLSX.writeFile(wb, `Сводная_МСС_${selDate}.xlsx`);
   }
 
+  /* ── Styles for HTML table ── */
   const thStyle: React.CSSProperties = {
     padding: "8px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
-    color: "#1a2a3a", borderBottom: "2px solid #90a4ae", borderRight: "1px solid #cfd8dc",
-    whiteSpace: "nowrap", position: "sticky", top: 0, background: "#ECEFF1", zIndex: 1,
+    color: "#fff", borderBottom: "2px solid #90a4ae", borderRight: "1px solid #546E7A",
+    whiteSpace: "nowrap", position: "sticky", top: 0, background: "#37474F", zIndex: 1,
   };
 
   const tdBase: React.CSSProperties = {
@@ -163,11 +246,11 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
     borderRight: "1px solid #e8eaed", verticalAlign: "top",
   };
 
-  const fbtn = (active: boolean, color?: string): React.CSSProperties => ({
+  const fbtn = (active: boolean): React.CSSProperties => ({
     padding: "4px 12px", borderRadius: 20, border: "1px solid",
     cursor: "pointer", fontSize: 11, fontWeight: 600,
-    borderColor: active ? (color || T.accent) : T.border,
-    background: active ? (color || T.accent) : "transparent",
+    borderColor: active ? "#37474F" : T.border,
+    background: active ? "#37474F" : "transparent",
     color: active ? "#fff" : T.text2,
   });
 
@@ -188,10 +271,7 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
 
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {branches.map((b) => (
-            <button key={b} onClick={() => setFilterBranch(b)}
-              style={fbtn(filterBranch === b, BRANCH_COLORS[b] ? "#546E7A" : undefined)}>
-              {b}
-            </button>
+            <button key={b} onClick={() => setFilterBranch(b)} style={fbtn(filterBranch === b)}>{b}</button>
           ))}
         </div>
 
@@ -231,11 +311,9 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
               const sc = statusCls(v.status);
               const rowBg = branchBg(v.branch);
 
-              // Extract contract info from status for АСД
               let statusDisplay = v.status;
               let contractInfo = "";
               if (isAdmin && sc === "asd") {
-                // Try to split status from contract details
                 const parts = v.status.split(/[,/]/);
                 if (parts.length > 1) {
                   statusDisplay = parts[0].trim();
@@ -249,52 +327,20 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
 
               return (
                 <tr key={v.vessel_name} style={{ background: rowBg }}>
-                  {/* № */}
                   <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
-
-                  {/* Name */}
                   <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{v.vessel_name}</td>
-
-                  {/* Branch */}
                   <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-
-                  {/* Status */}
                   <td style={{
                     ...tdBase,
                     background: STATUS_BG[sc],
                     color: STATUS_COLOR[sc],
-                    fontWeight: 600,
-                    fontSize: 11,
-                  }}>
-                    {statusDisplay}
-                  </td>
-
-                  {/* Contract (admin) */}
-                  {isAdmin && (
-                    <td style={{ ...tdBase, fontSize: 11, color: "#37474F" }}>
-                      {contractInfo || (sc === "asd" ? "" : "")}
-                    </td>
-                  )}
-
-                  {/* Location */}
+                    fontWeight: 600, fontSize: 11,
+                  }}>{statusDisplay}</td>
+                  {isAdmin && <td style={{ ...tdBase, fontSize: 11, color: "#37474F" }}>{contractInfo}</td>}
                   <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{v.coord_raw || "—"}</td>
-
-                  {/* Note (admin) */}
                   {isAdmin && <td style={{ ...tdBase, fontSize: 11, color: "#546E7A", maxWidth: 220 }}>{v.note || ""}</td>}
-
-                  {/* Fuel DT (admin) */}
-                  {isAdmin && (
-                    <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#1a2a3a", fontWeight: 500 }}>
-                      {getSupply(v.supplies, "ДТ") || ""}
-                    </td>
-                  )}
-
-                  {/* Fuel Mazut (admin) */}
-                  {isAdmin && (
-                    <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, color: "#1a2a3a", fontWeight: 500 }}>
-                      {getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}
-                    </td>
-                  )}
+                  {isAdmin && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
+                  {isAdmin && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
                 </tr>
               );
             })}
