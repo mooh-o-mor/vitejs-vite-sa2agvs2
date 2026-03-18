@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
 import { PORTS } from "./ports";
 
 /* ── Types ── */
