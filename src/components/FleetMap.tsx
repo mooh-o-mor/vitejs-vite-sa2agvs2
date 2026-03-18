@@ -244,7 +244,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
       for (const v of parsed) {
         const row = {
           vessel_name: v.name,
-          branch: v.branch || branchMap.get(v.name.toUpperCase().trim()) || "",
+          branch: (v.branch && v.branch.trim()) || branchMap.get(v.name.toUpperCase().trim()) || "",
           report_date: dateStr,
           status: v.status,
           coord_raw: v.coordRaw,
