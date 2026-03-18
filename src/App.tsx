@@ -12,6 +12,7 @@ import { VesselForm } from "./components/VesselForm";
 import { LoginForm } from "./components/LoginForm";
 import { FilterBar } from "./components/FilterBar";
 import { FleetMap } from "./components/FleetMap";
+import { SummaryReport } from "./components/SummaryReport";
 
 const EMPTY_FORM: FormState = {
   counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`,
@@ -187,6 +188,7 @@ export default function App() {
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
     ["map", "🗺 Карта флота"],
+    ["summary", "📋 Сводный отчёт"],
     ...(isAdmin ? [["economics", "💰 Экономика"], ["vessels", "🚢 Суда"]] as [string, string][] : []),
   ];
 
@@ -275,6 +277,9 @@ export default function App() {
         )}
         {activeTab==="map" && (
           <FleetMap isAdmin={isAdmin} />
+        )}
+        {activeTab==="summary" && (
+          <SummaryReport isAdmin={isAdmin} />
         )}
         {activeTab==="economics" && isAdmin && (
           <Economics vessels={filtered} contracts={visibleContracts} />
