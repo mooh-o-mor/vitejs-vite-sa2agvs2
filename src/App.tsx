@@ -245,7 +245,7 @@ export default function App() {
         ))}
       </div>
 
-      <div style={{ padding: activeTab === "map" || activeTab === "gantt" ? "0" : "8px 8px" }}>
+      <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
         {(activeTab==="gantt"||activeTab==="economics") && (
           <FilterBar
             allTypes={allTypes}
