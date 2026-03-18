@@ -62,7 +62,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
     if (!mapRef.current || mapObj.current) return;
     const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: true });
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      attribution: "©OSM ©CartoDB", subdomains: "abcd", maxZoom: 19,
+      attribution: "", subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapObj.current = map;
