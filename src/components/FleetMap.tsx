@@ -230,8 +230,14 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
       // Fetch branch lookup from vessels table
       const { data: vesselList } = await supabase.from("vessels").select("name, branch");
       const branchMap = new Map<string, string>();
+     const BRANCH_MAP: Record<string, string> = {
+        "СевФ": "СВРФ", "БФ": "БЛТФ", "ПримФ": "ПРМФ", "СахФ": "СХЛФ",
+      };
       (vesselList || []).forEach((v: any) => {
-        if (v.branch) branchMap.set(v.name.toUpperCase().trim(), v.branch);
+        if (v.branch) {
+          const normalized = BRANCH_MAP[v.branch] || v.branch;
+          branchMap.set(v.name.toUpperCase().trim(), normalized);
+        }
       });
 
       let ok = 0, fail = 0;
