@@ -250,8 +250,14 @@ export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel
     }
   }
 
-  // Dedupe by name (latest wins)
+ // Dedupe by name (prefer entry with more data)
   const map = new Map<string, DprVessel>();
-  all.forEach((v) => map.set(v.name, v));
+  all.forEach((v) => {
+    const key = v.name.toUpperCase().trim();
+    const existing = map.get(key);
+    if (!existing || (!existing.branch && v.branch) || (!existing.lat && v.lat)) {
+      map.set(key, v);
+    }
+  });
   return { vessels: Array.from(map.values()), date: reportDate };
 }
