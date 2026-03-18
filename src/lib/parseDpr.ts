@@ -188,6 +188,13 @@ export function parseFilial(rows: any[][]): DprVessel[] {
     if (typeof limVal === "number" && limVal > 0 && limVal < 43831) { i += 5; continue; }
     if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
 
+    // Also check all cells in the row for stale Excel dates (before 2020)
+    let staleRow = false;
+    for (const cell of row) {
+      if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
+    }
+    if (staleRow) { i += 5; continue; }
+
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
