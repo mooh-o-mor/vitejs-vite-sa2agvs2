@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import "leaflet.markercluster";
 import { supabase } from "../lib/supabase";
 import { parseMsgFiles, type DprSupply } from "../lib/parseDpr";
 import { T } from "../lib/types";
@@ -15,6 +18,14 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8aa8" };
+
+function shortStatus(stat: string): string {
+  const s = stat.toUpperCase();
+  if (s.startsWith("АСГ")) return "АСГ";
+  if (s.startsWith("АСД")) return "АСД";
+  if (s.startsWith("РЕМ")) return "РЕМ";
+  return stat;
+}
 
 function mkIcon(c: string) {
   const color = CLR[c as keyof typeof CLR] || CLR.oth;
@@ -44,7 +55,7 @@ interface DprRow {
 export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObj = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.LayerGroup | null>(null);
+  const markersRef = useRef<any>(null);
 
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
@@ -64,7 +75,31 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: "", subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
-    markersRef.current = L.layerGroup().addTo(map);
+
+    markersRef.current = (L as any).markerClusterGroup({
+      maxClusterRadius: 40,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      iconCreateFunction: (cluster: any) => {
+        const children = cluster.getAllChildMarkers();
+        const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
+        children.forEach((m: any) => {
+          if (m.options._status) counts[m.options._status as keyof typeof counts]++;
+        });
+        const dom = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]) as keyof typeof CLR;
+        const bg = CLR[dom];
+        const n = children.length;
+        const sz = n < 5 ? 34 : n < 10 ? 40 : 46;
+        return L.divIcon({
+          html: `<div style="width:${sz}px;height:${sz}px;background:${bg};border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:${n > 9 ? 11 : 13}px;font-weight:700;color:white;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n}</div>`,
+          className: "",
+          iconSize: [sz, sz],
+          iconAnchor: [sz / 2, sz / 2],
+        });
+      },
+    }).addTo(map);
+
     mapObj.current = map;
     return () => { map.remove(); mapObj.current = null; };
   }, []);
@@ -113,7 +148,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
     vis.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
-      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c) });
+      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
       marker.bindTooltip(v.vessel_name, {
         permanent: true, direction: "bottom", offset: [0, 4],
         className: "vessel-label-map",
@@ -129,6 +164,22 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
     if (bounds.length > 1) {
       mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
     }
+
+    // Show labels only for non-clustered markers
+    const updateLabels = () => {
+      markersRef.current!.getLayers().forEach((m: any) => {
+        if (!m.getTooltip) return;
+        const parent = markersRef.current!.getVisibleParent(m);
+        if (parent === m) m.openTooltip(); else m.closeTooltip();
+      });
+    };
+    markersRef.current.on("animationend", updateLabels);
+    mapObj.current.on("zoomend", updateLabels);
+    setTimeout(updateLabels, 300);
+
+    return () => {
+      if (mapObj.current) mapObj.current.off("zoomend", updateLabels);
+    };
   }, [vessels, filter, search]);
 
   const filtered = useCallback(() => {
@@ -252,7 +303,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
         <div style={{ display: "flex", gap: 4, padding: "8px 10px", borderBottom: `1px solid ${T.border}` }}>
           {(["all", "asg", "asd", "rem"] as const).map((f) => (
             <button key={f} onClick={() => setFilter(f)} style={fbtn(filter === f)}>
-              {f === "all" ? "Все" : f.toUpperCase().replace("ASG", "АСГ").replace("ASD", "АСД").replace("REM", "РЕМ")}
+              {f === "all" ? "Все" : f === "asg" ? "АСГ" : f === "asd" ? "АСД" : "РЕМ"}
             </button>
           ))}
         </div>
@@ -284,7 +335,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
                     fontFamily: "monospace", fontSize: 10, fontWeight: 600,
                     background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5",
                     color: CLR[c],
-                  }}>{v.status.split("/")[0].trim()}</span>
+                  }}>{isAdmin ? v.status.split("/")[0].trim() : shortStatus(v.status)}</span>
                   <span style={{ fontSize: 11, color: T.text2 }}>{v.branch}</span>
                   {v.lat == null && <span style={{ fontSize: 10, color: "#c07800" }}>📍?</span>}
                 </div>
@@ -332,7 +383,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
                   padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 600,
                   background: cls(selVessel.status) === "asg" ? "#ffebee" : cls(selVessel.status) === "asd" ? "#e8f5e9" : "#f5f5f5",
                   color: CLR[cls(selVessel.status)],
-                }}>{selVessel.status}</span>
+                }}>{isAdmin ? selVessel.status : shortStatus(selVessel.status)}</span>
               } />
               <DetailRow label="Филиал" value={selVessel.branch} />
               <DetailRow label="Местоположение" value={selVessel.coord_raw || "—"} small />
@@ -392,6 +443,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
           white-space: nowrap !important;
         }
         .vessel-label-map::before { display: none !important; }
+        .leaflet-control-attribution { display: none !important; }
       `}</style>
     </div>
   );
