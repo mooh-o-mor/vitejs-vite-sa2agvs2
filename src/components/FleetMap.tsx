@@ -68,6 +68,30 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
   const [filter, setFilter] = useState<"all" | "asg" | "asd" | "rem">("all");
   const [selVessel, setSelVessel] = useState<DprRow | null>(null);
 
+  const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
+
+  // Drag & drop handlers
+  useEffect(() => {
+    const onEnter = (e: DragEvent) => { e.preventDefault(); dragCounter.current++; setDragging(true); };
+    const onLeave = () => { dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setDragging(false); } };
+    const onOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault(); dragCounter.current = 0; setDragging(false);
+      if (e.dataTransfer?.files?.length && isAdmin) handleUpload(e.dataTransfer.files);
+    };
+    document.addEventListener("dragenter", onEnter);
+    document.addEventListener("dragleave", onLeave);
+    document.addEventListener("dragover", onOver);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("dragenter", onEnter);
+      document.removeEventListener("dragleave", onLeave);
+      document.removeEventListener("dragover", onOver);
+      document.removeEventListener("drop", onDrop);
+    };
+  }, [isAdmin]);
+
   // Init map
   useEffect(() => {
     if (!mapRef.current || mapObj.current) return;
@@ -149,7 +173,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-     marker.bindTooltip(v.vessel_name, {
+      marker.bindTooltip(v.vessel_name, {
         permanent: false, direction: "bottom", offset: [0, 4],
         className: "vessel-label-map",
       });
@@ -202,6 +226,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
 
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
+
       // Fetch branch lookup from vessels table
       const { data: vesselList } = await supabase.from("vessels").select("name, branch");
       const branchMap = new Map<string, string>();
@@ -212,7 +237,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
       let ok = 0, fail = 0;
       for (const v of parsed) {
         const row = {
-         vessel_name: v.name,
+          vessel_name: v.name,
           branch: v.branch || branchMap.get(v.name.toUpperCase().trim()) || "",
           report_date: dateStr,
           status: v.status,
@@ -259,6 +284,20 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 90px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
+
+      {/* Drag overlay */}
+      {dragging && isAdmin && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9000,
+          background: "rgba(11,15,24,0.85)", border: "3px dashed #3b82f6",
+          display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16,
+          pointerEvents: "none",
+        }}>
+          <div style={{ fontSize: 52 }}>📂</div>
+          <div style={{ fontSize: 18, color: "#3b82f6", fontFamily: "monospace", fontWeight: 600 }}>Отпустите файлы ДПР</div>
+          <div style={{ fontSize: 13, color: "#9ca3af" }}>Поддерживаются .msg файлы от всех филиалов</div>
+        </div>
+      )}
 
       {/* ── SIDEBAR ── */}
       <div style={{ width: 280, minWidth: 280, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column" }}>
@@ -366,7 +405,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
             <div style={{ fontSize: 16, color: T.text2, fontWeight: 500, marginBottom: 6 }}>
               {isAdmin ? "Загрузите файлы ДПР" : "Данные ДПР не загружены"}
             </div>
-            {isAdmin && <div style={{ fontSize: 12, color: T.text3 }}>Используйте кнопку «Загрузить .msg» в боковой панели</div>}
+            {isAdmin && <div style={{ fontSize: 12, color: T.text3 }}>Используйте кнопку «Загрузить .msg» или перетащите файлы на страницу</div>}
           </div>
         )}
 
@@ -419,7 +458,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
                             <tr key={i}>
                               <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
                               <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
-                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
+                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
                               <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
                               <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
                             </tr>
