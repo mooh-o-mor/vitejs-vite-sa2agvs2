@@ -11,6 +11,7 @@ import { ContractForm } from "./components/ContractForm";
 import { VesselForm } from "./components/VesselForm";
 import { LoginForm } from "./components/LoginForm";
 import { FilterBar } from "./components/FilterBar";
+import { FleetMap } from "./components/FleetMap";
 
 const EMPTY_FORM: FormState = {
   counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`,
@@ -144,10 +145,10 @@ export default function App() {
   }).sort((a, b) => {
     if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
     if (sortBy==="name") {
-  const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-  const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-  return nameA.localeCompare(nameB, "ru");
-}
+      const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+      const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+      return nameA.localeCompare(nameB, "ru");
+    }
     if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
     return 0;
   });
@@ -181,6 +182,13 @@ export default function App() {
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
+
+  /* ── TABS CONFIG ── */
+  const tabs: [string, string][] = [
+    ["gantt", "📊 Расстановка"],
+    ["map", "🗺 Карта флота"],
+    ...(isAdmin ? [["economics", "💰 Экономика"], ["vessels", "🚢 Суда"]] as [string, string][] : []),
+  ];
 
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
@@ -230,8 +238,9 @@ export default function App() {
         )}
       </div>
 
+      {/* ── TAB BAR ── */}
       <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 16px" }}>
-        {[["gantt","📊 Расстановка"], ...(isAdmin ? [["economics","💰 Экономика"],["vessels","🚢 Суда"]] : [])].map(([k,l]) => (
+        {tabs.map(([k, l]) => (
           <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent" }}>{l}</button>
         ))}
       </div>
@@ -263,6 +272,9 @@ export default function App() {
             onAddContract={openAddContract}
             onEditContract={openEditContract}
           />
+        )}
+        {activeTab==="map" && (
+          <FleetMap isAdmin={isAdmin} />
         )}
         {activeTab==="economics" && isAdmin && (
           <Economics vessels={filtered} contracts={visibleContracts} />
