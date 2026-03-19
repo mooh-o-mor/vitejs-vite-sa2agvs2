@@ -7,8 +7,8 @@ export async function exportToPPTX(
   contractsToExport: Contract[],
   filterCp: string,
   isAdmin: boolean,
-  filterBranch?: string,
-  filterType?: string
+  filterBranches?: string[],
+  filterTypes?: string[]
 ) {
   const pptxgen = (await import("pptxgenjs")).default;
   const prs = new pptxgen();
@@ -21,14 +21,13 @@ export async function exportToPPTX(
     ? contractsToExport
     : contractsToExport.filter(c => cpKey(c.counterparty) === filterCp);
 
-  // Only contracts for exported vessels
   const vesselIds = new Set(vesselsToExport.map(v => v.id));
   const visibleContracts = filteredContracts.filter(c => vesselIds.has(c.vesselId));
 
   // Dynamic title
   const parts: string[] = [];
-  if (filterBranch && filterBranch !== "Все") parts.push(filterBranch);
-  if (filterType && filterType !== "Все") parts.push(filterType);
+  if (filterBranches && filterBranches.length > 0) parts.push(filterBranches.join(", "));
+  if (filterTypes && filterTypes.length > 0) parts.push(filterTypes.join(", "));
   const subtitle = parts.length > 0 ? parts.join(" · ") : "Весь флот";
   const title = `Морспасслужба — ${subtitle}`;
 
@@ -38,13 +37,11 @@ export async function exportToPPTX(
 
   const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
 
-  // Only counterparties that appear in visible contracts
   const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
   const colorMapPptx: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, (SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]).replace("#","")])
   );
 
-  // Шкала месяцев
   let mx = LEFT;
   MONTHS.forEach((m,i) => {
     const daysInMonth = new Date(YEAR,i+1,0).getDate();
@@ -54,7 +51,6 @@ export async function exportToPPTX(
     mx += w;
   });
 
-  // Строки судов
   vesselsToExport.forEach((v,idx) => {
     const y = TOP + idx*(ROW_H+ROW_GAP);
     const vc = visibleContracts.filter(c => c.vesselId === v.id);
@@ -100,7 +96,6 @@ export async function exportToPPTX(
     });
   });
 
-  // Легенда внизу — только контрагенты присутствующие в экспорте
   if (isAdmin) {
     const legendCps = cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp));
     const legendY = TOP + vesselsToExport.length*(ROW_H+ROW_GAP)+0.15;
