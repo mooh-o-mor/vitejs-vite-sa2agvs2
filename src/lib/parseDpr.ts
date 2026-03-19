@@ -290,8 +290,14 @@ export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel
 
   for (const f of files) {
     try {
-      const buf = await f.arrayBuffer();
-      const rows = await extractXlsx(buf);
+      let rows: any[][] | null = null;
+      if (f.name.toLowerCase().endsWith(".eml")) {
+        const text = await f.text();
+        rows = await extractXlsxFromEml(text);
+      } else {
+        const buf = await f.arrayBuffer();
+        rows = await extractXlsx(buf);
+      }
       if (!rows) continue;
       const vs = parseFilial(rows);
       if (vs.length) {
