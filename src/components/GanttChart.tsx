@@ -17,7 +17,12 @@ function priorityIdx(p: string): number {
 }
 
 export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract, onEditContract }: Props) {
-  const cpKeys = [...new Set(contracts.map(c => cpKey(c.counterparty)))];
+  // Only contracts for visible vessels
+  const vesselIds = new Set(vessels.map(v => v.id));
+  const visibleContracts = contracts.filter(c => vesselIds.has(c.vesselId));
+
+  // Legend: only counterparties in visible contracts
+  const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
   const colorMap: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
   );
@@ -45,16 +50,12 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
         const vc = contracts.filter(c => c.vesselId===v.id);
 
         // Split into main row and alt row
-        // Main row: contracts without altGroup, or highest priority from each altGroup
-        // Alt row: lower priority alternatives
         const altGroups = new Set(vc.filter(c => c.altGroup).map(c => c.altGroup!));
         const mainContracts: Contract[] = [];
         const altContracts: Contract[] = [];
 
-        // Non-grouped contracts → main
         vc.filter(c => !c.altGroup).forEach(c => mainContracts.push(c));
 
-        // Grouped: sort by priority, top → main, rest → alt
         altGroups.forEach(g => {
           const group = vc.filter(c => c.altGroup === g).sort((a,b) => priorityIdx(a.priority) - priorityIdx(b.priority));
           if (group.length > 0) mainContracts.push(group[0]);
@@ -74,21 +75,16 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
               style={{ flex:1, minHeight:rowHeight, background:idx%2===0?T.bg3:T.bg2, borderRadius:4, position:"relative", border:`1px solid ${T.border2}`, cursor:canView?"pointer":"default" }}
               onClick={() => isAdmin && onAddContract(v.id)}
             >
-              {/* Month gridlines */}
               {MONTHS.map((_,i) => {
                 const off = (new Date(YEAR,i,1).getTime()-new Date(YEAR,0,1).getTime())/86400000;
                 return <div key={i} style={{ position:"absolute", left:`${(off/totalDays)*100}%`, top:0, bottom:0, width:1, background:T.border2, pointerEvents:"none" }}/>;
               })}
 
-              {/* Divider line between main and alt rows */}
               {hasAlt && (
                 <div style={{ position:"absolute", left:0, right:0, top:"50%", height:1, background:T.border2, pointerEvents:"none", opacity:0.5 }} />
               )}
 
-              {/* Main contracts (top half or full) */}
               {mainContracts.map(c => renderBar(c, colorMap, canView, onEditContract, hasAlt ? "top" : "full"))}
-
-              {/* Alternative contracts (bottom half) */}
               {altContracts.map(c => renderBar(c, colorMap, canView, onEditContract, "bottom"))}
 
               {isAdmin && vc.length===0 && (
@@ -136,14 +132,11 @@ function renderBar(
       ? `repeating-linear-gradient(135deg, ${color}, ${color} 3px, ${color}88 3px, ${color}88 6px)`
       : color;
 
-  // Vertical positioning
   const topPx = position === "full" ? 3 : position === "top" ? 2 : "50%";
   const bottomPx = position === "full" ? 3 : position === "top" ? "calc(50% + 1px)" : 2;
   const opacity = isAlt ? 0.7 : 1;
 
-  const priorityBadge = isKpOrPlan
-    ? ` [${PRIORITY_LABELS[c.priority]}]`
-    : "";
+  const priorityBadge = isKpOrPlan ? ` [${PRIORITY_LABELS[c.priority]}]` : "";
 
   return (
     <div key={c.id} style={{ position:"absolute", left:0, right:0, top:0, bottom:0, pointerEvents:"none" }}>
