@@ -6,7 +6,9 @@ export async function exportToPPTX(
   vesselsToExport: Vessel[],
   contractsToExport: Contract[],
   filterCp: string,
-  isAdmin: boolean
+  isAdmin: boolean,
+  filterBranch?: string,
+  filterType?: string
 ) {
   const pptxgen = (await import("pptxgenjs")).default;
   const prs = new pptxgen();
@@ -19,12 +21,27 @@ export async function exportToPPTX(
     ? contractsToExport
     : contractsToExport.filter(c => cpKey(c.counterparty) === filterCp);
 
-  slide.addText(`Флот МСС — Диаграмма Ганта ${YEAR}`, {
+  // Only contracts for exported vessels
+  const vesselIds = new Set(vesselsToExport.map(v => v.id));
+  const visibleContracts = filteredContracts.filter(c => vesselIds.has(c.vesselId));
+
+  // Dynamic title
+  let subtitle = "Весь флот";
+  if (filterBranch && filterBranch !== "Все") {
+    subtitle = filterBranch;
+  } else if (filterType && filterType !== "Все") {
+    subtitle = filterType;
+  }
+  const title = `Морспасслужба — ${subtitle}`;
+
+  slide.addText(title, {
     x:0.2, y:0.1, w:16, h:0.4, fontSize:18, bold:true, color:"1e40af", fontFace:"Arial"
   });
 
   const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
-  const cpKeys = [...new Set(filteredContracts.map(c => cpKey(c.counterparty)))];
+
+  // Only counterparties that appear in visible contracts
+  const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
   const colorMapPptx: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, (SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]).replace("#","")])
   );
@@ -42,7 +59,7 @@ export async function exportToPPTX(
   // Строки судов
   vesselsToExport.forEach((v,idx) => {
     const y = TOP + idx*(ROW_H+ROW_GAP);
-    const vc = filteredContracts.filter(c => c.vesselId === v.id);
+    const vc = visibleContracts.filter(c => c.vesselId === v.id);
     slide.addShape(prs.ShapeType.rect, { x:0.1, y, w:LEFT+CHART_W+0.1, h:ROW_H, fill:{color:idx%2===0?"f8fafc":"f1f5f9"}, line:{color:idx%2===0?"f8fafc":"f1f5f9"} });
     slide.addText(v.name, { x:0.12, y:y+0.01, w:LEFT-0.15, h:ROW_H-0.02, fontSize:6.5, color:"0f172a", fontFace:"Arial", valign:"middle" });
     if (v.branch) slide.addText(v.branch, { x:0.12, y:y+0.01, w:LEFT-0.15, h:ROW_H-0.02, fontSize:5.5, color:"d97706", fontFace:"Arial", valign:"middle", align:"right" });
@@ -85,12 +102,13 @@ export async function exportToPPTX(
     });
   });
 
-  // Легенда внизу
+  // Легенда внизу — только контрагенты присутствующие в экспорте
   if (isAdmin) {
+    const legendCps = cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp));
     const legendY = TOP + vesselsToExport.length*(ROW_H+ROW_GAP)+0.15;
     let legendX = LEFT;
     let legendRow = 0;
-    cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).forEach(cp => {
+    legendCps.forEach(cp => {
       if (legendX + 2.0 > LEFT + CHART_W) { legendX = LEFT; legendRow += 1; }
       const ly = legendY + legendRow*0.22;
       const col = colorMapPptx[cp]||"1D4ED8";
@@ -98,10 +116,13 @@ export async function exportToPPTX(
       slide.addText(cp, { x:legendX+0.15, y:ly-0.02, w:1.8, h:0.16, fontSize:7, color:"0f172a", fontFace:"Arial" });
       legendX += 2.0;
     });
-    const totalRev = filteredContracts.reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
+    const totalRev = visibleContracts
+      .filter(c => c.priority === "contract" || !c.priority)
+      .reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
     const revY = legendY + (legendRow+1)*0.22 + 0.05;
     slide.addText(`Выручка: ${fmoney(totalRev)}`, { x:0.2, y:revY, w:16, h:0.3, fontSize:10, bold:true, color:"059669", fontFace:"Arial" });
   }
 
-  await prs.writeFile({ fileName:`флот_МСС_${YEAR}.pptx` });
+  const safeName = subtitle.replace(/[^а-яА-Яa-zA-Z0-9\s]/g, "").trim().replace(/\s+/g, "_");
+  await prs.writeFile({ fileName:`Морспасслужба_${safeName}_${YEAR}.pptx` });
 }
