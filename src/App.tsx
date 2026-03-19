@@ -196,7 +196,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logoMSS.png" alt="" style={{ height:48 }} />
+      <img src="/logoMSS.png" alt="" style={{ height:240 }} />
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
