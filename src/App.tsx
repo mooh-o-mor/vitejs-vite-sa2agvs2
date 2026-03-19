@@ -204,8 +204,7 @@ export default function App() {
           <img src="/logo.png" style={{ height:32, width:32, objectFit:"contain" }} alt="МСС" />
           Флот МСС
         </span>
-        <span style={{ fontSize:12, color:"#bfdbfe" }}>{contractCount} контрактов</span>
-        {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
+       {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
 
         {/* Upload .msg button in header — only on Карта флота tab, only for admin */}
         {isAdmin && activeTab === "map" && (
