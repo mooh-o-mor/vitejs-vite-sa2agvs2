@@ -244,7 +244,45 @@ export function parseFilial(rows: any[][]): DprVessel[] {
   }
   return vessels;
 }
-
+/* ── EML → XLSX extraction ── */
+async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
+  // Find base64-encoded attachment
+  const parts = text.split(/\r?\n\r?\n/);
+  for (let i = 0; i < parts.length; i++) {
+    // Look for base64 block after attachment header
+    const prev = i > 0 ? parts[i - 1] : "";
+    if (/content-transfer-encoding:\s*base64/i.test(prev) || 
+        (/attachment/i.test(prev) && /base64/i.test(prev))) {
+      const b64 = parts[i].replace(/[\r\n\s]/g, "");
+      try {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+        const wb = XLSX.read(bytes, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+        if (rows.some(r => r && r.some((v: any) => v && String(v).includes("Название судна")))) {
+          return rows;
+        }
+      } catch (_) {}
+    }
+  }
+  
+  // Fallback: find any large base64 block
+  const b64Match = text.match(/\r?\n\r?\n([A-Za-z0-9+/=\r\n]{500,})/);
+  if (b64Match) {
+    try {
+      const b64 = b64Match[1].replace(/[\r\n\s]/g, "");
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+      const wb = XLSX.read(bytes, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+    } catch (_) {}
+  }
+  return null;
+}
 /* ── Full pipeline: ArrayBuffer[] → DprVessel[] ── */
 export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel[]; date: Date | null }> {
   let reportDate: Date | null = null;
