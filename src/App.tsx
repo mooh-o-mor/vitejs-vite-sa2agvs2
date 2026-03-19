@@ -165,7 +165,6 @@ export default function App() {
   const revenueContracts = visibleContracts.filter(c => {
     if (!filtered.some(v => v.id===c.vesselId)) return false;
     if (!c.altGroup) return c.priority === "contract";
-    // From alt_group, only count the highest priority
     const group = visibleContracts.filter(g => g.vesselId===c.vesselId && g.altGroup===c.altGroup);
     const sorted = group.sort((a,b) => {
       const ord = ["contract","kp","plan"];
@@ -174,7 +173,6 @@ export default function App() {
     return sorted[0]?.id === c.id && c.priority === "contract";
   });
   const totalRev = revenueContracts.reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
-  const contractCount = contracts.filter(c => !["Ремонт","АСГ"].includes(cpKey(c.counterparty))).length;
 
   const btnFilter = (active: boolean, amber?: boolean) => ({
     padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
@@ -201,19 +199,22 @@ export default function App() {
     </div>
   );
 
+  /* ── TABS CONFIG ── */
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
+    ...(isAdmin ? [["economics", "💰 Экономика"]] as [string, string][] : []),
     ["map", "🗺 Карта флота"],
     ["summary", "📋 Сводный отчёт"],
-    ...(isAdmin ? [["economics", "💰 Экономика"], ["vessels", "🚢 Суда"]] as [string, string][] : []),
   ];
 
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
+      {/* ── HEADER ── */}
       <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
-        <span style={{ fontSize:18, fontWeight:700, color:"#ffffff" }}>⚓ Флот МСС — {YEAR}</span>
-        <span style={{ fontSize:12, color:"#bfdbfe" }}>{contractCount} контрактов</span>
+        <span style={{ display:"flex", alignItems:"center", gap:8, fontSize:18, fontWeight:700, color:"#ffffff" }}>
+          <img src="/logo.png" alt="" style={{ height:32 }} /> Флот МСС
+        </span>
         {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
           {isAdmin && activeTab==="gantt" && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
@@ -226,6 +227,7 @@ export default function App() {
         ) : (
           <button onClick={() => setShowLogin(true)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔒 Войти</button>
         )}
+        {/* PPTX export — only on Расстановка, only for admin */}
         {isAdmin && activeTab==="gantt" && (
           <div style={{ position:"relative" }}>
             <button onClick={() => setShowExportMenu(v => !v)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600 }}>⬇ Экспорт PPTX ▾</button>
@@ -256,12 +258,20 @@ export default function App() {
         )}
       </div>
 
+      {/* ── TAB BAR ── */}
       <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 8px" }}>
         {tabs.map(([k, l]) => (
           <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent" }}>{l}</button>
         ))}
+        {isAdmin && (
+          <>
+            <div style={{ flex:1 }} />
+            <button onClick={() => setActiveTab("vessels")} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, background:"transparent", color:activeTab==="vessels"?T.accent:T.text2, borderBottom:activeTab==="vessels"?`2px solid ${T.accent}`:"2px solid transparent" }}>🚢 Суда</button>
+          </>
+        )}
       </div>
 
+      {/* ── CONTENT ── */}
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
         {(activeTab==="gantt"||activeTab==="economics") && (
           <FilterBar
