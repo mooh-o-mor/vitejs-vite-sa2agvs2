@@ -1,5 +1,5 @@
 import type { FormState } from "../lib/types";
-import { T } from "../lib/types";
+import { T, PRIORITY_LABELS } from "../lib/types";
 import { fmoney, fdate, formatInput, unformat, contractDays, addDays } from "../lib/utils";
 
 interface Props {
@@ -33,6 +33,12 @@ function Field({ label, value, type, placeholder, half, readOnly, onChange }: {
   );
 }
 
+const PRIORITY_COLORS: Record<string, string> = {
+  contract: "#059669",
+  kp: "#d97706",
+  plan: "#6b7280",
+};
+
 export function ContractForm({ form, editId, vesselName, readOnly, onChange, onSave, onDelete, onClose }: Props) {
   const modal = { position:"fixed" as const, inset:0, background:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 };
   const modalBox = { background:T.bg2, borderRadius:10, padding:22, border:`1px solid ${T.border}`, boxShadow:"0 8px 40px rgba(0,0,0,0.15)" };
@@ -63,6 +69,46 @@ export function ContractForm({ form, editId, vesselName, readOnly, onChange, onS
 
         <Field label="Контрагент" value={form.counterparty} type="text" readOnly={readOnly}
           onChange={v => onChange({...form, counterparty:v})} />
+
+        {/* Priority + Alt Group */}
+        <div style={{ display:"flex", gap:10, marginBottom:12 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Тип</div>
+            <div style={{ display:"flex", gap:4 }}>
+              {(["contract", "kp", "plan"] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => !readOnly && onChange({...form, priority:p})}
+                  style={{
+                    flex:1, padding:"6px 4px", borderRadius:6, fontSize:11, fontWeight:600, cursor: readOnly ? "default" : "pointer",
+                    border: `2px solid ${form.priority===p ? PRIORITY_COLORS[p] : T.border}`,
+                    background: form.priority===p ? PRIORITY_COLORS[p] + "18" : T.bg2,
+                    color: form.priority===p ? PRIORITY_COLORS[p] : T.text2,
+                  }}
+                >
+                  {PRIORITY_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ width:100 }}>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Группа альт.</div>
+            <input
+              type="text"
+              value={form.altGroup}
+              placeholder="—"
+              readOnly={readOnly}
+              onChange={e => !readOnly && onChange({...form, altGroup:e.target.value.replace(/\D/g,"")})}
+              style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background: readOnly ? T.bg3 : T.bg2, color:T.text, fontSize:13, boxSizing:"border-box", textAlign:"center", cursor: readOnly ? "default" : "text" }}
+            />
+          </div>
+        </div>
+
+        {form.altGroup && (
+          <div style={{ background:"#fef3c7", borderRadius:6, padding:"5px 10px", marginBottom:12, fontSize:11, color:"#92400e", border:"1px solid #fde68a" }}>
+            ⚡ Группа альтернатив #{form.altGroup} — контракты с одинаковым номером группы на одном судне считаются взаимоисключающими
+          </div>
+        )}
 
         <div style={{ display:"flex", gap:10 }}>
           <Field label="Начало" value={form.start} type="date" half readOnly={readOnly} onChange={v => {
@@ -100,6 +146,7 @@ export function ContractForm({ form, editId, vesselName, readOnly, onChange, onS
         {days_>0 && (
           <div style={{ background:"#f0fdf4", borderRadius:6, padding:"7px 10px", marginBottom:12, fontSize:11, color:T.green, border:"1px solid #bbf7d0" }}>
             {days_} дней · Выручка: <b>{fmoney(preview)}</b>
+            {form.priority !== "contract" && <span style={{ color:T.amber, marginLeft:8 }}>(не учитывается в итого — тип: {PRIORITY_LABELS[form.priority]})</span>}
           </div>
         )}
 
