@@ -26,12 +26,10 @@ export async function exportToPPTX(
   const visibleContracts = filteredContracts.filter(c => vesselIds.has(c.vesselId));
 
   // Dynamic title
-  let subtitle = "Весь флот";
-  if (filterBranch && filterBranch !== "Все") {
-    subtitle = filterBranch;
-  } else if (filterType && filterType !== "Все") {
-    subtitle = filterType;
-  }
+  const parts: string[] = [];
+  if (filterBranch && filterBranch !== "Все") parts.push(filterBranch);
+  if (filterType && filterType !== "Все") parts.push(filterType);
+  const subtitle = parts.length > 0 ? parts.join(" · ") : "Весь флот";
   const title = `Морспасслужба — ${subtitle}`;
 
   slide.addText(title, {
