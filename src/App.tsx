@@ -37,6 +37,8 @@ export default function App() {
   const [sortBy, setSortBy] = useState<"type"|"name"|"branch">("type");
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
+
   const [showContractForm, setShowContractForm] = useState(false);
   const [editContractId, setEditContractId] = useState<number|null>(null);
   const [activeVesselId, setActiveVesselId] = useState<number|null>(null);
@@ -179,7 +181,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <div style={{ fontSize:32 }}>⚓</div>
+      <img src="/logo.png" style={{ height:48, width:48, objectFit:"contain" }} alt="МСС" />
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
@@ -187,18 +189,33 @@ export default function App() {
   /* ── TABS CONFIG ── */
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
+    ...(isAdmin ? [["economics", "💰 Экономика"]] as [string, string][] : []),
     ["map", "🗺 Карта флота"],
     ["summary", "📋 Сводный отчёт"],
-    ...(isAdmin ? [["economics", "💰 Экономика"], ["vessels", "🚢 Суда"]] as [string, string][] : []),
+    ...(isAdmin ? [["vessels", "🚢 Суда"]] as [string, string][] : []),
   ];
 
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
       <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
-        <span style={{ fontSize:18, fontWeight:700, color:"#ffffff" }}>⚓ Флот МСС — {YEAR}</span>
+        {/* Logo + title */}
+        <span style={{ display:"flex", alignItems:"center", gap:8, fontSize:18, fontWeight:700, color:"#ffffff" }}>
+          <img src="/logo.png" style={{ height:32, width:32, objectFit:"contain" }} alt="МСС" />
+          Флот МСС
+        </span>
         <span style={{ fontSize:12, color:"#bfdbfe" }}>{contractCount} контрактов</span>
         {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
+
+        {/* Upload .msg button in header — only on Карта флота tab, only for admin */}
+        {isAdmin && activeTab === "map" && (
+          <label style={{ cursor:"pointer", fontSize:12, color:"#bfdbfe", fontWeight:600, display:"flex", alignItems:"center", gap:4, padding:"6px 12px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.1)" }}>
+            📂 Загрузить .msg
+            <input type="file" multiple accept=".msg" style={{ display:"none" }}
+              onChange={(e) => { if (e.target.files) setHeaderUploadFiles(e.target.files); }} />
+          </label>
+        )}
+
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
           {isAdmin && activeTab==="gantt" && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
         </span>
@@ -277,7 +294,12 @@ export default function App() {
           />
         )}
         {activeTab==="map" && (
-          <FleetMap isAdmin={isAdmin} canView={canView} />
+          <FleetMap
+            isAdmin={isAdmin}
+            canView={canView}
+            externalFiles={headerUploadFiles}
+            onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
+          />
         )}
         {activeTab==="summary" && (
           <SummaryReport isAdmin={isAdmin} canView={canView} />
