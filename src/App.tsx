@@ -251,7 +251,7 @@ export default function App() {
                   </div>
                 )}
                 <div style={{ fontSize:11, color:T.text2, marginBottom:8 }}>Будет экспортировано: <b style={{ color:T.text }}>{filtered.length} судов</b></div>
-                <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, isAdmin); setShowExportMenu(false); }} style={{ width:"100%", padding:9, borderRadius:6, border:"none", background:T.accent, color:"#ffffff", fontWeight:700, cursor:"pointer", fontSize:13 }}>⬇ Скачать PPTX</button>
+                <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, filterBranch, filterType, isAdmin); setShowExportMenu(false); }} style={{ width:"100%", padding:9, borderRadius:6, border:"none", background:T.accent, color:"#ffffff", fontWeight:700, cursor:"pointer", fontSize:13 }}>⬇ Скачать PPTX</button>
               </div>
             )}
           </div>
