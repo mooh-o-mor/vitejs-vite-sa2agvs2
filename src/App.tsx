@@ -213,7 +213,7 @@ export default function App() {
 
       <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
         <span style={{ display:"flex", alignItems:"center", gap:8, fontSize:18, fontWeight:700, color:"#ffffff" }}>
-          <img src="/logo.png" alt="" style={{ height:32 }} /> Флот МСС
+          <img src="/logo.png" alt="" style={{ height:40 }} /> Флот МСС
         </span>
         {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
