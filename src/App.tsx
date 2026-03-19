@@ -200,7 +200,7 @@ export default function App() {
         <span style={{ fontSize:12, color:"#bfdbfe" }}>{contractCount} контрактов</span>
         {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
-          {isAdmin && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
+          {isAdmin && activeTab==="gantt" && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
         </span>
         {access !== "guest" && (
           <span style={{ fontSize:11, color:"#bfdbfe", marginRight:8 }}>{accessLabel()}</span>
@@ -210,7 +210,8 @@ export default function App() {
         ) : (
           <button onClick={() => setShowLogin(true)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔒 Войти</button>
         )}
-        {isAdmin && (
+        {/* PPTX export — only on Расстановка, only for admin */}
+        {isAdmin && activeTab==="gantt" && (
           <div style={{ position:"relative" }}>
             <button onClick={() => setShowExportMenu(v => !v)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600 }}>⬇ Экспорт PPTX ▾</button>
             {showExportMenu && (
@@ -276,10 +277,10 @@ export default function App() {
           />
         )}
         {activeTab==="map" && (
-          <FleetMap isAdmin={isAdmin} />
+          <FleetMap isAdmin={isAdmin} canView={canView} />
         )}
         {activeTab==="summary" && (
-          <SummaryReport isAdmin={isAdmin} />
+          <SummaryReport isAdmin={isAdmin} canView={canView} />
         )}
         {activeTab==="economics" && isAdmin && (
           <Economics vessels={filtered} contracts={visibleContracts} />
