@@ -168,14 +168,12 @@ export function FleetMap({
   // Init map
   useEffect(() => {
     if (!mapRef.current || mapObj.current) return;
-    const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: false, attributionControl: false });
-L.control.zoom({ position: "bottomright" }).addTo(map);
+   const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: false, attributionControl: false });
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: "", subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
-
-    // Zoom controls — bottom right to avoid conflict with mobile sidebar button
-    L.control.zoom({ position: "bottomright" }).addTo(map);
+    // Zoom controls
+    L.control.zoom({ position: "topright" }).addTo(map);
 
     markersRef.current = (L as any).markerClusterGroup({
       maxClusterRadius: 40,
