@@ -52,7 +52,6 @@ const BRANCH_COLORS: Record<string, string> = {
   "АРХФ": "#F1F8E9",
 };
 
-// Excel hex (without #)
 const BRANCH_XL: Record<string, string> = {
   "АЧФ":  "FFF3E0", "АЗЧФ": "FFF3E0",
   "БЛТФ": "E3F2FD", "БФ":   "E3F2FD",
@@ -81,7 +80,7 @@ function branchBg(b: string): string {
 }
 
 /* ── Component ── */
-export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
+export function SummaryReport({ isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
@@ -138,26 +137,21 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
   /* ── Styled Excel export ── */
   function exportXlsx() {
     const wb = XLSX.utils.book_new();
-
     const headers = ["№ п/п", "Название судна", "Филиал", "Статус по План-графику", "Местоположение судна", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
     const colWidths = [6, 30, 10, 28, 28, 35, 12, 12];
 
-    // Build data array with styles
     const aoa: any[][] = [];
 
-    // Row 0: Title (merged later)
-    aoa.push([{ v: `Сводная таблица судов МСС`, t: "s", s: {
+    aoa.push([{ v: "Сводная таблица судов МСС", t: "s", s: {
       font: { bold: true, sz: 16, color: { rgb: "1A2A3A" } },
       alignment: { horizontal: "center", vertical: "center" },
     }}]);
 
-    // Row 1: Date
     aoa.push([{ v: `на ${fmtDateRu(selDate)}`, t: "s", s: {
       font: { bold: true, sz: 12, color: { rgb: "546E7A" } },
       alignment: { horizontal: "center", vertical: "center" },
     }}]);
 
-    // Row 2: Headers
     const headerRow = headers.map((h) => ({
       v: h, t: "s",
       s: {
@@ -174,7 +168,6 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
     }));
     aoa.push(headerRow);
 
-    // Data rows
     filtered.forEach((v, i) => {
       const sc = statusCls(v.status);
       const brXl = BRANCH_XL[v.branch] || "FFFFFF";
@@ -188,47 +181,28 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
 
       const rowFill = { fgColor: { rgb: brXl } };
       const wrap = { wrapText: true, vertical: "center" as const };
-
       const statusFill = { fgColor: { rgb: STATUS_XL_BG[sc] || "FFFFFF" } };
       const statusFont = { bold: true, sz: 10, color: { rgb: STATUS_XL_FG[sc] || "424242" } };
 
       aoa.push([
-        // №
         { v: i + 1, t: "n", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
-        // Судно
         { v: v.vessel_name, t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "1A2A3A" } } } },
-        // Филиал
         { v: v.branch, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "37474F" } } } },
-        // Статус
         { v: v.status, t: "s", s: { fill: statusFill, alignment: { ...wrap }, border: baseBorder, font: statusFont } },
-        // Местоположение
         { v: v.coord_raw || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
-        // Примечание
         { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
-        // ДТ
         { v: getSupply(v.supplies, "ДТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
-        // Мазут
         { v: getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
       ]);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-    // Merges: title and date rows across all columns
     ws["!merges"] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
       { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
     ];
-
-    // Column widths
     ws["!cols"] = colWidths.map((w) => ({ wch: w }));
-
-    // Row heights: header row taller
-    ws["!rows"] = [
-      { hpt: 30 }, // title
-      { hpt: 20 }, // date
-      { hpt: 36 }, // headers
-    ];
+    ws["!rows"] = [{ hpt: 30 }, { hpt: 20 }, { hpt: 36 }];
 
     XLSX.utils.book_append_sheet(wb, ws, "Сводная");
     XLSX.writeFile(wb, `Сводная_МСС_${selDate}.xlsx`);
@@ -256,12 +230,10 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div>
-      {/* Title */}
       <div style={{ textAlign: "center", fontSize: 18, fontWeight: 700, margin: "4px 0 10px", color: "#1a2a3a" }}>
         Сводная таблица судов МСС
       </div>
 
-      {/* Controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
         <select value={selDate} onChange={(e) => setSelDate(e.target.value)}
           style={{ padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>
@@ -282,7 +254,8 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
           <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
         </div>
 
-        {isAdmin && (
+        {/* Excel export — for admin and viewer */}
+        {canView && (
           <button onClick={exportXlsx}
             style={{ marginLeft: "auto", padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
             ⬇ Экспорт в Excel
@@ -290,7 +263,6 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      {/* Table */}
       <div style={{ overflow: "auto", maxHeight: "calc(100vh - 220px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
@@ -299,11 +271,11 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
               <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Название судна</th>
               <th style={thStyle}>Филиал</th>
               <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Статус по План-графику</th>
-              {isAdmin && <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Сведения о контракте</th>}
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Сведения о контракте</th>}
               <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Местоположение судна</th>
-              {isAdmin && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
-              {isAdmin && <th style={{ ...thStyle, width: 70 }}>Топливо ДТ</th>}
-              {isAdmin && <th style={{ ...thStyle, width: 70 }}>Топливо Мазут</th>}
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
+              {canView && <th style={{ ...thStyle, width: 70 }}>Топливо ДТ</th>}
+              {canView && <th style={{ ...thStyle, width: 70 }}>Топливо Мазут</th>}
             </tr>
           </thead>
           <tbody>
@@ -313,14 +285,14 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
 
               let statusDisplay = v.status;
               let contractInfo = "";
-              if (isAdmin && sc === "asd") {
+              if (canView && sc === "asd") {
                 const parts = v.status.split(/[,/]/);
                 if (parts.length > 1) {
                   statusDisplay = parts[0].trim();
                   contractInfo = parts.slice(1).join(", ").trim();
                 }
               }
-              if (!isAdmin) {
+              if (!canView) {
                 statusDisplay = shortStatus(v.status);
                 contractInfo = "";
               }
@@ -336,11 +308,11 @@ export function SummaryReport({ isAdmin }: { isAdmin: boolean }) {
                     color: STATUS_COLOR[sc],
                     fontWeight: 600, fontSize: 11,
                   }}>{statusDisplay}</td>
-                  {isAdmin && <td style={{ ...tdBase, fontSize: 11, color: "#37474F" }}>{contractInfo}</td>}
+                  {canView && <td style={{ ...tdBase, fontSize: 11, color: "#37474F" }}>{contractInfo}</td>}
                   <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{v.coord_raw || "—"}</td>
-                  {isAdmin && <td style={{ ...tdBase, fontSize: 11, color: "#546E7A", maxWidth: 220 }}>{v.note || ""}</td>}
-                  {isAdmin && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
-                  {isAdmin && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
+                  {canView && <td style={{ ...tdBase, fontSize: 11, color: "#546E7A", maxWidth: 220 }}>{v.note || ""}</td>}
+                  {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
+                  {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
                 </tr>
               );
             })}

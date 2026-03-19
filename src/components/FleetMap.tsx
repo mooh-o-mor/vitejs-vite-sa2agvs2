@@ -37,6 +37,51 @@ function mkIcon(c: string) {
   return L.divIcon({ html: svg, iconSize: [26, 32], iconAnchor: [13, 32], popupAnchor: [0, -34], className: "" });
 }
 
+/* ── Pie chart SVG for cluster icon ── */
+function mkPieIcon(counts: Record<string, number>, total: number) {
+  const sz = total < 5 ? 38 : total < 10 ? 44 : 50;
+  const r = sz / 2;
+  const ir = r * 0.55; // inner radius for donut
+
+  const segments = [
+    { key: "asg", count: counts.asg || 0, color: CLR.asg },
+    { key: "asd", count: counts.asd || 0, color: CLR.asd },
+    { key: "rem", count: counts.rem || 0, color: CLR.rem },
+    { key: "oth", count: counts.oth || 0, color: CLR.oth },
+  ].filter((s) => s.count > 0);
+
+  let paths = "";
+  if (segments.length === 1) {
+    paths = `<circle cx="${r}" cy="${r}" r="${r}" fill="${segments[0].color}"/>`;
+  } else {
+    let startAngle = -Math.PI / 2;
+    for (const seg of segments) {
+      const angle = (seg.count / total) * 2 * Math.PI;
+      const endAngle = startAngle + angle;
+      const x1 = r + r * Math.cos(startAngle);
+      const y1 = r + r * Math.sin(startAngle);
+      const x2 = r + r * Math.cos(endAngle);
+      const y2 = r + r * Math.sin(endAngle);
+      const large = angle > Math.PI ? 1 : 0;
+      paths += `<path d="M${r},${r} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large},1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${seg.color}"/>`;
+      startAngle = endAngle;
+    }
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">
+    <circle cx="${r}" cy="${r}" r="${r}" fill="white"/>
+    ${paths}
+    <circle cx="${r}" cy="${r}" r="${ir}" fill="white"/>
+    <text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="central"
+      font-family="monospace" font-size="${total > 9 ? 11 : 13}" font-weight="700" fill="#1a2a3a">${total}</text>
+  </svg>`;
+
+  return L.divIcon({
+    html: svg, className: "",
+    iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2],
+  });
+}
+
 /* ── DB row type ── */
 interface DprRow {
   id: number;
@@ -52,7 +97,7 @@ interface DprRow {
 }
 
 /* ── Component ── */
-export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
+export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObj = useRef<L.Map | null>(null);
   const markersRef = useRef<any>(null);
@@ -70,6 +115,16 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
 
   const [dragging, setDragging] = useState(false);
   const dragCounter = useRef(0);
+
+  // Mobile sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // Drag & drop handlers
   useEffect(() => {
@@ -111,16 +166,8 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
         children.forEach((m: any) => {
           if (m.options._status) counts[m.options._status as keyof typeof counts]++;
         });
-        const dom = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]) as keyof typeof CLR;
-        const bg = CLR[dom];
-        const n = children.length;
-        const sz = n < 5 ? 34 : n < 10 ? 40 : 46;
-        return L.divIcon({
-          html: `<div style="width:${sz}px;height:${sz}px;background:${bg};border:3px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:${n > 9 ? 11 : 13}px;font-weight:700;color:white;box-shadow:0 2px 8px rgba(0,0,0,.3)">${n}</div>`,
-          className: "",
-          iconSize: [sz, sz],
-          iconAnchor: [sz / 2, sz / 2],
-        });
+        const total = children.length;
+        return mkPieIcon(counts, total);
       },
     }).addTo(map);
 
@@ -179,6 +226,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
       });
       marker.on("click", () => {
         setSelVessel(v);
+        if (isMobile) setSidebarOpen(false);
         mapObj.current?.setView([v.lat!, v.lng!], Math.max(mapObj.current.getZoom(), 7), { animate: true });
       });
       markersRef.current!.addLayer(marker);
@@ -229,10 +277,10 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
 
       // Fetch branch lookup from vessels table
       const { data: vesselList } = await supabase.from("vessels").select("name, branch");
-      const branchMap = new Map<string, string>();
-     const BRANCH_MAP: Record<string, string> = {
+      const BRANCH_MAP: Record<string, string> = {
         "СевФ": "СВРФ", "БФ": "БЛТФ", "ПримФ": "ПРМФ", "СахФ": "СХЛФ",
       };
+      const branchMap = new Map<string, string>();
       (vesselList || []).forEach((v: any) => {
         if (v.branch) {
           const normalized = BRANCH_MAP[v.branch] || v.branch;
@@ -288,6 +336,8 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
     color: active ? "#fff" : T.text2,
   });
 
+  const showSidebar = isMobile ? sidebarOpen : true;
+
   return (
     <div style={{ display: "flex", height: "calc(100vh - 90px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
 
@@ -305,101 +355,136 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
+      {/* Mobile hamburger */}
+      {isMobile && !sidebarOpen && (
+        <button onClick={() => setSidebarOpen(true)} style={{
+          position: "absolute", top: 10, left: 10, zIndex: 800,
+          width: 40, height: 40, borderRadius: 8,
+          background: "#fff", border: `1px solid ${T.border}`,
+          boxShadow: "0 2px 8px rgba(0,0,0,.15)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 20, cursor: "pointer", color: T.text,
+        }}>☰</button>
+      )}
+
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{
+          position: "absolute", inset: 0, zIndex: 600,
+          background: "rgba(0,0,0,0.3)",
+        }} />
+      )}
+
       {/* ── SIDEBAR ── */}
-      <div style={{ width: 280, minWidth: 280, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column" }}>
+      {showSidebar && (
+        <div style={{
+          width: 280, minWidth: 280, background: "#fff",
+          borderRight: `1px solid ${T.border}`,
+          display: "flex", flexDirection: "column",
+          ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}),
+        }}>
 
-        {/* Date + stats */}
-        <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <select
-              value={selDate}
-              onChange={(e) => setSelDate(e.target.value)}
-              style={{ flex: 1, padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12, fontFamily: "monospace", background: "#f8fafc" }}
-            >
-              {dates.length === 0 && <option value="">— нет данных —</option>}
-              {dates.map((d) => <option key={d} value={d}>{fmtDateRu(d)}</option>)}
-            </select>
-          </div>
-          <div style={{ display: "flex", gap: 10, fontSize: 12 }}>
-            <span><b style={{ color: CLR.asg }}>{cAsg}</b> <span style={{ color: T.text2 }}>АСГ</span></span>
-            <span><b style={{ color: CLR.asd }}>{cAsd}</b> <span style={{ color: T.text2 }}>АСД</span></span>
-            <span><b style={{ color: CLR.rem }}>{cRem}</b> <span style={{ color: T.text2 }}>РЕМ</span></span>
-            <span style={{ color: T.text2 }}><b>{all.length}</b> всего</span>
-          </div>
-          {noPos > 0 && <div style={{ fontSize: 10, color: "#c07800", marginTop: 4 }}>⚠ без позиции: {noPos}</div>}
-        </div>
-
-        {/* Upload (admin) */}
-        {isAdmin && (
-          <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600 }}>
-              📂 Загрузить .msg
-              <input type="file" multiple accept=".msg" style={{ display: "none" }}
-                onChange={(e) => e.target.files && handleUpload(e.target.files)} />
-            </label>
-            {uploadMsg && <div style={{ fontSize: 11, color: uploading ? T.text2 : T.accent, marginTop: 4 }}>{uploadMsg}</div>}
-          </div>
-        )}
-
-        {/* Search */}
-        <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
-          <input
-            placeholder="Поиск судна, филиала..."
-            value={search} onChange={(e) => setSearch(e.target.value)}
-            style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12 }}
-          />
-        </div>
-
-        {/* Filter buttons */}
-        <div style={{ display: "flex", gap: 4, padding: "8px 10px", borderBottom: `1px solid ${T.border}` }}>
-          {(["all", "asg", "asd", "rem"] as const).map((f) => (
-            <button key={f} onClick={() => setFilter(f)} style={fbtn(filter === f)}>
-              {f === "all" ? "Все" : f === "asg" ? "АСГ" : f === "asd" ? "АСД" : "РЕМ"}
-            </button>
-          ))}
-        </div>
-
-        {/* Vessel list */}
-        <div style={{ flex: 1, overflowY: "auto" }}>
-          {all.map((v) => {
-            const c = cls(v.status);
-            const isSel = selVessel?.vessel_name === v.vessel_name;
-            return (
-              <div
-                key={v.vessel_name}
-                onClick={() => {
-                  setSelVessel(v);
-                  if (v.lat != null && v.lng != null && mapObj.current) {
-                    mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
-                  }
-                }}
-                style={{
-                  padding: "8px 12px", borderBottom: `1px solid ${T.border}`, cursor: "pointer",
-                  borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`,
-                  background: isSel ? "rgba(30,144,255,0.06)" : "transparent",
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{v.vessel_name}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                  <span style={{
-                    display: "inline-block", padding: "1px 6px", borderRadius: 3,
-                    fontFamily: "monospace", fontSize: 10, fontWeight: 600,
-                    background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5",
-                    color: CLR[c],
-                  }}>{isAdmin ? v.status.split("/")[0].trim() : shortStatus(v.status)}</span>
-                  <span style={{ fontSize: 11, color: T.text2 }}>{v.branch}</span>
-                  {v.lat == null && <span style={{ fontSize: 10, color: "#c07800" }}>📍?</span>}
-                </div>
-              </div>
-            );
-          })}
-          {all.length === 0 && !loading && (
-            <div style={{ padding: 20, textAlign: "center", color: T.text2, fontSize: 13 }}>
-              {dates.length === 0 ? "Нет загруженных данных" : "Нет судов по фильтру"}
+          {/* Mobile close button */}
+          {isMobile && (
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 8px", borderBottom: `1px solid ${T.border}` }}>
+              <button onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.text2 }}>✕</button>
             </div>
           )}
+
+          {/* Date + stats */}
+          <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <select
+                value={selDate}
+                onChange={(e) => setSelDate(e.target.value)}
+                style={{ flex: 1, padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12, fontFamily: "monospace", background: "#f8fafc" }}
+              >
+                {dates.length === 0 && <option value="">— нет данных —</option>}
+                {dates.map((d) => <option key={d} value={d}>{fmtDateRu(d)}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: 10, fontSize: 12 }}>
+              <span><b style={{ color: CLR.asg }}>{cAsg}</b> <span style={{ color: T.text2 }}>АСГ</span></span>
+              <span><b style={{ color: CLR.asd }}>{cAsd}</b> <span style={{ color: T.text2 }}>АСД</span></span>
+              <span><b style={{ color: CLR.rem }}>{cRem}</b> <span style={{ color: T.text2 }}>РЕМ</span></span>
+              <span style={{ color: T.text2 }}><b>{all.length}</b> всего</span>
+            </div>
+            {noPos > 0 && <div style={{ fontSize: 10, color: "#c07800", marginTop: 4 }}>⚠ без позиции: {noPos}</div>}
+          </div>
+
+          {/* Upload (admin only) */}
+          {isAdmin && (
+            <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600 }}>
+                📂 Загрузить .msg
+                <input type="file" multiple accept=".msg" style={{ display: "none" }}
+                  onChange={(e) => e.target.files && handleUpload(e.target.files)} />
+              </label>
+              {uploadMsg && <div style={{ fontSize: 11, color: uploading ? T.text2 : T.accent, marginTop: 4 }}>{uploadMsg}</div>}
+            </div>
+          )}
+
+          {/* Search */}
+          <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+            <input
+              placeholder="Поиск судна, филиала..."
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12 }}
+            />
+          </div>
+
+          {/* Filter buttons */}
+          <div style={{ display: "flex", gap: 4, padding: "8px 10px", borderBottom: `1px solid ${T.border}` }}>
+            {(["all", "asg", "asd", "rem"] as const).map((f) => (
+              <button key={f} onClick={() => setFilter(f)} style={fbtn(filter === f)}>
+                {f === "all" ? "Все" : f === "asg" ? "АСГ" : f === "asd" ? "АСД" : "РЕМ"}
+              </button>
+            ))}
+          </div>
+
+          {/* Vessel list */}
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {all.map((v) => {
+              const c = cls(v.status);
+              const isSel = selVessel?.vessel_name === v.vessel_name;
+              return (
+                <div
+                  key={v.vessel_name}
+                  onClick={() => {
+                    setSelVessel(v);
+                    if (isMobile) setSidebarOpen(false);
+                    if (v.lat != null && v.lng != null && mapObj.current) {
+                      mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+                    }
+                  }}
+                  style={{
+                    padding: "8px 12px", borderBottom: `1px solid ${T.border}`, cursor: "pointer",
+                    borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`,
+                    background: isSel ? "rgba(30,144,255,0.06)" : "transparent",
+                  }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{v.vessel_name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                    <span style={{
+                      display: "inline-block", padding: "1px 6px", borderRadius: 3,
+                      fontFamily: "monospace", fontSize: 10, fontWeight: 600,
+                      background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5",
+                      color: CLR[c],
+                    }}>{canView ? v.status.split("/")[0].trim() : shortStatus(v.status)}</span>
+                    <span style={{ fontSize: 11, color: T.text2 }}>{v.branch}</span>
+                    {v.lat == null && <span style={{ fontSize: 10, color: "#c07800" }}>📍?</span>}
+                  </div>
+                </div>
+              );
+            })}
+            {all.length === 0 && !loading && (
+              <div style={{ padding: 20, textAlign: "center", color: T.text2, fontSize: 13 }}>
+                {dates.length === 0 ? "Нет загруженных данных" : "Нет судов по фильтру"}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── MAP ── */}
       <div style={{ flex: 1, position: "relative" }}>
@@ -418,7 +503,8 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
         {/* Detail panel */}
         {selVessel && (
           <div style={{
-            position: "absolute", right: 14, bottom: 36, width: 320, maxHeight: "70vh",
+            position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36,
+            width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh",
             background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900,
             boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden",
           }}>
@@ -434,7 +520,7 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
                   padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 600,
                   background: cls(selVessel.status) === "asg" ? "#ffebee" : cls(selVessel.status) === "asd" ? "#e8f5e9" : "#f5f5f5",
                   color: CLR[cls(selVessel.status)],
-                }}>{isAdmin ? selVessel.status : shortStatus(selVessel.status)}</span>
+                }}>{canView ? selVessel.status : shortStatus(selVessel.status)}</span>
               } />
               <DetailRow label="Филиал" value={selVessel.branch} />
               <DetailRow label="Местоположение" value={selVessel.coord_raw || "—"} small />
@@ -444,8 +530,8 @@ export function FleetMap({ isAdmin }: { isAdmin: boolean }) {
                 </span>
               } />
 
-              {/* Admin-only: note + supplies */}
-              {isAdmin && (
+              {/* canView: note + supplies (admin + viewer) */}
+              {canView && (
                 <>
                   {selVessel.note && <DetailRow label="Примечание" value={selVessel.note} small />}
                   {selVessel.supplies && selVessel.supplies.length > 0 && (
