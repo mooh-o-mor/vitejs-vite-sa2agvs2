@@ -231,7 +231,7 @@ export default function App() {
         {isAdmin && activeTab==="map" && (
           <label style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8, display:"flex", alignItems:"center", gap:6 }}>
             📂 .msg
-            <input type="file" multiple accept=".msg" style={{ display:"none" }}
+            <input type="file" multiple accept=".msg,.eml" style={{ display:"none" }}
               onChange={(e) => {
                 if (e.target.files) {
                   const event = new CustomEvent("dpr-upload", { detail: e.target.files });
