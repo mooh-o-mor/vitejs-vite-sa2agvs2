@@ -144,7 +144,7 @@ export function FleetMap({
     }
   }, [externalFiles]);
 
-  // Drag & drop handlers
+  // Drag & drop handlers + header upload button
   useEffect(() => {
     const onEnter = (e: DragEvent) => { e.preventDefault(); dragCounter.current++; setDragging(true); };
     const onLeave = () => { dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setDragging(false); } };
@@ -153,15 +153,21 @@ export function FleetMap({
       e.preventDefault(); dragCounter.current = 0; setDragging(false);
       if (e.dataTransfer?.files?.length && isAdmin) handleUpload(e.dataTransfer.files);
     };
+    const onDprUpload = (e: Event) => {
+      const files = (e as CustomEvent).detail as FileList;
+      if (files?.length) handleUpload(files);
+    };
     document.addEventListener("dragenter", onEnter);
     document.addEventListener("dragleave", onLeave);
     document.addEventListener("dragover", onOver);
     document.addEventListener("drop", onDrop);
+    window.addEventListener("dpr-upload", onDprUpload);
     return () => {
       document.removeEventListener("dragenter", onEnter);
       document.removeEventListener("dragleave", onLeave);
       document.removeEventListener("dragover", onOver);
       document.removeEventListener("drop", onDrop);
+      window.removeEventListener("dpr-upload", onDprUpload);
     };
   }, [isAdmin]);
 
