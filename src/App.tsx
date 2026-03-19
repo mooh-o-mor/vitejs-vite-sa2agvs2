@@ -55,7 +55,8 @@ export default function App() {
 
   async function loadData() {
     setLoading(true);
-    const [{ data: vData }, { data: cData }] = await Promise.all([
+    const [, { data: vData }, { data: cData }] = await Promise.all([
+      new Promise(r => setTimeout(r, 1500)),
       supabase.from("vessels").select("*").order("id"),
       supabase.from("contracts").select("*").order("id"),
     ]);
