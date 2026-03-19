@@ -37,7 +37,15 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-
+// DD°MM[,M]N / DDD°MM[,M]E  (например: 45°04N/036°32E)
+const m2 = s.match(
+  /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+);
+if (m2) {
+  const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
+  const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
+  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+}
   // Port lookup
   const low = s
     .toLowerCase()
