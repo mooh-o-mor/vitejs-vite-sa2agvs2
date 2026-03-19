@@ -16,7 +16,8 @@ import { SummaryReport } from "./components/SummaryReport";
 
 const EMPTY_FORM: FormState = {
   counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`,
-  rate:"", mob:"", demob:"", firmDays:"", optionDays:""
+  rate:"", mob:"", demob:"", firmDays:"", optionDays:"",
+  priority:"contract", altGroup:""
 };
 
 export default function App() {
@@ -36,8 +37,6 @@ export default function App() {
   const [filterCp, setFilterCp] = useState("Все");
   const [sortBy, setSortBy] = useState<"type"|"name"|"branch">("type");
   const [showExportMenu, setShowExportMenu] = useState(false);
-
-  const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
 
   const [showContractForm, setShowContractForm] = useState(false);
   const [editContractId, setEditContractId] = useState<number|null>(null);
@@ -66,6 +65,7 @@ export default function App() {
       start:c.start_date, end:c.end_date,
       rate:c.rate, mob:c.mob, demob:c.demob,
       firmDays:c.firm_days||0, optionDays:c.option_days||0,
+      priority:c.priority||"contract", altGroup:c.alt_group||null,
     })));
     setLoading(false);
   }
@@ -82,7 +82,8 @@ export default function App() {
     setContractForm({
       counterparty:contract.counterparty, start:contract.start, end:contract.end,
       rate:String(contract.rate), mob:String(contract.mob), demob:String(contract.demob),
-      firmDays:String(contract.firmDays||""), optionDays:String(contract.optionDays||"")
+      firmDays:String(contract.firmDays||""), optionDays:String(contract.optionDays||""),
+      priority:contract.priority||"contract", altGroup:contract.altGroup ? String(contract.altGroup) : ""
     });
     setActiveVesselId(contract.vesselId);
     setShowContractForm(true);
@@ -96,6 +97,8 @@ export default function App() {
       start_date:contractForm.start, end_date:contractForm.end,
       rate:+contractForm.rate||0, mob:+contractForm.mob||0, demob:+contractForm.demob||0,
       firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
+      priority:contractForm.priority||"contract",
+      alt_group:contractForm.altGroup ? +contractForm.altGroup : null,
     };
     if (editContractId) {
       const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
@@ -157,9 +160,22 @@ export default function App() {
   });
 
   const visibleContracts = filterCp==="Все" ? contracts : contracts.filter(c => cpKey(c.counterparty)===filterCp);
-  const totalRev = visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
-    .reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
-  
+
+  // Revenue: only count "contract" priority, or top priority from each alt_group
+  const revenueContracts = visibleContracts.filter(c => {
+    if (!filtered.some(v => v.id===c.vesselId)) return false;
+    if (!c.altGroup) return c.priority === "contract";
+    // From alt_group, only count the highest priority
+    const group = visibleContracts.filter(g => g.vesselId===c.vesselId && g.altGroup===c.altGroup);
+    const sorted = group.sort((a,b) => {
+      const ord = ["contract","kp","plan"];
+      return ord.indexOf(a.priority) - ord.indexOf(b.priority);
+    });
+    return sorted[0]?.id === c.id && c.priority === "contract";
+  });
+  const totalRev = revenueContracts.reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
+  const contractCount = contracts.filter(c => !["Ремонт","АСГ"].includes(cpKey(c.counterparty))).length;
+
   const btnFilter = (active: boolean, amber?: boolean) => ({
     padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
     borderColor: active ? (amber ? T.amber : T.accent) : T.border,
@@ -180,40 +196,25 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logo.png" style={{ height:48, width:48, objectFit:"contain" }} alt="МСС" />
+      <div style={{ fontSize:32 }}>⚓</div>
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
 
-  /* ── TABS CONFIG ── */
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
-    ...(isAdmin ? [["economics", "💰 Экономика"]] as [string, string][] : []),
     ["map", "🗺 Карта флота"],
     ["summary", "📋 Сводный отчёт"],
-    ...(isAdmin ? [["vessels", "🚢 Суда"]] as [string, string][] : []),
+    ...(isAdmin ? [["economics", "💰 Экономика"], ["vessels", "🚢 Суда"]] as [string, string][] : []),
   ];
 
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
       <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
-        {/* Logo + title */}
-        <span style={{ display:"flex", alignItems:"center", gap:8, fontSize:18, fontWeight:700, color:"#ffffff" }}>
-          <img src="/logo.png" style={{ height:32, width:32, objectFit:"contain" }} alt="МСС" />
-          Флот МСС
-        </span>
-       {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
-
-        {/* Upload .msg button in header — only on Карта флота tab, only for admin */}
-        {isAdmin && activeTab === "map" && (
-          <label style={{ cursor:"pointer", fontSize:12, color:"#bfdbfe", fontWeight:600, display:"flex", alignItems:"center", gap:4, padding:"6px 12px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.1)" }}>
-            📂 Загрузить .msg
-            <input type="file" multiple accept=".msg" style={{ display:"none" }}
-              onChange={(e) => { if (e.target.files) setHeaderUploadFiles(e.target.files); }} />
-          </label>
-        )}
-
+        <span style={{ fontSize:18, fontWeight:700, color:"#ffffff" }}>⚓ Флот МСС — {YEAR}</span>
+        <span style={{ fontSize:12, color:"#bfdbfe" }}>{contractCount} контрактов</span>
+        {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
         <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
           {isAdmin && activeTab==="gantt" && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
         </span>
@@ -225,7 +226,6 @@ export default function App() {
         ) : (
           <button onClick={() => setShowLogin(true)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔒 Войти</button>
         )}
-        {/* PPTX export — only on Расстановка, only for admin */}
         {isAdmin && activeTab==="gantt" && (
           <div style={{ position:"relative" }}>
             <button onClick={() => setShowExportMenu(v => !v)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600 }}>⬇ Экспорт PPTX ▾</button>
@@ -256,11 +256,10 @@ export default function App() {
         )}
       </div>
 
-      {/* ── TAB BAR ── */}
       <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 8px" }}>
         {tabs.map(([k, l]) => (
-  <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent", ...(k==="vessels" ? { marginLeft:"auto" } : {}) }}>{l}</button>
-))}
+          <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent" }}>{l}</button>
+        ))}
       </div>
 
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
@@ -292,12 +291,7 @@ export default function App() {
           />
         )}
         {activeTab==="map" && (
-          <FleetMap
-            isAdmin={isAdmin}
-            canView={canView}
-            externalFiles={headerUploadFiles}
-            onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
-          />
+          <FleetMap isAdmin={isAdmin} canView={canView} />
         )}
         {activeTab==="summary" && (
           <SummaryReport isAdmin={isAdmin} canView={canView} />
