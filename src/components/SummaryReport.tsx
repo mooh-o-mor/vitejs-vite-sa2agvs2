@@ -80,7 +80,7 @@ function branchBg(b: string): string {
 }
 
 /* ── Component ── */
-export function SummaryReport({ isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
+export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
