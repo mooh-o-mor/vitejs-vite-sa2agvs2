@@ -159,8 +159,7 @@ export default function App() {
   const visibleContracts = filterCp==="Все" ? contracts : contracts.filter(c => cpKey(c.counterparty)===filterCp);
   const totalRev = visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
     .reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
-  const contractCount = contracts.filter(c => !["Ремонт","АСГ"].includes(cpKey(c.counterparty))).length;
-
+  
   const btnFilter = (active: boolean, amber?: boolean) => ({
     padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
     borderColor: active ? (amber ? T.amber : T.accent) : T.border,
@@ -260,8 +259,8 @@ export default function App() {
       {/* ── TAB BAR ── */}
       <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 8px" }}>
         {tabs.map(([k, l]) => (
-          <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent" }}>{l}</button>
-        ))}
+  <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent", ...(k==="vessels" ? { marginLeft:"auto" } : {}) }}>{l}</button>
+))}
       </div>
 
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
