@@ -183,13 +183,6 @@ export default function App() {
   });
   const totalRev = revenueContracts.reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
 
-  const btnFilter = (active: boolean, amber?: boolean) => ({
-    padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
-    borderColor: active ? (amber ? T.amber : T.accent) : T.border,
-    background: active ? (amber ? T.amber : T.accent) : T.bg2,
-    color: active ? "#ffffff" : T.text2
-  } as React.CSSProperties);
-
   function fmoney(n: number) {
     if (!n && n !== 0) return "—";
     return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
