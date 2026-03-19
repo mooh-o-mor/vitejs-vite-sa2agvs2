@@ -41,7 +41,7 @@ function mkIcon(c: string) {
 function mkPieIcon(counts: Record<string, number>, total: number) {
   const sz = total < 5 ? 38 : total < 10 ? 44 : 50;
   const r = sz / 2;
-  const ir = r * 0.55; // inner radius for donut
+  const ir = r * 0.55;
 
   const segments = [
     { key: "asg", count: counts.asg || 0, color: CLR.asg },
@@ -97,7 +97,17 @@ interface DprRow {
 }
 
 /* ── Component ── */
-export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
+export function FleetMap({
+  isAdmin,
+  canView,
+  externalFiles,
+  onExternalFilesConsumed,
+}: {
+  isAdmin: boolean;
+  canView: boolean;
+  externalFiles?: FileList | null;
+  onExternalFilesConsumed?: () => void;
+}) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObj = useRef<L.Map | null>(null);
   const markersRef = useRef<any>(null);
@@ -126,6 +136,14 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Handle files passed from header button
+  useEffect(() => {
+    if (externalFiles && externalFiles.length > 0 && isAdmin) {
+      handleUpload(externalFiles);
+      onExternalFilesConsumed?.();
+    }
+  }, [externalFiles]);
+
   // Drag & drop handlers
   useEffect(() => {
     const onEnter = (e: DragEvent) => { e.preventDefault(); dragCounter.current++; setDragging(true); };
@@ -150,10 +168,13 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
   // Init map
   useEffect(() => {
     if (!mapRef.current || mapObj.current) return;
-    const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: false, attributionControl: false }); L.control.zoom({ position: 'topright' }).addTo(map);
+    const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: false, attributionControl: false });
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: "", subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
+
+    // Zoom controls — bottom right to avoid conflict with mobile sidebar button
+    L.control.zoom({ position: "bottomright" }).addTo(map);
 
     markersRef.current = (L as any).markerClusterGroup({
       maxClusterRadius: 40,
@@ -237,7 +258,6 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
       mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
     }
 
-    // Show labels only for non-clustered markers
     const updateLabels = () => {
       markersRef.current!.getLayers().forEach((m: any) => {
         if (!m.getTooltip) return;
@@ -275,7 +295,6 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
 
-      // Fetch branch lookup from vessels table
       const { data: vesselList } = await supabase.from("vessels").select("name, branch");
       const BRANCH_MAP: Record<string, string> = {
         "СевФ": "СВРФ", "БФ": "БЛТФ", "ПримФ": "ПРМФ", "СахФ": "СХЛФ",
@@ -410,19 +429,8 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
               <span style={{ color: T.text2 }}><b>{all.length}</b> всего</span>
             </div>
             {noPos > 0 && <div style={{ fontSize: 10, color: "#c07800", marginTop: 4 }}>⚠ без позиции: {noPos}</div>}
+            {uploadMsg && <div style={{ fontSize: 11, color: uploading ? T.text2 : T.accent, marginTop: 6 }}>{uploadMsg}</div>}
           </div>
-
-          {/* Upload (admin only) */}
-          {isAdmin && (
-            <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600 }}>
-                📂 Загрузить .msg
-                <input type="file" multiple accept=".msg" style={{ display: "none" }}
-                  onChange={(e) => e.target.files && handleUpload(e.target.files)} />
-              </label>
-              {uploadMsg && <div style={{ fontSize: 11, color: uploading ? T.text2 : T.accent, marginTop: 4 }}>{uploadMsg}</div>}
-            </div>
-          )}
 
           {/* Search */}
           <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
@@ -496,7 +504,7 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
             <div style={{ fontSize: 16, color: T.text2, fontWeight: 500, marginBottom: 6 }}>
               {isAdmin ? "Загрузите файлы ДПР" : "Данные ДПР не загружены"}
             </div>
-            {isAdmin && <div style={{ fontSize: 12, color: T.text3 }}>Используйте кнопку «Загрузить .msg» или перетащите файлы на страницу</div>}
+            {isAdmin && <div style={{ fontSize: 12, color: T.text2 }}>Используйте кнопку «Загрузить .msg» в шапке или перетащите файлы на страницу</div>}
           </div>
         )}
 
@@ -530,7 +538,6 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
                 </span>
               } />
 
-              {/* canView: note + supplies (admin + viewer) */}
               {canView && (
                 <>
                   {selVessel.note && <DetailRow label="Примечание" value={selVessel.note} small />}
