@@ -150,7 +150,7 @@ export function FleetMap({ isAdmin, canView }: { isAdmin: boolean; canView: bool
   // Init map
   useEffect(() => {
     if (!mapRef.current || mapObj.current) return;
-    const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: false, attributionControl: false }); L.control.zoom({ position: 'bottomright' }).addTo(map);
+    const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: false, attributionControl: false }); L.control.zoom({ position: 'topright' }).addTo(map);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: "", subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
