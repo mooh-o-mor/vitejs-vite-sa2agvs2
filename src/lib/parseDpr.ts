@@ -23,6 +23,35 @@ export interface DprVessel {
   reportDate: Date | null;
 }
 
+/* ── Status normalizer ── */
+function normalizeStatus(raw: string): { status: string; extra: string } {
+  const s = raw.trim();
+
+  // Split on first / or ,
+  const sep = s.search(/[\/,]/);
+  const firstPart = (sep >= 0 ? s.slice(0, sep) : s).trim();
+  const afterSep = sep >= 0 ? s.slice(sep + 1).trim() : "";
+
+  const fu = firstPart.toUpperCase();
+  let status: string;
+  let extraFromFirst = "";
+
+  if (fu.startsWith("АСГ")) {
+    status = "АСГ";
+    extraFromFirst = firstPart.slice(3).trim();
+  } else if (fu.startsWith("АСД")) {
+    status = "АСД";
+    extraFromFirst = firstPart.slice(3).trim();
+  } else if (fu.startsWith("РЕМ") || /РЕМОНТ|КНР|ОСВИДЕТ/i.test(fu)) {
+    status = "РЕМ";
+  } else {
+    status = firstPart;
+  }
+
+  const extra = [extraFromFirst, afterSep].filter(Boolean).join(" / ");
+  return { status, extra };
+}
+
 /* ── Coordinate parser ── */
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
   if (!raw || raw === "nan") return null;
@@ -37,15 +66,17 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-// DD°MM[,M]N / DDD°MM[,M]E  (например: 45°04N/036°32E)
-const m2 = s.match(
-  /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
-);
-if (m2) {
-  const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
-  const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
-  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
-}
+
+  // DD°MM[,M]N / DDD°MM[,M]E  (например: 45°04N/036°32E)
+  const m2 = s.match(
+    /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+  );
+  if (m2) {
+    const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
+    const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
   // Port lookup
   const low = s
     .toLowerCase()
@@ -100,14 +131,12 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
     } catch (_) {}
   };
 
-  // XLSX (PK magic)
   for (let i = 0; i < u8.length - 4; i++) {
     if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 0x03 && u8[i + 3] === 0x04)
       tryParse(i);
   }
   if (best) return best;
 
-  // XLS (OLE magic)
   for (let i = 0; i < u8.length - 4; i++) {
     if (u8[i] === 0xd0 && u8[i + 1] === 0xcf && u8[i + 2] === 0x11 && u8[i + 3] === 0xe0)
       tryParse(i);
@@ -117,7 +146,6 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
 
 /* ── Filial data parser ── */
 export function parseFilial(rows: any[][]): DprVessel[] {
-  // Find header row
   let hRow = -1;
   for (let i = 0; i < Math.min(15, rows.length); i++) {
     if (rows[i] && rows[i].some((v: any) => v && String(v).includes("Название судна"))) {
@@ -149,9 +177,7 @@ export function parseFilial(rows: any[][]): DprVessel[] {
     C.pos = C.stat + 1;
   }
 
- // Extract report date — prefer Excel serial numbers, skip regulatory headers
   let date: Date | null = null;
-  // Pass 1: Excel serial numbers only (most reliable)
   for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
     for (const v of rows[i] || []) {
       if (typeof v === "number" && v > 45000 && v < 47000) {
@@ -160,7 +186,6 @@ export function parseFilial(rows: any[][]): DprVessel[] {
       }
     }
   }
-  // Pass 2: string dates (skip "Приложение"/"Распоряжение" lines)
   if (!date) {
     for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
       for (const v of rows[i] || []) {
@@ -196,7 +221,6 @@ export function parseFilial(rows: any[][]): DprVessel[] {
     if (typeof limVal === "number" && limVal > 0 && limVal < 43831) { i += 5; continue; }
     if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
 
-    // Also check all cells in the row for stale Excel dates (before 2020)
     let staleRow = false;
     for (const cell of row) {
       if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
@@ -228,14 +252,19 @@ export function parseFilial(rows: any[][]): DprVessel[] {
     const coordRaw = coordParts.join(" ").trim();
     const coords = parseCoord(coordRaw);
 
+    // Normalize status — split contract/extra info out of status field
+    const { status: cleanStatus, extra: statusExtra } = normalizeStatus(statStr);
+    const rawNote = C.note >= 0 && row[C.note] ? String(row[C.note]).trim() : "";
+    const combinedNote = [statusExtra, rawNote].filter(Boolean).join(" / ");
+
     vessels.push({
       name: String(name).trim(),
       branch: C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "",
-      status: statStr,
+      status: cleanStatus,
       coordRaw,
       lat: coords ? coords[0] : null,
       lng: coords ? coords[1] : null,
-      note: C.note >= 0 && row[C.note] ? String(row[C.note]).trim() : "",
+      note: combinedNote,
       supplies,
       reportDate: date,
     });
@@ -244,14 +273,13 @@ export function parseFilial(rows: any[][]): DprVessel[] {
   }
   return vessels;
 }
+
 /* ── EML → XLSX extraction ── */
 async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
-  // Find base64-encoded attachment
   const parts = text.split(/\r?\n\r?\n/);
   for (let i = 0; i < parts.length; i++) {
-    // Look for base64 block after attachment header
     const prev = i > 0 ? parts[i - 1] : "";
-    if (/content-transfer-encoding:\s*base64/i.test(prev) || 
+    if (/content-transfer-encoding:\s*base64/i.test(prev) ||
         (/attachment/i.test(prev) && /base64/i.test(prev))) {
       const b64 = parts[i].replace(/[\r\n\s]/g, "");
       try {
@@ -267,8 +295,6 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
       } catch (_) {}
     }
   }
-  
-  // Fallback: find any large base64 block
   const b64Match = text.match(/\r?\n\r?\n([A-Za-z0-9+/=\r\n]{500,})/);
   if (b64Match) {
     try {
@@ -283,7 +309,8 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
   }
   return null;
 }
-/* ── Full pipeline: ArrayBuffer[] → DprVessel[] ── */
+
+/* ── Full pipeline: File[] → DprVessel[] ── */
 export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel[]; date: Date | null }> {
   let reportDate: Date | null = null;
   const all: DprVessel[] = [];
@@ -309,7 +336,6 @@ export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel
     }
   }
 
- // Dedupe by name (prefer entry with more data)
   const map = new Map<string, DprVessel>();
   all.forEach((v) => {
     const key = v.name.toUpperCase().trim();
