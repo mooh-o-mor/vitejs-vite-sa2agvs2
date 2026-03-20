@@ -303,11 +303,12 @@ export default function App() {
           />
         )}
         {activeTab==="map" && (
-       <FleetMap
-  isAdmin={isAdmin}
-  externalFiles={headerUploadFiles}
-  onExternalFilesConsumed={handleFilesConsumed}
-/>
+          <FleetMap
+            isAdmin={isAdmin}
+            canView={canView}
+            externalFiles={headerUploadFiles}
+            onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
+          />
         )}
         {activeTab==="summary" && (
           <SummaryReport isAdmin={isAdmin} canView={canView} />
