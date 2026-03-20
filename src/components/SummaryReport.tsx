@@ -188,7 +188,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     filtered.forEach((v, i) => {
       const sc = statusCls(v.status);
       const brXl = BRANCH_XL[v.branch] || "FFFFFF";
-      const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+      const vType = typeMap.get(v.vessel_name.toUpperCase().trim().replace(/\s+/g, " ")) || "";
       const power = getPower(v.coord_raw);
 
       const baseBorder = {
@@ -304,7 +304,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
             {filtered.map((v, i) => {
               const sc = statusCls(v.status);
               const rowBg = branchBg(v.branch);
-              const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+              const vType = typeMap.get(v.vessel_name.toUpperCase().trim().replace(/\s+/g, " ")) || "";
               const power = getPower(v.coord_raw);
               const coordDisplay = (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
 
