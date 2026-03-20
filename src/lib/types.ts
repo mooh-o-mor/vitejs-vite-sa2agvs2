@@ -2,6 +2,7 @@ export interface Vessel {
   id: number;
   name: string;
   branch: string;
+  imo: string;
 }
 export interface Contract {
   id: number;
