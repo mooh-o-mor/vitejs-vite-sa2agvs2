@@ -127,12 +127,19 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Load IMO map from vessels table once
+  // Load IMO map — store both full name and name without prefix
   useEffect(() => {
     supabase.from("vessels").select("name, imo").then(({ data }) => {
       if (data) {
         const m = new Map<string, string>();
-        data.forEach((v: any) => { if (v.imo) m.set(v.name.toUpperCase().trim(), v.imo); });
+        data.forEach((v: any) => {
+          if (!v.imo) return;
+          const full = v.name.toUpperCase().trim();
+          m.set(full, v.imo);
+          // Also index without МФАСС/ТБС/etc prefix
+          const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+          if (short !== full) m.set(short, v.imo);
+        });
         setImoMap(m);
       }
     });
@@ -375,7 +382,6 @@ export function FleetMap({
             ))}
           </div>
 
-          {/* Vessel list — name first, then status badge, then branch */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {all.map((v) => {
               const c = cls(v.status);
@@ -392,7 +398,7 @@ export function FleetMap({
                 >
                   <span style={{ fontSize: 12, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel_name}</span>
                   <span style={{ flexShrink: 0, display: "inline-block", padding: "1px 5px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c] }}>{shortStatus(v.status)}</span>
-                  {v.branch && <span style={{ fontSize: 10, color: T.text2, flexShrink: 0 }}>{v.branch}</span>}
+                  {v.branch && v.branch !== "0" && <span style={{ fontSize: 10, color: T.text2, flexShrink: 0 }}>{v.branch}</span>}
                   {v.lat == null && <span style={{ fontSize: 10, color: "#c07800", flexShrink: 0 }}>📍?</span>}
                 </div>
               );
@@ -417,40 +423,37 @@ export function FleetMap({
         )}
 
         {selVessel && (() => {
-          const imo = imoMap.get(selVessel.vessel_name.toUpperCase().trim()) || "";
+          const key = selVessel.vessel_name.toUpperCase().trim();
+          const imo = imoMap.get(key) || "";
           const c = cls(selVessel.status);
+          // Extract БЭП/СЭП from coord_raw
+          const powerMatch = /\b(БЭП|СЭП)\b/i.exec(selVessel.coord_raw || "");
+          const power = powerMatch ? powerMatch[1].toUpperCase() : null;
+          const powerLabel = power === "БЭП" ? "Береговое эл-е (БЭП)" : power === "СЭП" ? "Судовое эл-е (СЭП)" : null;
+          // Clean coord_raw for display — remove БЭП/СЭП suffix
+          const coordDisplay = (selVessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
+
           return (
             <div style={{ position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36, width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              {/* Header: name + status badge + branch */}
-              <div style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "flex-start", gap: 8, flexShrink: 0 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 4 }}>{selVessel.vessel_name}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c] }}>{selVessel.status}</span>
-                    {selVessel.branch && <span style={{ fontSize: 11, color: T.text2 }}>{selVessel.branch}</span>}
-                    {imo && (
-                      <a href={`https://www.marinetraffic.com/en/ais/details/ships/shipid:0/mmsi:0/imo:${imo}/vessel:${encodeURIComponent(selVessel.vessel_name)}`}
-                        target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: 10, color: T.accent, fontFamily: "monospace", textDecoration: "none" }}
-                        title="Открыть на MarineTraffic"
-                      >IMO {imo} ↗</a>
-                    )}
+              {/* Header: name + status + branch + IMO — all in one line area */}
+              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>{selVessel.vessel_name}</span>
+                    <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c], flexShrink: 0 }}>{selVessel.status}</span>
+                    {selVessel.branch && selVessel.branch !== "0" && <span style={{ fontSize: 11, color: T.text2, flexShrink: 0 }}>{selVessel.branch}</span>}
+                    {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
                   </div>
                 </div>
-                <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+                <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
               </div>
               {/* Body */}
               <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
-                <DetailRow label="Местоположение" value={selVessel.coord_raw || "—"} small />
-                <DetailRow label="На карте" value={
-                  <span style={{ color: selVessel.lat != null ? "#00913f" : "#c07800" }}>
-                    {selVessel.lat != null ? "✓ определена" : "— нет в базе портов"}
-                  </span>
-                } />
+                <DetailRow label="Местоположение" value={coordDisplay || "—"} small />
                 {canView && (
                   <>
                     {selVessel.note && <DetailRow label="Примечание" value={selVessel.note} small />}
-                    {selVessel.supplies && selVessel.supplies.length > 0 && (
+                    {(selVessel.supplies && selVessel.supplies.length > 0 || powerLabel) && (
                       <>
                         <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, margin: "10px 0 4px", fontFamily: "monospace" }}>Запасы</div>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -460,6 +463,12 @@ export function FleetMap({
                             ))}</tr>
                           </thead>
                           <tbody>
+                            {/* Электропитание — первая строка */}
+                            {powerLabel && (
+                              <tr>
+                                <td colSpan={5} style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontStyle: "italic" }}>{powerLabel}</td>
+                              </tr>
+                            )}
                             {(selVessel.supplies as DprSupply[]).map((s, i) => (
                               <tr key={i}>
                                 <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
