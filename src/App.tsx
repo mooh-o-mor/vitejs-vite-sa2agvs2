@@ -4,17 +4,19 @@ import type { Vessel, Contract, FormState } from "./lib/types";
 import { T, YEAR, typeOrder } from "./lib/types";
 import { getType, cpKey } from "./lib/utils";
 
-import FilterBar from "./components/FilterBar";
-import LoginForm from "./components/LoginForm";
-import VesselForm from "./components/VesselForm";
-import ContractForm from "./components/ContractForm";
+// именованные импорты — именно то, что нужно по ошибкам TS2613
+import { FilterBar } from "./components/FilterBar";
+import { LoginForm } from "./components/LoginForm";
+import { VesselForm } from "./components/VesselForm";
+import { ContractForm } from "./components/ContractForm";
 
-// Для lazy-импортов используем промежуточные объекты с .default
-const GanttChart = lazy(() => import("./components/GanttChart").then(module => ({ default: module.GanttChart })));
-const FleetMap = lazy(() => import("./components/FleetMap").then(module => ({ default: module.FleetMap })));
-const SummaryReport = lazy(() => import("./components/SummaryReport").then(module => ({ default: module.SummaryReport })));
-const Economics = lazy(() => import("./components/Economics").then(module => ({ default: module.Economics })));
-const VesselList = lazy(() => import("./components/VesselList").then(module => ({ default: module.VesselList })));
+// lazy с .then для совместимости, если компоненты тоже используют именованный экспорт
+const GanttChart    = lazy(() => import("./components/GanttChart").then(m => ({ default: m.GanttChart })));
+const FleetMap      = lazy(() => import("./components/FleetMap").then(m => ({ default: m.FleetMap })));
+const SummaryReport = lazy(() => import("./components/SummaryReport").then(m => ({ default: m.SummaryReport })));
+const Economics     = lazy(() => import("./components/Economics").then(m => ({ default: m.Economics })));
+const VesselList    = lazy(() => import("./components/VesselList").then(m => ({ default: m.VesselList })));
+
 
 const EMPTY_FORM: FormState = {
   counterparty: "",
