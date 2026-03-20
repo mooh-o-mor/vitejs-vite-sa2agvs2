@@ -42,7 +42,7 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
   } else if (fu.startsWith("АСД")) {
     status = "АСД";
     extraFromFirst = firstPart.slice(3).trim();
-  } else if (fu.startsWith("РЕМ") || /РЕМОНТ|КНР|ОСВИДЕТ/i.test(fu)) {
+  } else if (fu.startsWith("РЕМ") || /РЕМОНТ|ТЕХ|ОСВИДЕТ/i.test(fu)) {
     status = "РЕМ";
   } else {
     status = firstPart;
