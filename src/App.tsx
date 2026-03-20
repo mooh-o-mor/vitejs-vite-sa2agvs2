@@ -1,25 +1,32 @@
-import { lazy, Suspense, useState, useEffect, useMemo } from "react";
+import { lazy, Suspense, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import type { Vessel, Contract, FormState } from "./lib/types";
-import { T, YEAR } from "./lib/types";
+import { T, YEAR, typeOrder } from "./lib/types";
 import { getType, cpKey } from "./lib/utils";
 
-import { FilterBar } from "./components/FilterBar";
-import { LoginForm } from "./components/LoginForm";
-import { VesselForm } from "./components/VesselForm";
-import { ContractForm } from "./components/ContractForm";
+import FilterBar from "./components/FilterBar";
+import LoginForm from "./components/LoginForm";
+import VesselForm from "./components/VesselForm";
+import ContractForm from "./components/ContractForm";
 
-// lazy-компоненты
-const GanttChart    = lazy(() => import("./components/GanttChart"));
-const FleetMap      = lazy(() => import("./components/FleetMap"));
-const SummaryReport = lazy(() => import("./components/SummaryReport"));
-const Economics     = lazy(() => import("./components/Economics"));
-const VesselList    = lazy(() => import("./components/VesselList"));
+// Для lazy-импортов используем промежуточные объекты с .default
+const GanttChart = lazy(() => import("./components/GanttChart").then(module => ({ default: module.GanttChart })));
+const FleetMap = lazy(() => import("./components/FleetMap").then(module => ({ default: module.FleetMap })));
+const SummaryReport = lazy(() => import("./components/SummaryReport").then(module => ({ default: module.SummaryReport })));
+const Economics = lazy(() => import("./components/Economics").then(module => ({ default: module.Economics })));
+const VesselList = lazy(() => import("./components/VesselList").then(module => ({ default: module.VesselList })));
 
 const EMPTY_FORM: FormState = {
-  counterparty: "", start: `${YEAR}-01-01`, end: `${YEAR}-12-31`,
-  rate: "", mob: "", demob: "", firmDays: "", optionDays: "",
-  priority: "contract", altGroup: ""
+  counterparty: "",
+  start: `${YEAR}-01-01`,
+  end: `${YEAR}-12-31`,
+  rate: "",
+  mob: "",
+  demob: "",
+  firmDays: "",
+  optionDays: "",
+  priority: "contract",
+  altGroup: "",
 };
 
 export default function App() {
@@ -32,7 +39,7 @@ export default function App() {
   const canView = isAdmin || access === "viewer";
 
   const [showLogin, setShowLogin] = useState(false);
-  const [activeTab, setActiveTab] = useState("gantt");
+  const [activeTab, setActiveTab] = useState<"gantt" | "map" | "summary" | "economics" | "vessels">("gantt");
 
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
@@ -49,68 +56,93 @@ export default function App() {
 
   useEffect(() => {
     loadData();
-    const s1 = supabase.channel("vessels").on("postgres_changes", { event: "*", schema: "public", table: "vessels" }, loadData).subscribe();
-    const s2 = supabase.channel("contracts").on("postgres_changes", { event: "*", schema: "public", table: "contracts" }, loadData).subscribe();
-    return () => { supabase.removeChannel(s1); supabase.removeChannel(s2); };
-  }, []);
 
-  async function loadData() {
+    const vesselsChannel = supabase
+      .channel("vessels-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vessels" },
+        () => loadData(),
+        (error) => console.error("Realtime vessels error:", error)
+      )
+      .subscribe();
+
+    const contractsChannel = supabase
+      .channel("contracts-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "contracts" },
+        () => loadData(),
+        (error) => console.error("Realtime contracts error:", error)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(vesselsChannel);
+      supabase.removeChannel(contractsChannel);
+    };
+  }, [loadData]);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: vData }, { data: cData }] = await Promise.all([
-        supabase.from("vessels").select("*"),
-        supabase.from("contracts").select("*")
+      const [vRes, cRes] = await Promise.all([
+        supabase.from("vessels").select("*").order("name"),
+        supabase.from("contracts").select("*"),
       ]);
-      setVessels(vData || []);
-      setContracts(cData || []);
+
+      setVessels(vRes.data ?? []);
+      setContracts(cRes.data ?? []);
     } catch (err) {
-      console.error("loadData error", err);
+      console.error("Ошибка загрузки данных:", err);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  // ── Фильтрация и сортировка (мемоизация) ──
+  // Мемоизация отфильтрованного списка
   const filteredVessels = useMemo(() => {
-    let list = [...vessels];
+    let list = vessels.slice();
 
     if (filterTypes.length > 0) {
-      list = list.filter(v => filterTypes.includes(getType(v.name)));
-    }
-    if (filterBranches.length > 0) {
-      list = list.filter(v => filterBranches.includes(v.branch));
+      list = list.filter((v) => filterTypes.some((t) => getType(v.name) === t));
     }
 
-    if (sortBy === "type") {
-      list.sort((a, b) => getType(a.name).localeCompare(getType(b.name)));
-    } else if (sortBy === "name") {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortBy === "branch") {
-      list.sort((a, b) => a.branch.localeCompare(b.branch));
+    if (filterBranches.length > 0) {
+      list = list.filter((v) => filterBranches.includes(v.branch));
     }
+
+    list.sort((a, b) => {
+      if (sortBy === "type") {
+        return typeOrder.indexOf(getType(a.name)) - typeOrder.indexOf(getType(b.name));
+      }
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "branch") return a.branch.localeCompare(b.branch);
+      return 0;
+    });
 
     return list;
   }, [vessels, filterTypes, filterBranches, sortBy]);
 
   const visibleContracts = useMemo(() => {
-    const vesselIds = new Set(filteredVessels.map(v => v.id));
-    return contracts.filter(c => vesselIds.has(c.vesselId));
+    const ids = new Set(filteredVessels.map((v) => v.id));
+    return contracts.filter((c) => ids.has(c.vesselId));
   }, [contracts, filteredVessels]);
 
-  // ── Обработчики фильтров (useCallback) ──
   const toggleType = useCallback((t: string) => {
-    setFilterTypes(prev =>
-      t === "Все" ? [] : prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
-    );
+    setFilterTypes((prev) => {
+      if (t === "Все") return [];
+      return prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t];
+    });
   }, []);
 
   const toggleBranch = useCallback((b: string) => {
-    setFilterBranches(prev =>
-      b === "Все" ? [] : prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]
-    );
+    setFilterBranches((prev) => {
+      if (b === "Все") return [];
+      return prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b];
+    });
   }, []);
 
-  // ── Модалки контрактов и судов ──
   const openAddContract = useCallback((vesselId: number) => {
     setActiveVesselId(vesselId);
     setEditContractId(null);
@@ -131,44 +163,48 @@ export default function App() {
       firmDays: String(c.firmDays),
       optionDays: String(c.optionDays),
       priority: c.priority,
-      altGroup: c.altGroup ? String(c.altGroup) : ""
+      altGroup: c.altGroup ? String(c.altGroup) : "",
     });
     setShowContractForm(true);
   }, []);
 
-  // ── Сохранение / удаление (заглушки — подставь свою логику) ──
+  // ── Заглушки для сохранения (замени на реальную логику) ──
   const saveContract = useCallback(async () => {
-    // здесь supabase.upsert / insert
+    // await supabase.from("contracts").upsert(...)
     setShowContractForm(false);
   }, []);
 
   const deleteContract = useCallback(async () => {
-    // здесь supabase.delete
+    // await supabase.from("contracts").delete().eq("id", editContractId)
     setShowContractForm(false);
   }, []);
 
-  const saveVessel = useCallback(async (name: string, branch: string, imo: string) => {
-    // supabase upsert
-    setShowVesselForm(false);
-  }, []);
+  const saveVessel = useCallback(
+    async (name: string, branch: string, imo: string) => {
+      // await supabase.from("vessels").upsert({ name, branch, imo })
+      setShowVesselForm(false);
+    },
+    []
+  );
 
   const deleteVessel = useCallback(async (id: number) => {
-    // supabase.delete
+    // await supabase.from("vessels").delete().eq("id", id)
   }, []);
 
-  // ── Рендер ──
-  if (loading) return <div style={{ padding: 40, textAlign: "center" }}>Загрузка данных...</div>;
+  if (loading) {
+    return <div style={{ padding: "40px", textAlign: "center", color: T.text2 }}>Загрузка данных...</div>;
+  }
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "system-ui, sans-serif" }}>
-      {/* шапка, табы, логин — оставляем как было или выносим в Header.tsx */}
+    <div style={{ minHeight: "100vh", background: T.bg, color: T.text }}>
+      {/* Здесь должен быть ваш Header / Tabs / Login button */}
 
       <div style={{ padding: activeTab === "map" ? 0 : "12px" }}>
         {(activeTab === "gantt" || activeTab === "economics") && (
           <FilterBar
-            allTypes={/* вычисляем уникальные типы */}
-            allBranches={/* уникальные филиалы */}
-            allCps={/* уникальные контрагенты */}
+            allTypes={Array.from(new Set(vessels.map((v) => getType(v.name))))}
+            allBranches={Array.from(new Set(vessels.map((v) => v.branch).filter(Boolean)))}
+            allCps={Array.from(new Set(contracts.map((c) => cpKey(c.counterparty))))}
             filterTypes={filterTypes}
             filterBranches={filterBranches}
             filterCp={filterCp}
@@ -181,7 +217,7 @@ export default function App() {
           />
         )}
 
-        <Suspense fallback={<div style={{ padding: 40 }}>Загрузка модуля...</div>}>
+        <Suspense fallback={<div style={{ padding: "40px", textAlign: "center" }}>Загрузка модуля...</div>}>
           {activeTab === "gantt" && (
             <GanttChart
               vessels={filteredVessels}
@@ -194,19 +230,39 @@ export default function App() {
           )}
           {activeTab === "map" && <FleetMap isAdmin={isAdmin} canView={canView} />}
           {activeTab === "summary" && <SummaryReport isAdmin={isAdmin} canView={canView} />}
-          {activeTab === "economics" && isAdmin && <Economics vessels={filteredVessels} contracts={visibleContracts} />}
+          {activeTab === "economics" && isAdmin && (
+            <Economics vessels={filteredVessels} contracts={visibleContracts} />
+          )}
           {activeTab === "vessels" && isAdmin && (
-            <VesselList vessels={vessels} contracts={contracts} onAdd={saveVessel} onEdit={v => { setEditingVessel(v); setShowVesselForm(true); }} onDelete={deleteVessel} />
+            <VesselList
+              vessels={vessels}
+              contracts={contracts}
+              onAdd={(name, branch, imo) => saveVessel(name, branch, imo)}
+              onEdit={(v: Vessel) => {
+                setEditingVessel(v);
+                setShowVesselForm(true);
+              }}
+              onDelete={deleteVessel}
+            />
           )}
         </Suspense>
       </div>
 
-      {showLogin && <LoginForm onLogin={setAccess} onClose={() => setShowLogin(false)} />}
+      {showLogin && (
+        <LoginForm
+          onLogin={(level) => {
+            setAccess(level);
+            setShowLogin(false);
+          }}
+          onClose={() => setShowLogin(false)}
+        />
+      )}
+
       {showContractForm && canView && (
         <ContractForm
           form={contractForm}
           editId={editContractId}
-          vesselName={vessels.find(v => v.id === activeVesselId)?.name || ""}
+          vesselName={vessels.find((v) => v.id === activeVesselId)?.name ?? ""}
           readOnly={!isAdmin}
           onChange={setContractForm}
           onSave={saveContract}
@@ -214,8 +270,13 @@ export default function App() {
           onClose={() => setShowContractForm(false)}
         />
       )}
+
       {showVesselForm && isAdmin && editingVessel && (
-        <VesselForm vessel={editingVessel} onSave={saveVessel} onClose={() => setShowVesselForm(false)} />
+        <VesselForm
+          vessel={editingVessel}
+          onSave={(name, branch, imo) => saveVessel(name, branch, imo)}
+          onClose={() => setShowVesselForm(false)}
+        />
       )}
     </div>
   );
