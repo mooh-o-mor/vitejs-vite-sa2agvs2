@@ -120,7 +120,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     const t = new Map<string, string>();
     (vData || []).forEach((v: any) => {
       const full = v.name.toUpperCase().trim();
-      const typeMatch = full.match(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/);
+      const typeMatch = full.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|БП|ВСП|Баржа)\s+/);
       if (typeMatch) {
         const short = full.slice(typeMatch[0].length);
         t.set(full, typeMatch[1]);
