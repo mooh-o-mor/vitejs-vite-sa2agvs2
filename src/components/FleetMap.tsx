@@ -427,7 +427,7 @@ export function FleetMap({
           const imo = imoMap.get(key) || "";
           const c = cls(selVessel.status);
           // Extract БЭП/СЭП from coord_raw
-          const powerMatch = /\b(БЭП|СЭП)\b/i.exec(selVessel.coord_raw || "");
+          const powerMatch = /(БЭП|СЭП)/i.exec(selVessel.coord_raw || "");
           const power = powerMatch ? powerMatch[1].toUpperCase() : null;
           const powerLabel = power === "БЭП" ? "Береговое эл-е (БЭП)" : power === "СЭП" ? "Судовое эл-е (СЭП)" : null;
           // Clean coord_raw for display — remove БЭП/СЭП suffix
