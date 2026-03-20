@@ -96,26 +96,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   useEffect(() => { loadDates(); }, []);
 
-  // Load type map from vessels table
-  useEffect(() => {
-    supabase.from("vessels").select("name").then(({ data }) => {
-      if (data) {
-        const t = new Map<string, string>();
-        data.forEach((v: any) => {
-          const full = v.name.toUpperCase().trim();
-          const typeMatch = full.match(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/);
-          if (typeMatch) {
-            const short = full.slice(typeMatch[0].length);
-            const typeStr = typeMatch[1];
-            t.set(full, typeStr);
-            t.set(short, typeStr);
-          }
-        });
-        setTypeMap(t);
-      }
-    });
-  }, []);
-
   async function loadDates() {
     const { data } = await supabase
       .from("dpr_entries")
@@ -133,11 +113,21 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   async function loadVessels(date: string) {
     setLoading(true);
-    const { data } = await supabase
-      .from("dpr_entries")
-      .select("*")
-      .eq("report_date", date)
-      .order("vessel_name");
+    const [{ data }, { data: vData }] = await Promise.all([
+      supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name"),
+      supabase.from("vessels").select("name"),
+    ]);
+    const t = new Map<string, string>();
+    (vData || []).forEach((v: any) => {
+      const full = v.name.toUpperCase().trim();
+      const typeMatch = full.match(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/);
+      if (typeMatch) {
+        const short = full.slice(typeMatch[0].length);
+        t.set(full, typeMatch[1]);
+        t.set(short, typeMatch[1]);
+      }
+    });
+    setTypeMap(t);
     setVessels(data || []);
     setLoading(false);
   }
