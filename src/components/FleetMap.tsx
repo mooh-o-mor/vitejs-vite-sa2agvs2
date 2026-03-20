@@ -37,12 +37,10 @@ function mkIcon(c: string) {
   return L.divIcon({ html: svg, iconSize: [26, 32], iconAnchor: [13, 32], popupAnchor: [0, -34], className: "" });
 }
 
-/* ── Pie chart SVG for cluster icon ── */
 function mkPieIcon(counts: Record<string, number>, total: number) {
   const sz = total < 5 ? 38 : total < 10 ? 44 : 50;
   const r = sz / 2;
   const ir = r * 0.55;
-
   const segments = [
     { key: "asg", count: counts.asg || 0, color: CLR.asg },
     { key: "asd", count: counts.asd || 0, color: CLR.asd },
@@ -67,7 +65,6 @@ function mkPieIcon(counts: Record<string, number>, total: number) {
       startAngle = endAngle;
     }
   }
-
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">
     <circle cx="${r}" cy="${r}" r="${r}" fill="white"/>
     ${paths}
@@ -75,14 +72,9 @@ function mkPieIcon(counts: Record<string, number>, total: number) {
     <text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="central"
       font-family="monospace" font-size="${total > 9 ? 11 : 13}" font-weight="700" fill="#1a2a3a">${total}</text>
   </svg>`;
-
-  return L.divIcon({
-    html: svg, className: "",
-    iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2],
-  });
+  return L.divIcon({ html: svg, className: "", iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] });
 }
 
-/* ── DB row type ── */
 interface DprRow {
   id: number;
   vessel_name: string;
@@ -96,7 +88,6 @@ interface DprRow {
   supplies: DprSupply[];
 }
 
-/* ── Component ── */
 export function FleetMap({
   isAdmin,
   canView,
@@ -115,6 +106,7 @@ export function FleetMap({
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
+  const [imoMap, setImoMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
@@ -133,6 +125,17 @@ export function FleetMap({
     const onResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Load IMO map from vessels table once
+  useEffect(() => {
+    supabase.from("vessels").select("name, imo").then(({ data }) => {
+      if (data) {
+        const m = new Map<string, string>();
+        data.forEach((v: any) => { if (v.imo) m.set(v.name.toUpperCase().trim(), v.imo); });
+        setImoMap(m);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -192,10 +195,7 @@ export function FleetMap({
   useEffect(() => { loadDates(); }, []);
 
   async function loadDates() {
-    const { data } = await supabase
-      .from("dpr_entries")
-      .select("report_date")
-      .order("report_date", { ascending: false });
+    const { data } = await supabase.from("dpr_entries").select("report_date").order("report_date", { ascending: false });
     if (data) {
       const unique = [...new Set(data.map((r: any) => r.report_date))];
       setDates(unique);
@@ -210,11 +210,7 @@ export function FleetMap({
 
   async function loadVessels(date: string) {
     setLoading(true);
-    const { data } = await supabase
-      .from("dpr_entries")
-      .select("*")
-      .eq("report_date", date)
-      .order("vessel_name");
+    const { data } = await supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name");
     setVessels(data || []);
     setSelVessel(null);
     setLoading(false);
@@ -223,18 +219,13 @@ export function FleetMap({
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
-
     const vis = filtered();
     const bounds: L.LatLng[] = [];
-
     vis.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      marker.bindTooltip(v.vessel_name, {
-        permanent: false, direction: "bottom", offset: [0, 4],
-        className: "vessel-label-map",
-      });
+      marker.bindTooltip(v.vessel_name, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
         setSelVessel(v);
         if (isMobile) setSidebarOpen(false);
@@ -243,11 +234,9 @@ export function FleetMap({
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
     });
-
     if (bounds.length > 1) {
       mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
     }
-
     const updateLabels = () => {
       markersRef.current!.getLayers().forEach((m: any) => {
         if (!m.getTooltip) return;
@@ -258,10 +247,7 @@ export function FleetMap({
     markersRef.current.on("animationend", updateLabels);
     mapObj.current.on("zoomend", updateLabels);
     setTimeout(updateLabels, 300);
-
-    return () => {
-      if (mapObj.current) mapObj.current.off("zoomend", updateLabels);
-    };
+    return () => { if (mapObj.current) mapObj.current.off("zoomend", updateLabels); };
   }, [vessels, filter, search]);
 
   const filtered = useCallback(() => {
@@ -280,22 +266,14 @@ export function FleetMap({
       const { vessels: parsed, date } = await parseMsgFiles(Array.from(files));
       if (!parsed.length) { setUploadMsg("⚠ Данные не найдены"); setUploading(false); return; }
       if (!date) { setUploadMsg("⚠ Дата не определена"); setUploading(false); return; }
-
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
-
       const { data: vesselList } = await supabase.from("vessels").select("name, branch");
-      const BRANCH_MAP: Record<string, string> = {
-        "СевФ": "СВРФ", "БФ": "БЛТФ", "ПримФ": "ПРМФ", "СахФ": "СХЛФ",
-      };
+      const BRANCH_MAP: Record<string, string> = { "СевФ": "СВРФ", "БФ": "БЛТФ", "ПримФ": "ПРМФ", "СахФ": "СХЛФ" };
       const branchMap = new Map<string, string>();
       (vesselList || []).forEach((v: any) => {
-        if (v.branch) {
-          const normalized = BRANCH_MAP[v.branch] || v.branch;
-          branchMap.set(v.name.toUpperCase().trim(), normalized);
-        }
+        if (v.branch) branchMap.set(v.name.toUpperCase().trim(), BRANCH_MAP[v.branch] || v.branch);
       });
-
       let ok = 0, fail = 0;
       for (const v of parsed) {
         const row = {
@@ -309,12 +287,9 @@ export function FleetMap({
           note: v.note,
           supplies: v.supplies,
         };
-        const { error } = await supabase
-          .from("dpr_entries")
-          .upsert(row, { onConflict: "vessel_name,report_date" });
+        const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
         if (error) { fail++; console.error(v.name, error); } else ok++;
       }
-
       setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
       await loadDates();
       setSelDate(dateStr);
@@ -330,10 +305,7 @@ export function FleetMap({
   const cRem = all.filter((v) => cls(v.status) === "rem").length;
   const noPos = all.filter((v) => v.lat == null).length;
 
-  const fmtDateRu = (d: string) => {
-    const [y, m, day] = d.split("-");
-    return `${day}.${m}.${y}`;
-  };
+  const fmtDateRu = (d: string) => { const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
 
   const fbtn = (active: boolean): React.CSSProperties => ({
     flex: 1, padding: "5px 0", textAlign: "center", borderRadius: 4,
@@ -349,12 +321,7 @@ export function FleetMap({
     <div style={{ display: "flex", height: "calc(100vh - 90px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
 
       {dragging && isAdmin && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 9000,
-          background: "rgba(11,15,24,0.85)", border: "3px dashed #3b82f6",
-          display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16,
-          pointerEvents: "none",
-        }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(11,15,24,0.85)", border: "3px dashed #3b82f6", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, pointerEvents: "none" }}>
           <div style={{ fontSize: 52 }}>📂</div>
           <div style={{ fontSize: 18, color: "#3b82f6", fontFamily: "monospace", fontWeight: 600 }}>Отпустите файлы ДПР</div>
           <div style={{ fontSize: 13, color: "#9ca3af" }}>Поддерживаются .msg и .eml файлы от всех филиалов</div>
@@ -362,30 +329,15 @@ export function FleetMap({
       )}
 
       {isMobile && !sidebarOpen && (
-        <button onClick={() => setSidebarOpen(true)} style={{
-          position: "absolute", top: 10, left: 10, zIndex: 800,
-          width: 40, height: 40, borderRadius: 8,
-          background: "#fff", border: `1px solid ${T.border}`,
-          boxShadow: "0 2px 8px rgba(0,0,0,.15)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 20, cursor: "pointer", color: T.text,
-        }}>☰</button>
+        <button onClick={() => setSidebarOpen(true)} style={{ position: "absolute", top: 10, left: 10, zIndex: 800, width: 40, height: 40, borderRadius: 8, background: "#fff", border: `1px solid ${T.border}`, boxShadow: "0 2px 8px rgba(0,0,0,.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, cursor: "pointer", color: T.text }}>☰</button>
       )}
 
       {isMobile && sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} style={{
-          position: "absolute", inset: 0, zIndex: 600,
-          background: "rgba(0,0,0,0.3)",
-        }} />
+        <div onClick={() => setSidebarOpen(false)} style={{ position: "absolute", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.3)" }} />
       )}
 
       {showSidebar && (
-        <div style={{
-          width: 280, minWidth: 280, background: "#fff",
-          borderRight: `1px solid ${T.border}`,
-          display: "flex", flexDirection: "column",
-          ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}),
-        }}>
+        <div style={{ width: 280, minWidth: 280, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
 
           {isMobile && (
             <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 8px", borderBottom: `1px solid ${T.border}` }}>
@@ -395,11 +347,7 @@ export function FleetMap({
 
           <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-              <select
-                value={selDate}
-                onChange={(e) => setSelDate(e.target.value)}
-                style={{ flex: 1, padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12, fontFamily: "monospace", background: "#f8fafc" }}
-              >
+              <select value={selDate} onChange={(e) => setSelDate(e.target.value)} style={{ flex: 1, padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12, fontFamily: "monospace", background: "#f8fafc" }}>
                 {dates.length === 0 && <option value="">— нет данных —</option>}
                 {dates.map((d) => <option key={d} value={d}>{fmtDateRu(d)}</option>)}
               </select>
@@ -415,11 +363,8 @@ export function FleetMap({
           </div>
 
           <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
-            <input
-              placeholder="Поиск судна, филиала..."
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12 }}
-            />
+            <input placeholder="Поиск судна, филиала..." value={search} onChange={(e) => setSearch(e.target.value)}
+              style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12 }} />
           </div>
 
           <div style={{ display: "flex", gap: 4, padding: "8px 10px", borderBottom: `1px solid ${T.border}` }}>
@@ -430,38 +375,23 @@ export function FleetMap({
             ))}
           </div>
 
-          {/* Vessel list — compact single-line rows */}
+          {/* Vessel list — name first, then status badge, then branch */}
           <div style={{ flex: 1, overflowY: "auto" }}>
             {all.map((v) => {
               const c = cls(v.status);
               const isSel = selVessel?.vessel_name === v.vessel_name;
               return (
-                <div
-                  key={v.vessel_name}
-                  onClick={() => {
+                <div key={v.vessel_name} onClick={() => {
                     setSelVessel(v);
                     if (isMobile) setSidebarOpen(false);
                     if (v.lat != null && v.lng != null && mapObj.current) {
                       mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
                     }
                   }}
-                  style={{
-                    padding: "5px 10px", borderBottom: `1px solid ${T.border}`, cursor: "pointer",
-                    borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`,
-                    background: isSel ? "rgba(30,144,255,0.06)" : "transparent",
-                    display: "flex", alignItems: "center", gap: 6, overflow: "hidden",
-                  }}
+                  style={{ padding: "5px 10px", borderBottom: `1px solid ${T.border}`, cursor: "pointer", borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`, background: isSel ? "rgba(30,144,255,0.06)" : "transparent", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}
                 >
-                  <span style={{
-                    flexShrink: 0,
-                    display: "inline-block", padding: "1px 5px", borderRadius: 3,
-                    fontFamily: "monospace", fontSize: 10, fontWeight: 700,
-                    background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5",
-                    color: CLR[c],
-                  }}>{v.vessel_name}</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {shortStatus(v.status)}
-                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel_name}</span>
+                  <span style={{ flexShrink: 0, display: "inline-block", padding: "1px 5px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c] }}>{shortStatus(v.status)}</span>
                   {v.branch && <span style={{ fontSize: 10, color: T.text2, flexShrink: 0 }}>{v.branch}</span>}
                   {v.lat == null && <span style={{ fontSize: 10, color: "#c07800", flexShrink: 0 }}>📍?</span>}
                 </div>
@@ -481,86 +411,78 @@ export function FleetMap({
 
         {dates.length === 0 && !loading && (
           <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center", pointerEvents: "none", zIndex: 500 }}>
-            <div style={{ fontSize: 16, color: T.text2, fontWeight: 500, marginBottom: 6 }}>
-              {isAdmin ? "Загрузите файлы ДПР" : "Данные ДПР не загружены"}
-            </div>
+            <div style={{ fontSize: 16, color: T.text2, fontWeight: 500, marginBottom: 6 }}>{isAdmin ? "Загрузите файлы ДПР" : "Данные ДПР не загружены"}</div>
             {isAdmin && <div style={{ fontSize: 12, color: T.text2 }}>Используйте кнопку «Загрузить .msg» в шапке или перетащите файлы на страницу</div>}
           </div>
         )}
 
-        {selVessel && (
-          <div style={{
-            position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36,
-            width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh",
-            background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900,
-            boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden",
-          }}>
-            <div style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "flex-start", gap: 8, flexShrink: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, flex: 1, lineHeight: 1.3 }}>{selVessel.vessel_name}</div>
-              <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
-            </div>
-            <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
-              <DetailRow label="Статус" value={
-                <span style={{
-                  padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 600,
-                  background: cls(selVessel.status) === "asg" ? "#ffebee" : cls(selVessel.status) === "asd" ? "#e8f5e9" : "#f5f5f5",
-                  color: CLR[cls(selVessel.status)],
-                }}>{selVessel.status}</span>
-              } />
-              <DetailRow label="Филиал" value={selVessel.branch} />
-              <DetailRow label="Местоположение" value={selVessel.coord_raw || "—"} small />
-              <DetailRow label="На карте" value={
-                <span style={{ color: selVessel.lat != null ? "#00913f" : "#c07800" }}>
-                  {selVessel.lat != null ? "✓ определена" : "— нет в базе портов"}
-                </span>
-              } />
-              {canView && (
-                <>
-                  {selVessel.note && <DetailRow label="Примечание" value={selVessel.note} small />}
-                  {selVessel.supplies && selVessel.supplies.length > 0 && (
-                    <>
-                      <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, margin: "10px 0 4px", fontFamily: "monospace" }}>Запасы</div>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                        <thead>
-                          <tr>
-                            {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
+        {selVessel && (() => {
+          const imo = imoMap.get(selVessel.vessel_name.toUpperCase().trim()) || "";
+          const c = cls(selVessel.status);
+          return (
+            <div style={{ position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36, width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              {/* Header: name + status badge + branch */}
+              <div style={{ padding: "12px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "flex-start", gap: 8, flexShrink: 0 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, marginBottom: 4 }}>{selVessel.vessel_name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c] }}>{selVessel.status}</span>
+                    {selVessel.branch && <span style={{ fontSize: 11, color: T.text2 }}>{selVessel.branch}</span>}
+                    {imo && (
+                      <a href={`https://www.marinetraffic.com/en/ais/details/ships/shipid:0/mmsi:0/imo:${imo}/vessel:${encodeURIComponent(selVessel.vessel_name)}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 10, color: T.accent, fontFamily: "monospace", textDecoration: "none" }}
+                        title="Открыть на MarineTraffic"
+                      >IMO {imo} ↗</a>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+              </div>
+              {/* Body */}
+              <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
+                <DetailRow label="Местоположение" value={selVessel.coord_raw || "—"} small />
+                <DetailRow label="На карте" value={
+                  <span style={{ color: selVessel.lat != null ? "#00913f" : "#c07800" }}>
+                    {selVessel.lat != null ? "✓ определена" : "— нет в базе портов"}
+                  </span>
+                } />
+                {canView && (
+                  <>
+                    {selVessel.note && <DetailRow label="Примечание" value={selVessel.note} small />}
+                    {selVessel.supplies && selVessel.supplies.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, margin: "10px 0 4px", fontFamily: "monospace" }}>Запасы</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                          <thead>
+                            <tr>{["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
                               <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
+                            ))}</tr>
+                          </thead>
+                          <tbody>
+                            {(selVessel.supplies as DprSupply[]).map((s, i) => (
+                              <tr key={i}>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
+                              </tr>
                             ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(selVessel.supplies as DprSupply[]).map((s, i) => (
-                            <tr key={i}>
-                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
-                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
-                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
-                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
-                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </>
-                  )}
-                </>
-              )}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       <style>{`
-        .vessel-label-map {
-          background: white !important;
-          border: 1px solid #d1dce8 !important;
-          border-radius: 3px !important;
-          padding: 2px 6px !important;
-          font-size: 11px !important;
-          font-weight: 500 !important;
-          color: #1a2a3a !important;
-          box-shadow: 0 1px 4px rgba(0,0,0,.15) !important;
-          white-space: nowrap !important;
-        }
+        .vessel-label-map { background: white !important; border: 1px solid #d1dce8 !important; border-radius: 3px !important; padding: 2px 6px !important; font-size: 11px !important; font-weight: 500 !important; color: #1a2a3a !important; box-shadow: 0 1px 4px rgba(0,0,0,.15) !important; white-space: nowrap !important; }
         .vessel-label-map::before { display: none !important; }
         .leaflet-control-attribution { display: none !important; }
       `}</style>

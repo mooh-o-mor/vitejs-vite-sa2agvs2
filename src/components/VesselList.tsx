@@ -6,7 +6,7 @@ import { getType } from "../lib/utils";
 interface Props {
   vessels: Vessel[];
   contracts: Contract[];
-  onAdd: (name: string, branch: string) => void;
+  onAdd: (name: string, branch: string, imo: string) => void;
   onEdit: (vessel: Vessel) => void;
   onDelete: (id: number) => void;
 }
@@ -15,12 +15,14 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
   const [newType, setNewType] = useState(typeOrder[0]);
   const [newShortName, setNewShortName] = useState("");
   const [newBranch, setNewBranch] = useState("");
+  const [newImo, setNewImo] = useState("");
 
   function handleAdd() {
     if (!newShortName.trim()) return;
-    onAdd(`${newType} ${newShortName.trim()}`, newBranch.trim());
+    onAdd(`${newType} ${newShortName.trim()}`, newBranch.trim(), newImo.trim());
     setNewShortName("");
     setNewBranch("");
+    setNewImo("");
   }
 
   return (
@@ -41,7 +43,12 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
           </div>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Филиал</div>
-            <input value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="БФ, СевФ..."
+            <input value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="БЛТФ..."
+              style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13, boxSizing:"border-box" }} />
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>IMO</div>
+            <input value={newImo} onChange={e => setNewImo(e.target.value)} placeholder="9663219"
               style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background:T.bg2, color:T.text, fontSize:13, boxSizing:"border-box" }} />
           </div>
         </div>
@@ -65,6 +72,7 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
               <div key={v.id} style={{ display:"flex", alignItems:"center", background:T.bg2, borderRadius:6, padding:"9px 12px", marginBottom:4, border:`1px solid ${T.border}` }}>
                 <span style={{ marginRight:8 }}>🚢</span>
                 <span style={{ flex:1, fontSize:12, color:T.text }}>{v.name}</span>
+                {v.imo && <span style={{ color:T.text3, fontSize:11, marginRight:10, fontFamily:"monospace" }}>IMO {v.imo}</span>}
                 {v.branch && <span style={{ color:T.amber, fontSize:11, marginRight:10 }}>{v.branch}</span>}
                 <span style={{ color:T.text3, fontSize:11, marginRight:8 }}>{contracts.filter(c => c.vesselId===v.id).length} контр.</span>
                 <button onClick={() => onEdit(v)} style={{ padding:"2px 8px", borderRadius:4, border:`1px solid ${T.border}`, background:"transparent", color:T.text2, cursor:"pointer", fontSize:11, marginRight:4 }}>✎</button>
