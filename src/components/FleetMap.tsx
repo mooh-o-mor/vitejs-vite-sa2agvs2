@@ -10,7 +10,6 @@ type StatusKey = "asg" | "asd" | "rem" | "oth";
 
 type FleetMapProps = {
   isAdmin: boolean;
-  canView: boolean;
   externalFiles?: FileList | null;
   onExternalFilesConsumed?: () => void;
 };
@@ -21,9 +20,6 @@ interface Vessel {
   status: string;
   lat: number | null;
   lng: number | null;
-  note?: string;
-  supplies?: any[];
-  coord_raw?: string;
 
   _name: string;
   _branch: string;
@@ -52,13 +48,14 @@ function getStatus(s: string): StatusKey {
 
 export function FleetMap({
   isAdmin,
-  canView,
   externalFiles,
   onExternalFilesConsumed,
 }: FleetMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObj = useRef<L.Map | null>(null);
-  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+
+  // 👇 FIX: any вместо MarkerClusterGroup
+  const clusterRef = useRef<any>(null);
 
   const markersMap = useRef<Map<string, L.Layer>>(new Map());
 
@@ -149,7 +146,7 @@ export function FleetMap({
     });
   }, [vessels, search, filter]);
 
-  /* ───────────── MARKER DIFF UPDATE ───────────── */
+  /* ───────────── MARKERS DIFF UPDATE ───────────── */
 
   useEffect(() => {
     if (!clusterRef.current) return;
@@ -160,7 +157,7 @@ export function FleetMap({
     // REMOVE
     existing.forEach((marker, id) => {
       if (!nextIds.has(id)) {
-        clusterRef.current!.removeLayer(marker);
+        clusterRef.current.removeLayer(marker);
         existing.delete(id);
       }
     });
@@ -179,7 +176,7 @@ export function FleetMap({
 
         marker.bindTooltip(v.vessel_name);
 
-        clusterRef.current!.addLayer(marker);
+        clusterRef.current.addLayer(marker);
         existing.set(v.vessel_name, marker);
       }
     });
@@ -201,8 +198,6 @@ export function FleetMap({
       coord_raw: v.coordRaw,
       lat: v.lat,
       lng: v.lng,
-      note: v.note,
-      supplies: v.supplies,
     }));
 
     await supabase.from("dpr_entries").upsert(rows);
