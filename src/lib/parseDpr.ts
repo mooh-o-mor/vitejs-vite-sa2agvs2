@@ -267,7 +267,7 @@ export function parseFilial(rows: any[][]): DprVessel[] {
     const combinedNote = [statusExtra, rawNote].filter(Boolean).join(" / ");
 
     vessels.push({
-      name: String(name).trim(),
+  name: String(name).trim().replace(/\s+/g, " "),
       branch: C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "",
       status: cleanStatus,
       coordRaw,
