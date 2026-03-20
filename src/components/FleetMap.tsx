@@ -4,16 +4,42 @@ import "leaflet.markercluster";
 import { supabase } from "../lib/supabase";
 import { parseMsgFiles } from "../lib/parseDpr";
 
+/* ───────────── Types ───────────── */
+
+type StatusKey = "asg" | "asd" | "rem" | "oth";
+
+type FleetMapProps = {
+  isAdmin: boolean;
+  canView: boolean;
+  externalFiles?: FileList | null;
+  onExternalFilesConsumed?: () => void;
+};
+
+interface Vessel {
+  vessel_name: string;
+  branch: string;
+  status: string;
+  lat: number | null;
+  lng: number | null;
+  note?: string;
+  supplies?: any[];
+  coord_raw?: string;
+
+  _name: string;
+  _branch: string;
+  _status: StatusKey;
+}
+
 /* ───────────── Helpers ───────────── */
 
-const STATUS = {
+const STATUS_COLOR: Record<StatusKey, string> = {
   asg: "#e53935",
   asd: "#2e7d32",
   rem: "#757575",
   oth: "#6b8aa8",
 };
 
-function getStatus(s: string) {
+function getStatus(s: string): StatusKey {
   if (!s) return "oth";
   const t = s.toUpperCase();
   if (t.startsWith("АСГ")) return "asg";
@@ -24,16 +50,21 @@ function getStatus(s: string) {
 
 /* ───────────── Component ───────────── */
 
-export function FleetMap({ isAdmin, externalFiles }) {
+export function FleetMap({
+  isAdmin,
+  canView,
+  externalFiles,
+  onExternalFilesConsumed,
+}: FleetMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObj = useRef<L.Map | null>(null);
-  const clusterRef = useRef<any>(null);
+  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
 
-  const markersMap = useRef<Map<string, L.Marker>>(new Map());
+  const markersMap = useRef<Map<string, L.Layer>>(new Map());
 
-  const [vessels, setVessels] = useState<any[]>([]);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<"all" | StatusKey>("all");
 
   const [selDate, setSelDate] = useState("");
   const [dates, setDates] = useState<string[]>([]);
@@ -62,7 +93,9 @@ export function FleetMap({ isAdmin, externalFiles }) {
     mapObj.current = map;
     clusterRef.current = cluster;
 
-    return () => map.remove();
+    return () => {
+      map.remove();
+    };
   }, []);
 
   /* ───────────── LOAD DATES ───────────── */
@@ -71,10 +104,11 @@ export function FleetMap({ isAdmin, externalFiles }) {
     supabase
       .from("dpr_entries")
       .select("report_date")
+      .order("report_date", { ascending: false })
       .then(({ data }) => {
-        const unique = [...new Set(data?.map((d: any) => d.report_date))];
+        const unique = [...new Set((data || []).map((d: any) => d.report_date))];
         setDates(unique);
-        if (unique[0]) setSelDate(unique[0]);
+        if (unique.length > 0) setSelDate(unique[0]);
       });
   }, []);
 
@@ -88,7 +122,7 @@ export function FleetMap({ isAdmin, externalFiles }) {
       .select("*")
       .eq("report_date", selDate)
       .then(({ data }) => {
-        const normalized = (data || []).map((v: any) => ({
+        const normalized: Vessel[] = (data || []).map((v: any) => ({
           ...v,
           _name: v.vessel_name.toLowerCase(),
           _branch: (v.branch || "").toLowerCase(),
@@ -99,7 +133,7 @@ export function FleetMap({ isAdmin, externalFiles }) {
       });
   }, [selDate]);
 
-  /* ───────────── FILTERED DATA ───────────── */
+  /* ───────────── FILTERED ───────────── */
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -123,29 +157,29 @@ export function FleetMap({ isAdmin, externalFiles }) {
     const existing = markersMap.current;
     const nextIds = new Set(filtered.map((v) => v.vessel_name));
 
-    /* REMOVE OLD */
+    // REMOVE
     existing.forEach((marker, id) => {
       if (!nextIds.has(id)) {
-        clusterRef.current.removeLayer(marker);
+        clusterRef.current!.removeLayer(marker);
         existing.delete(id);
       }
     });
 
-    /* ADD / UPDATE */
+    // ADD
     filtered.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
 
       if (!existing.has(v.vessel_name)) {
         const marker = L.circleMarker([v.lat, v.lng], {
           radius: 6,
-          color: STATUS[v._status],
+          color: STATUS_COLOR[v._status],
           weight: 2,
           fillOpacity: 0.8,
         });
 
         marker.bindTooltip(v.vessel_name);
 
-        clusterRef.current.addLayer(marker);
+        clusterRef.current!.addLayer(marker);
         existing.set(v.vessel_name, marker);
       }
     });
@@ -154,15 +188,15 @@ export function FleetMap({ isAdmin, externalFiles }) {
   /* ───────────── BULK UPLOAD ───────────── */
 
   async function handleUpload(files: FileList) {
-    const { vessels: parsed, date } = await parseMsgFiles(
-      Array.from(files)
-    );
+    const { vessels: parsed, date } = await parseMsgFiles(Array.from(files));
 
-    if (!parsed.length) return;
+    if (!parsed.length || !date) return;
 
-    const rows = parsed.map((v) => ({
+    const dateStr = date.toISOString().slice(0, 10);
+
+    const rows = parsed.map((v: any) => ({
       vessel_name: v.name,
-      report_date: date.toISOString().slice(0, 10),
+      report_date: dateStr,
       status: v.status,
       coord_raw: v.coordRaw,
       lat: v.lat,
@@ -179,8 +213,9 @@ export function FleetMap({ isAdmin, externalFiles }) {
   useEffect(() => {
     if (externalFiles && isAdmin) {
       handleUpload(externalFiles);
+      onExternalFilesConsumed?.();
     }
-  }, [externalFiles]);
+  }, [externalFiles, isAdmin, onExternalFilesConsumed]);
 
   /* ───────────── UI ───────────── */
 
@@ -193,7 +228,9 @@ export function FleetMap({ isAdmin, externalFiles }) {
           onChange={(e) => setSelDate(e.target.value)}
         >
           {dates.map((d) => (
-            <option key={d}>{d}</option>
+            <option key={d} value={d}>
+              {d}
+            </option>
           ))}
         </select>
 
@@ -201,11 +238,20 @@ export function FleetMap({ isAdmin, externalFiles }) {
           placeholder="Поиск..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          style={{ width: "100%", marginTop: 8 }}
         />
 
-        <div>
-          {["all", "asg", "asd", "rem"].map((f) => (
-            <button key={f} onClick={() => setFilter(f)}>
+        <div style={{ marginTop: 8 }}>
+          {(["all", "asg", "asd", "rem"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              style={{
+                marginRight: 4,
+                background: filter === f ? "#1976d2" : "#eee",
+                color: filter === f ? "#fff" : "#000",
+              }}
+            >
               {f}
             </button>
           ))}
@@ -213,10 +259,7 @@ export function FleetMap({ isAdmin, externalFiles }) {
       </div>
 
       {/* MAP */}
-      <div
-        ref={mapRef}
-        style={{ flex: 1, height: "100%" }}
-      />
+      <div ref={mapRef} style={{ flex: 1 }} />
     </div>
   );
 }
