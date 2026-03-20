@@ -107,6 +107,7 @@ export function FleetMap({
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
   const [imoMap, setImoMap] = useState<Map<string, string>>(new Map());
+  const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
@@ -127,20 +128,22 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Load IMO map — store both full name and name without prefix
+  // Load IMO + type maps from vessels table
   useEffect(() => {
     supabase.from("vessels").select("name, imo").then(({ data }) => {
       if (data) {
         const m = new Map<string, string>();
+        const t = new Map<string, string>();
         data.forEach((v: any) => {
-          if (!v.imo) return;
           const full = v.name.toUpperCase().trim();
-          m.set(full, v.imo);
-          // Also index without МФАСС/ТБС/etc prefix
-          const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-          if (short !== full) m.set(short, v.imo);
+          const typeMatch = full.match(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/);
+          const short = typeMatch ? full.slice(typeMatch[0].length) : full;
+          const typeStr = typeMatch ? typeMatch[1] : "";
+          if (v.imo) { m.set(full, v.imo); m.set(short, v.imo); }
+          if (typeStr) { t.set(full, typeStr); t.set(short, typeStr); }
         });
         setImoMap(m);
+        setTypeMap(t);
       }
     });
   }, []);
@@ -425,37 +428,44 @@ export function FleetMap({
         {selVessel && (() => {
           const key = selVessel.vessel_name.toUpperCase().trim();
           const imo = imoMap.get(key) || "";
+          const vesselType = typeMap.get(key) || "";
           const c = cls(selVessel.status);
-          // Extract БЭП/СЭП from coord_raw
+          // Extract БЭП/СЭП
           const powerMatch = /(БЭП|СЭП)/i.exec(selVessel.coord_raw || "");
           const power = powerMatch ? powerMatch[1].toUpperCase() : null;
-          const powerLabel = power === "БЭП" ? "Береговое эл-е (БЭП)" : power === "СЭП" ? "Судовое эл-е (СЭП)" : null;
-          // Clean coord_raw for display — remove БЭП/СЭП suffix
+          const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
+          // Clean coord for display
           const coordDisplay = (selVessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
 
           return (
             <div style={{ position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36, width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              {/* Header: name + status + branch + IMO — all in one line area */}
+
+              {/* Header: тип + название + статус + IMO */}
               <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    {vesselType && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", fontWeight: 700, flexShrink: 0 }}>{vesselType}</span>}
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{selVessel.vessel_name}</span>
                     <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c], flexShrink: 0 }}>{selVessel.status}</span>
-                    {selVessel.branch && selVessel.branch !== "0" && <span style={{ fontSize: 11, color: T.text2, flexShrink: 0 }}>{selVessel.branch}</span>}
                     {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
                   </div>
                 </div>
                 <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
               </div>
+
               {/* Body */}
               <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
                 <DetailRow label="Местоположение" value={coordDisplay || "—"} small />
                 {canView && (
                   <>
                     {selVessel.note && <DetailRow label="Примечание" value={selVessel.note} small />}
-                    {(selVessel.supplies && selVessel.supplies.length > 0 || powerLabel) && (
+                    {(selVessel.supplies && selVessel.supplies.length > 0) && (
                       <>
-                        <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, margin: "10px 0 4px", fontFamily: "monospace" }}>Запасы</div>
+                        {/* ЗАПАСЫ header with power inline */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
+                          <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
+                          {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
+                        </div>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                           <thead>
                             <tr>{["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
@@ -463,12 +473,6 @@ export function FleetMap({
                             ))}</tr>
                           </thead>
                           <tbody>
-                            {/* Электропитание — первая строка */}
-                            {powerLabel && (
-                              <tr>
-                                <td colSpan={5} style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontStyle: "italic" }}>{powerLabel}</td>
-                              </tr>
-                            )}
                             {(selVessel.supplies as DprSupply[]).map((s, i) => (
                               <tr key={i}>
                                 <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
