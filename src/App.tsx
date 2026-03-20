@@ -56,21 +56,22 @@ export default function App() {
   }, []);
 
   async function loadData() {
-    setLoading(true);
-    const [{ data: vData }, { data: cData }] = await Promise.all([
-      supabase.from("vessels").select("*").order("id"),
-      supabase.from("contracts").select("*").order("id"),
-    ]);
-    setVessels((vData||[]).map((v: any) => ({ id:v.id, name:v.name, branch:v.branch||"", imo:v.imo||"" })));
-    setContracts((cData||[]).map((c: any) => ({
-      id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
-      start:c.start_date, end:c.end_date,
-      rate:c.rate, mob:c.mob, demob:c.demob,
-      firmDays:c.firm_days||0, optionDays:c.option_days||0,
-      priority:c.priority||"contract", altGroup:c.alt_group||null,
-    })));
-    setLoading(false);
-  }
+  setLoading(true);
+  const [, { data: vData }, { data: cData }] = await Promise.all([
+    new Promise(r => setTimeout(r, 1500)),
+    supabase.from("vessels").select("*").order("id"),
+    supabase.from("contracts").select("*").order("id"),
+  ]);
+  setVessels((vData||[]).map((v: any) => ({ id:v.id, name:v.name, branch:v.branch||"", imo:v.imo||"" })));
+  setContracts((cData||[]).map((c: any) => ({
+    id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
+    start:c.start_date, end:c.end_date,
+    rate:c.rate, mob:c.mob, demob:c.demob,
+    firmDays:c.firm_days||0, optionDays:c.option_days||0,
+    priority:c.priority||"contract", altGroup:c.alt_group||null,
+  })));
+  setLoading(false);
+}
 
   function toggleType(v: string) {
     if (v === "Все") { setFilterTypes([]); return; }
@@ -195,7 +196,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logoMSS.png" style={{ height:48, width:48, objectFit:"contain" }} alt="МСС" />
+      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
