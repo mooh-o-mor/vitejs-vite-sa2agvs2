@@ -40,6 +40,12 @@ function statusCls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
+function getPower(coordRaw: string): string {
+  const m = /(БЭП|СЭП)/i.exec(coordRaw || "");
+  if (!m) return "";
+  return m[1].toUpperCase() === "БЭП" ? "БЭП" : "СЭП";
+}
+
 /* ── Branch colors ── */
 const BRANCH_COLORS: Record<string, string> = {
   "АЧФ":  "#FFF3E0", "АЗЧФ": "#FFF3E0",
@@ -84,10 +90,31 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
+  const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [filterBranch, setFilterBranch] = useState("Все");
 
   useEffect(() => { loadDates(); }, []);
+
+  // Load type map from vessels table
+  useEffect(() => {
+    supabase.from("vessels").select("name").then(({ data }) => {
+      if (data) {
+        const t = new Map<string, string>();
+        data.forEach((v: any) => {
+          const full = v.name.toUpperCase().trim();
+          const typeMatch = full.match(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/);
+          if (typeMatch) {
+            const short = full.slice(typeMatch[0].length);
+            const typeStr = typeMatch[1];
+            t.set(full, typeStr);
+            t.set(short, typeStr);
+          }
+        });
+        setTypeMap(t);
+      }
+    });
+  }, []);
 
   async function loadDates() {
     const { data } = await supabase
@@ -137,8 +164,8 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   /* ── Styled Excel export ── */
   function exportXlsx() {
     const wb = XLSX.utils.book_new();
-    const headers = ["№ п/п", "Название судна", "Филиал", "Статус по План-графику", "Местоположение судна", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
-    const colWidths = [6, 30, 10, 28, 28, 35, 12, 12];
+    const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус по План-графику", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
+    const colWidths = [6, 8, 30, 10, 28, 28, 6, 35, 12, 12];
 
     const aoa: any[][] = [];
 
@@ -171,6 +198,8 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     filtered.forEach((v, i) => {
       const sc = statusCls(v.status);
       const brXl = BRANCH_XL[v.branch] || "FFFFFF";
+      const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+      const power = getPower(v.coord_raw);
 
       const baseBorder = {
         top: { style: "thin" as const, color: { rgb: "CFD8DC" } },
@@ -186,10 +215,12 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
       aoa.push([
         { v: i + 1, t: "n", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
+        { v: vType, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 9, color: { rgb: "546E7A" } } } },
         { v: v.vessel_name, t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "1A2A3A" } } } },
         { v: v.branch, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "37474F" } } } },
         { v: v.status, t: "s", s: { fill: statusFill, alignment: { ...wrap }, border: baseBorder, font: statusFont } },
-        { v: v.coord_raw || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
+        { v: (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim(), t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
+        { v: power, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: power === "БЭП" ? "1565C0" : "2E7D32" } } } },
         { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
         { v: getSupply(v.supplies, "ДТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
         { v: getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
@@ -254,7 +285,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
           <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
         </div>
 
-        {/* Excel export — for admin and viewer */}
         {canView && (
           <button onClick={exportXlsx}
             style={{ marginLeft: "auto", padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
@@ -267,21 +297,26 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
-              <th style={{ ...thStyle, width: 36 }}>№ п/п</th>
-              <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Название судна</th>
+              <th style={{ ...thStyle, width: 36 }}>№</th>
+              <th style={{ ...thStyle, width: 50 }}>Тип</th>
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Название судна</th>
               <th style={thStyle}>Филиал</th>
-              <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Статус по План-графику</th>
-              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Сведения о контракте</th>}
-              <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Местоположение судна</th>
-              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
-              {canView && <th style={{ ...thStyle, width: 70 }}>Топливо ДТ</th>}
-              {canView && <th style={{ ...thStyle, width: 70 }}>Топливо Мазут</th>}
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Статус</th>
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 120 }}>Контракт</th>}
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
+              <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Примечание</th>}
+              {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
+              {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
             </tr>
           </thead>
           <tbody>
             {filtered.map((v, i) => {
               const sc = statusCls(v.status);
               const rowBg = branchBg(v.branch);
+              const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+              const power = getPower(v.coord_raw);
+              const coordDisplay = (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
 
               let statusDisplay = v.status;
               let contractInfo = "";
@@ -300,16 +335,13 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
               return (
                 <tr key={v.vessel_name} style={{ background: rowBg }}>
                   <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
+                  <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{vType}</td>
                   <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{v.vessel_name}</td>
                   <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-                  <td style={{
-                    ...tdBase,
-                    background: STATUS_BG[sc],
-                    color: STATUS_COLOR[sc],
-                    fontWeight: 600, fontSize: 11,
-                  }}>{statusDisplay}</td>
+                  <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
                   {canView && <td style={{ ...tdBase, fontSize: 11, color: "#37474F" }}>{contractInfo}</td>}
-                  <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{v.coord_raw || "—"}</td>
+                  <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"}</td>
+                  <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"}</td>
                   {canView && <td style={{ ...tdBase, fontSize: 11, color: "#546E7A", maxWidth: 220 }}>{v.note || ""}</td>}
                   {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
                   {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
