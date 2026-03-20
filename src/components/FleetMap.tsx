@@ -168,7 +168,7 @@ export function FleetMap({
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: "", subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
-    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.control.zoom({ position: "topright" }).addTo(map);
 
     markersRef.current = (L as any).markerClusterGroup({
       maxClusterRadius: 40,
@@ -458,9 +458,9 @@ export function FleetMap({
                     fontFamily: "monospace", fontSize: 10, fontWeight: 700,
                     background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5",
                     color: CLR[c],
-                  }}>{shortStatus(v.status)}</span>
+                  }}>{v.vessel_name}</span>
                   <span style={{ fontSize: 12, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {v.vessel_name}
+                    {shortStatus(v.status)}
                   </span>
                   {v.branch && <span style={{ fontSize: 10, color: T.text2, flexShrink: 0 }}>{v.branch}</span>}
                   {v.lat == null && <span style={{ fontSize: 10, color: "#c07800", flexShrink: 0 }}>📍?</span>}
