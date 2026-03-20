@@ -32,8 +32,8 @@ export default function App() {
 
   const [showLogin, setShowLogin] = useState(false);
   const [activeTab, setActiveTab] = useState("gantt");
-  const [filterType, setFilterType] = useState("Все");
-  const [filterBranch, setFilterBranch] = useState("Все");
+  const [filterTypes, setFilterTypes] = useState<string[]>([]);
+  const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterCp, setFilterCp] = useState("Все");
   const [sortBy, setSortBy] = useState<"type"|"name"|"branch">("type");
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -70,6 +70,16 @@ export default function App() {
       priority:c.priority||"contract", altGroup:c.alt_group||null,
     })));
     setLoading(false);
+  }
+
+  function toggleType(v: string) {
+    if (v === "Все") { setFilterTypes([]); return; }
+    setFilterTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  }
+
+  function toggleBranch(v: string) {
+    if (v === "Все") { setFilterBranches([]); return; }
+    setFilterBranches(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
   }
 
   function openAddContract(vesselId: number) {
@@ -147,8 +157,8 @@ export default function App() {
   const allCps = ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))];
 
   const filtered = vessels.filter(v => {
-    const typeOk = filterType==="Все" || getType(v.name, typeOrder)===filterType;
-    const branchOk = filterBranch==="Все" || v.branch===filterBranch;
+    const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
+    const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
     return typeOk && branchOk;
   }).sort((a, b) => {
     if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
@@ -235,12 +245,12 @@ export default function App() {
                 <div style={{ fontSize:12, color:T.text2, marginBottom:10 }}>Выберите что экспортировать:</div>
                 <div style={{ marginBottom:8 }}>
                   <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Тип судна</div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{allTypes.map(t => <button key={t} onClick={() => setFilterType(t)} style={btnFilter(filterType===t)}>{t}</button>)}</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{allTypes.map(t => <button key={t} onClick={() => toggleType(t)} style={btnFilter(t === "Все" ? filterTypes.length === 0 : filterTypes.includes(t))}>{t}</button>)}</div>
                 </div>
                 {allBranches.length>1 && (
                   <div style={{ marginBottom:8 }}>
                     <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Филиал</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{allBranches.map(b => <button key={b} onClick={() => setFilterBranch(b)} style={btnFilter(filterBranch===b, true)}>{b||"Без филиала"}</button>)}</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{allBranches.map(b => <button key={b} onClick={() => toggleBranch(b)} style={btnFilter(b === "Все" ? filterBranches.length === 0 : filterBranches.includes(b), true)}>{b||"Без филиала"}</button>)}</div>
                   </div>
                 )}
                 {allCps.length>1 && (
@@ -250,7 +260,7 @@ export default function App() {
                   </div>
                 )}
                 <div style={{ fontSize:11, color:T.text2, marginBottom:8 }}>Будет экспортировано: <b style={{ color:T.text }}>{filtered.length} судов</b></div>
-                <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, isAdmin); setShowExportMenu(false); }} style={{ width:"100%", padding:9, borderRadius:6, border:"none", background:T.accent, color:"#ffffff", fontWeight:700, cursor:"pointer", fontSize:13 }}>⬇ Скачать PPTX</button>
+                <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, isAdmin, filterBranches, filterTypes); setShowExportMenu(false); }} style={{ width:"100%", padding:9, borderRadius:6, border:"none", background:T.accent, color:"#ffffff", fontWeight:700, cursor:"pointer", fontSize:13 }}>⬇ Скачать PPTX</button>
               </div>
             )}
           </div>
@@ -269,13 +279,13 @@ export default function App() {
             allTypes={allTypes}
             allBranches={allBranches}
             allCps={allCps}
-            filterType={filterType}
-            filterBranch={filterBranch}
+            filterTypes={filterTypes}
+            filterBranches={filterBranches}
             filterCp={filterCp}
             sortBy={sortBy}
             canView={canView}
-            onFilterType={setFilterType}
-            onFilterBranch={setFilterBranch}
+            onToggleType={toggleType}
+            onToggleBranch={toggleBranch}
             onFilterCp={setFilterCp}
             onSortBy={setSortBy}
           />
