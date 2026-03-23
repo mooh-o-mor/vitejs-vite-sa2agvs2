@@ -37,9 +37,10 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick }: Prop
         borderLeft: `3px solid ${isSelected ? T.accent : "transparent"}`, 
         background: isSelected ? "rgba(30,144,255,0.06)" : bgColor,
         transition: "all 0.2s",
+        whiteSpace: "nowrap",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
         {vesselType && (
           <span style={{ 
             fontSize: 11, 
@@ -47,17 +48,16 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick }: Prop
             fontFamily: "monospace", 
             fontWeight: 500, 
             padding: "0px", 
-            borderRadius: 0,
-            display: "inline-block"
+            flexShrink: 0,
           }}>
             {vesselType}
           </span>
         )}
-        <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1 }}>{vessel.vessel_name}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vessel.vessel_name}</span>
         {vessel.branch && vessel.branch !== "0" && (
-          <span style={{ fontSize: 11, color: T.text, padding: "0px", borderRadius: 0 }}>{vessel.branch}</span>
+          <span style={{ fontSize: 11, color: T.text, padding: "0px", flexShrink: 0 }}>{vessel.branch}</span>
         )}
-        {vessel.lat == null && <span style={{ fontSize: 10, color: "#c07800" }}>📍?</span>}
+        {vessel.lat == null && <span style={{ fontSize: 10, color: "#c07800", flexShrink: 0 }}>📍?</span>}
       </div>
     </div>
   );

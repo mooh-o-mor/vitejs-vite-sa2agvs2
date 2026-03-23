@@ -33,7 +33,7 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
 
   return (
-    <div style={{ position: "absolute", right: 14, bottom: 36, width: 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Заголовок с фоном статуса */}
       <div style={{ 
         padding: "10px 14px", 
@@ -41,31 +41,33 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
         display: "flex", 
         alignItems: "center", 
         justifyContent: "space-between",
-        flexWrap: "wrap",
+        flexWrap: "nowrap",
         gap: 8,
         background: STATUS_HEADER_BG[c],
         flexShrink: 0
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flex: 1, minWidth: 0, overflow: "hidden" }}>
           {vesselType && (
             <span style={{ 
               fontSize: 11, 
               color: T.text, 
               fontFamily: "monospace", 
               fontWeight: 500, 
-              padding: "0px"
+              padding: "0px",
+              flexShrink: 0,
             }}>
               {vesselType}
             </span>
           )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{vessel.vessel_name}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{vessel.vessel_name}</span>
           {vessel.branch && (
             <span style={{ 
               fontSize: 11, 
               color: T.text, 
               fontFamily: "monospace", 
               fontWeight: 500,
-              padding: "0px"
+              padding: "0px",
+              flexShrink: 0,
             }}>
               {vessel.branch}
             </span>
@@ -77,14 +79,14 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
       <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
           <span style={{ color: T.text2 }}>Местоположение</span>
-          <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 180 }}>{coordDisplay || "—"}</span>
+          <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 250 }}>{coordDisplay || "—"}</span>
         </div>
         {canView && (
           <>
             {vessel.note && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
                 <span style={{ color: T.text2 }}>Примечание</span>
-                <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 180 }}>{vessel.note}</span>
+                <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 250 }}>{vessel.note}</span>
               </div>
             )}
             {(vessel.supplies && vessel.supplies.length > 0) && (
