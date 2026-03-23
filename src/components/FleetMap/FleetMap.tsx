@@ -14,7 +14,7 @@ import { VesselPopup } from "./VesselPopup";
 
 interface DprRow {
   id: number;
-  vessel_name: string;
+  vessel_name: string;VesselPopup 
   branch: string;
   report_date: string;
   status: string;
@@ -370,15 +370,14 @@ export function FleetMap({
           </div>
         )}
 
-        {selVessel && (
-          <VesselPopup
-            vessel={selVessel}
-            vesselType={typeMap.get(selVessel.vessel_name.toUpperCase().trim()) || ""}
-            imo={imoMap.get(selVessel.vessel_name.toUpperCase().trim()) || ""}
-            canView={canView}
-            onClose={() => setSelVessel(null)}
-          />
-        )}
+       {selVessel && (
+  <VesselPopup
+    vessel={selVessel}
+    vesselType={typeMap.get(selVessel.vessel_name.toUpperCase().trim()) || ""}
+    canView={canView}
+    onClose={() => setSelVessel(null)}
+  />
+)}
       </div>
 
       <style>{`
