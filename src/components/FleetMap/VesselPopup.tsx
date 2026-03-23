@@ -26,14 +26,6 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
-function shortStatus(stat: string): string {
-  const s = stat.toUpperCase();
-  if (s.startsWith("АСГ")) return "АСГ";
-  if (s.startsWith("АСД")) return "АСД";
-  if (s.startsWith("РЕМ")) return "РЕМ";
-  return stat;
-}
-
 export function VesselPopup({ vessel, vesselType, imo, canView, onClose }: Props) {
   const c = cls(vessel.status);
   const powerMatch = /(БЭП|СЭП)/i.exec(vessel.coord_raw || "");
