@@ -1,16 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import XLSX from "xlsx-js-style";
 import { supabase } from "../lib/supabase";
 import { T } from "../lib/types";
 import type { DprSupply } from "../lib/parseDpr";
 
 interface DprRow {
+  id: number;
   vessel_name: string;
   branch: string;
+  report_date: string;
   status: string;
   coord_raw: string;
+  lat: number | null;
+  lng: number | null;
   note: string;
   supplies: DprSupply[];
+  contract_info?: string;
 }
 
 /* ── Helpers ── */
@@ -85,7 +90,133 @@ function branchBg(b: string): string {
   return BRANCH_COLORS[b] || "#FFFFFF";
 }
 
-/* ── Component ── */
+/* ── Компонент редактируемой ячейки ── */
+function EditableCell({ 
+  value, 
+  vesselName, 
+  reportDate, 
+  onUpdate 
+}: { 
+  value: string; 
+  vesselName: string; 
+  reportDate: string; 
+  onUpdate: (newValue: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value || "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("dpr_entries")
+        .update({ contract_info: editValue })
+        .eq("vessel_name", vesselName)
+        .eq("report_date", reportDate);
+      
+      if (error) throw error;
+      onUpdate(editValue);
+      setIsEditing(false);
+    } catch (err) {
+      console.error("Ошибка сохранения:", err);
+      alert("Не удалось сохранить");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave();
+    } else if (e.key === "Escape") {
+      setEditValue(value || "");
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+        <input
+          type="text"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          style={{
+            padding: "4px 6px",
+            borderRadius: 4,
+            border: `1px solid ${T.accent}`,
+            fontSize: 11,
+            width: "100%",
+            minWidth: 120,
+            background: "#fff",
+          }}
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            padding: "2px 6px",
+            borderRadius: 4,
+            border: "none",
+            background: T.accent,
+            color: "#fff",
+            fontSize: 10,
+            cursor: "pointer",
+          }}
+        >
+          {saving ? "..." : "✓"}
+        </button>
+        <button
+          onClick={() => {
+            setEditValue(value || "");
+            setIsEditing(false);
+          }}
+          style={{
+            padding: "2px 6px",
+            borderRadius: 4,
+            border: `1px solid ${T.border}`,
+            background: "transparent",
+            fontSize: 10,
+            cursor: "pointer",
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      style={{
+        cursor: "pointer",
+        padding: "2px 4px",
+        borderRadius: 4,
+        background: value ? "transparent" : "#fef3c7",
+        minWidth: 120,
+        color: value ? T.text : "#b45309",
+        border: "1px solid transparent",
+        transition: "all 0.2s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = T.accent;
+        e.currentTarget.style.background = "#f8fafc";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "transparent";
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
+      {value || "✎ добавить"}
+    </div>
+  );
+}
+
+/* ── Основной компонент ── */
 export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
@@ -132,12 +263,20 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     setLoading(false);
   }
 
+  const updateContractInfo = useCallback((vesselName: string, newValue: string) => {
+    setVessels(prev => prev.map(v => 
+      v.vessel_name === vesselName 
+        ? { ...v, contract_info: newValue }
+        : v
+    ));
+  }, []);
+
   const fmtDateRu = (d: string) => {
     const [y, m, day] = d.split("-");
     return `${day}.${m}.${y}`;
   };
 
-  const branches = ["Все", ...Array.from(new Set(vessels.map((v) => v.branch).filter(Boolean))).sort((a, b) => branchOrder(a) - branchOrder(b))];
+  const branches = ["Все", ...Array.from(new Set(vessels.map((v) => v.branch).filter(Boolean)))].sort((a, b) => branchOrder(a) - branchOrder(b));
 
   const filtered = vessels
     .filter((v) => filterBranch === "Все" || v.branch === filterBranch)
@@ -154,8 +293,8 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   /* ── Styled Excel export ── */
   function exportXlsx() {
     const wb = XLSX.utils.book_new();
-    const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус по План-графику", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
-    const colWidths = [6, 8, 30, 10, 28, 28, 6, 35, 12, 12];
+    const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус по План-графику", "Контракт", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
+    const colWidths = [6, 8, 30, 10, 28, 20, 28, 6, 35, 12, 12];
 
     const aoa: any[][] = [];
 
@@ -209,6 +348,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         { v: v.vessel_name, t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "1A2A3A" } } } },
         { v: v.branch, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "37474F" } } } },
         { v: v.status, t: "s", s: { fill: statusFill, alignment: { ...wrap }, border: baseBorder, font: statusFont } },
+        { v: v.contract_info || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
         { v: (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim(), t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
         { v: power, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: power === "БЭП" ? "1565C0" : "2E7D32" } } } },
         { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
@@ -292,7 +432,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
               <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Название судна</th>
               <th style={thStyle}>Филиал</th>
               <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Статус</th>
-              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 120 }}>Контракт</th>}
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Контракт</th>}
               <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
               <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
               {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Примечание</th>}
@@ -329,7 +469,16 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
                   <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{v.vessel_name}</td>
                   <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
                   <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
-                  {canView && <td style={{ ...tdBase, fontSize: 11, color: "#37474F" }}>{contractInfo}</td>}
+                  {canView && (
+                    <td style={{ ...tdBase, background: rowBg }}>
+                      <EditableCell
+                        value={v.contract_info || ""}
+                        vesselName={v.vessel_name}
+                        reportDate={selDate}
+                        onUpdate={(newValue) => updateContractInfo(v.vessel_name, newValue)}
+                      />
+                    </td>
+                  )}
                   <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"}</td>
                   <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"}</td>
                   {canView && <td style={{ ...tdBase, fontSize: 11, color: "#546E7A", maxWidth: 220 }}>{v.note || ""}</td>}
