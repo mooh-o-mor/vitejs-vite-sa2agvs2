@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../lib/supabase";
 import { T } from "../../lib/types";
-import { DprRow, branchOrder, statusCls, STATUS_COLOR, shortStatus } from "./types";
+import type { DprRow } from "./types";
+import { branchOrder, statusCls, STATUS_COLOR } from "./types";
 import { FilterBar } from "./FilterBar";
 import { ReportTable } from "./ReportTable";
 import { exportToExcel } from "./exportExcel";
