@@ -228,10 +228,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("branch"); // ← изменено
-
-  // ... остальной код без изменений
-}
+  const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("branch");
 
   useEffect(() => { loadDates(); }, []);
 
