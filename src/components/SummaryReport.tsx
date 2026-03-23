@@ -296,12 +296,12 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   }, [vessels]);
 
   const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
-  if (value === "Все") {
-    setter([]);
-    return;
-  }
-  setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-};
+    if (value === "Все") {
+      setter([]);
+      return;
+    }
+    setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+  };
 
   const filtered = useMemo(() => {
     let result = vessels.filter(v => {
@@ -461,30 +461,66 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      <div style={{ textAlign: "center", fontSize: 18, fontWeight: 700, margin: "4px 0 10px", color: "#1a2a3a" }}>
-        Сводная таблица судов МСС
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-        <select value={selDate} onChange={(e) => setSelDate(e.target.value)}
-          style={{ padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>
-          {dates.length === 0 && <option value="">— нет данных —</option>}
-          {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
-        </select>
-
-        <div style={{ marginLeft: "auto", display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
-          <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
-          <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
-          <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
-          <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
+      {/* Заголовок с датой, статусами и кнопкой экспорта */}
+      <div style={{ 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "space-between",
+        margin: "4px 0 12px",
+        padding: "8px 12px",
+        background: T.bg3,
+        borderRadius: 8,
+        flexWrap: "wrap",
+        gap: 10
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>
+          Сводная таблица судов МСС
         </div>
-
-        {canView && (
-          <button onClick={exportXlsx}
-            style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
-            ⬇ Экспорт в Excel
-          </button>
-        )}
+        
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <select 
+            value={selDate} 
+            onChange={(e) => setSelDate(e.target.value)}
+            style={{ 
+              padding: "5px 8px", 
+              borderRadius: 4, 
+              border: `1px solid ${T.border}`, 
+              fontSize: 13, 
+              fontFamily: "monospace", 
+              fontWeight: 600,
+              background: "#fff"
+            }}
+          >
+            {dates.length === 0 && <option value="">— нет данных —</option>}
+            {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
+          </select>
+          
+          <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
+            <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
+            <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
+            <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
+            <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
+          </div>
+          
+          {canView && (
+            <button 
+              onClick={exportXlsx}
+              style={{ 
+                padding: "6px 16px", 
+                borderRadius: 6, 
+                border: "none", 
+                background: "#2e7d32", 
+                color: "#fff", 
+                fontWeight: 600, 
+                fontSize: 12, 
+                cursor: "pointer",
+                whiteSpace: "nowrap"
+              }}
+            >
+              ⬇ Экспорт в Excel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Фильтры */}
@@ -495,6 +531,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         {sortRow()}
       </div>
 
+      {/* Таблица */}
       <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
