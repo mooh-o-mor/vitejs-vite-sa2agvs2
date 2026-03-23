@@ -12,7 +12,6 @@ interface Props {
     supplies: DprSupply[];
   };
   vesselType: string;
-  imo: string;
   canView: boolean;
   onClose: () => void;
 }
@@ -26,7 +25,7 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
-export function VesselPopup({ vessel, vesselType, imo, canView, onClose }: Props) {
+export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const c = cls(vessel.status);
   const powerMatch = /(БЭП|СЭП)/i.exec(vessel.coord_raw || "");
   const power = powerMatch ? powerMatch[1].toUpperCase() : null;
