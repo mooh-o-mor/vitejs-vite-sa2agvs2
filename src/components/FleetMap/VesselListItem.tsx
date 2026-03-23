@@ -1,5 +1,5 @@
 import { T } from "../../lib/types";
-import { CLR, STATUS_BG } from "./mapIcons";
+import { STATUS_BG } from "./mapIcons";
 
 interface Props {
   vessel: {
