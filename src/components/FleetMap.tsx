@@ -300,17 +300,18 @@ export function FleetMap({
 
     let ok = 0, fail = 0;
     for (const v of parsed) {
-      const row = {
-        vessel_name: v.name,
-        branch: v.branch,
-        report_date: dateStr,
-        status: v.status,
-        coord_raw: v.coordRaw,
-        lat: v.lat,
-        lng: v.lng,
-        note: v.note,
-        supplies: v.supplies,
-      };
+     const row = {
+  vessel_name: v.name,
+  branch: v.branch,
+  report_date: dateStr,
+  status: v.status,
+  coord_raw: v.coordRaw,
+  lat: v.lat,
+  lng: v.lng,
+  note: v.note,
+  supplies: v.supplies,
+  contract_info: v.contract_info || null,  // Добавляем
+};
       const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
       if (error) { fail++; console.error(v.name, error); } else ok++;
     }
