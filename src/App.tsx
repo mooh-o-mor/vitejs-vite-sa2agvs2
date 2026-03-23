@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase";
 import type { Vessel, Contract, FormState } from "./lib/types";
 import { T, YEAR, typeOrder } from "./lib/types";
@@ -48,49 +48,50 @@ export default function App() {
   const [showVesselForm, setShowVesselForm] = useState(false);
   const [editingVessel, setEditingVessel] = useState<Vessel|null>(null);
 
+  // Мемоизированная функция загрузки данных
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const [, { data: vData }, { data: cData }] = await Promise.all([
+      new Promise(r => setTimeout(r, 1500)),
+      supabase.from("vessels").select("id,name,branch,imo").order("id"),
+      supabase.from("contracts").select("*").order("id"),
+    ]);
+    setVessels((vData||[]).map((v: any) => ({ id:v.id, name:v.name, branch:v.branch||"", imo:v.imo||"" })));
+    setContracts((cData||[]).map((c: any) => ({
+      id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
+      start:c.start_date, end:c.end_date,
+      rate:c.rate, mob:c.mob, demob:c.demob,
+      firmDays:c.firm_days||0, optionDays:c.option_days||0,
+      priority:c.priority||"contract", altGroup:c.alt_group||null,
+    })));
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     loadData();
     const s1 = supabase.channel("vessels-ch").on("postgres_changes", { event:"*", schema:"public", table:"vessels" }, () => loadData()).subscribe();
     const s2 = supabase.channel("contracts-ch").on("postgres_changes", { event:"*", schema:"public", table:"contracts" }, () => loadData()).subscribe();
     return () => { supabase.removeChannel(s1); supabase.removeChannel(s2); };
-  }, []);
+  }, [loadData]);
 
-  async function loadData() {
-  setLoading(true);
-  const [, { data: vData }, { data: cData }] = await Promise.all([
-    new Promise(r => setTimeout(r, 1500)),
-    supabase.from("vessels").select("*").order("id"),
-    supabase.from("contracts").select("*").order("id"),
-  ]);
-  setVessels((vData||[]).map((v: any) => ({ id:v.id, name:v.name, branch:v.branch||"", imo:v.imo||"" })));
-  setContracts((cData||[]).map((c: any) => ({
-    id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
-    start:c.start_date, end:c.end_date,
-    rate:c.rate, mob:c.mob, demob:c.demob,
-    firmDays:c.firm_days||0, optionDays:c.option_days||0,
-    priority:c.priority||"contract", altGroup:c.alt_group||null,
-  })));
-  setLoading(false);
-}
-
-  function toggleType(v: string) {
+  const toggleType = useCallback((v: string) => {
     if (v === "Все") { setFilterTypes([]); return; }
     setFilterTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
-  }
+  }, []);
 
-  function toggleBranch(v: string) {
+  const toggleBranch = useCallback((v: string) => {
     if (v === "Все") { setFilterBranches([]); return; }
     setFilterBranches(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
-  }
+  }, []);
 
-  function openAddContract(vesselId: number) {
+  const openAddContract = useCallback((vesselId: number) => {
     setEditContractId(null);
     setContractForm(EMPTY_FORM);
     setActiveVesselId(vesselId);
     setShowContractForm(true);
-  }
+  }, []);
 
-  function openEditContract(contract: Contract) {
+  const openEditContract = useCallback((contract: Contract) => {
     setEditContractId(contract.id);
     setContractForm({
       counterparty:contract.counterparty, start:contract.start, end:contract.end,
@@ -100,9 +101,9 @@ export default function App() {
     });
     setActiveVesselId(contract.vesselId);
     setShowContractForm(true);
-  }
+  }, []);
 
-  async function saveContract() {
+  const saveContract = useCallback(async () => {
     if (!contractForm.counterparty || !contractForm.start || !contractForm.end) return;
     setSyncing(true);
     const data = {
@@ -121,78 +122,86 @@ export default function App() {
       if (error) alert("Ошибка: " + error.message);
     }
     setSyncing(false); setShowContractForm(false); await loadData();
-  }
+  }, [contractForm, activeVesselId, editContractId, loadData]);
 
-  async function deleteContract() {
+  const deleteContract = useCallback(async () => {
     if (!editContractId) return;
     setSyncing(true);
     await supabase.from("contracts").delete().eq("id", editContractId);
     setSyncing(false); setShowContractForm(false); await loadData();
-  }
+  }, [editContractId, loadData]);
 
-  async function addVessel(name: string, branch: string, imo: string) {
+  const addVessel = useCallback(async (name: string, branch: string, imo: string) => {
     setSyncing(true);
     const maxId = vessels.reduce((m, v) => Math.max(m, v.id), 0);
     const { error } = await supabase.from("vessels").insert({ id:maxId+1, name, branch, imo });
     if (error) alert("Ошибка: " + error.message);
     setSyncing(false); await loadData();
-  }
+  }, [vessels, loadData]);
 
-  async function saveVessel(name: string, branch: string, imo: string) {
+  const saveVessel = useCallback(async (name: string, branch: string, imo: string) => {
     if (!editingVessel) return;
     setSyncing(true);
     await supabase.from("vessels").update({ name, branch, imo }).eq("id", editingVessel.id);
     setSyncing(false); setShowVesselForm(false); await loadData();
-  }
+  }, [editingVessel, loadData]);
 
-  async function deleteVessel(id: number) {
+  const deleteVessel = useCallback(async (id: number) => {
     setSyncing(true);
     await supabase.from("contracts").delete().eq("vessel_id", id);
     await supabase.from("vessels").delete().eq("id", id);
     setSyncing(false); await loadData();
-  }
+  }, [loadData]);
 
-  const cpKeys = [...new Set(contracts.map(c => cpKey(c.counterparty)))];
-  const allTypes = ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))];
-  const allBranches = ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))];
-  const allCps = ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))];
+  // Мемоизированные вычисления
+  const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpKey(c.counterparty)))], [contracts]);
+  const allTypes = useMemo(() => ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))], [vessels]);
+  const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
+  const allCps = useMemo(() => ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))], [cpKeys]);
 
-  const filtered = vessels.filter(v => {
-    const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
-    const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
-    return typeOk && branchOk;
-  }).sort((a, b) => {
-    if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
-    if (sortBy==="name") {
-      const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-      const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-      return nameA.localeCompare(nameB, "ru");
-    }
-    if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
-    return 0;
-  });
+  const filtered = useMemo(() => {
+    return vessels.filter(v => {
+      const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
+      const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
+      return typeOk && branchOk;
+    }).sort((a, b) => {
+      if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
+      if (sortBy==="name") {
+        const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+        const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+        return nameA.localeCompare(nameB, "ru");
+      }
+      if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
+      return 0;
+    });
+  }, [vessels, filterTypes, filterBranches, sortBy]);
 
-  const visibleContracts = filterCp==="Все" ? contracts : contracts.filter(c => cpKey(c.counterparty)===filterCp);
-  const totalRev = visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
-    .reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
+  const visibleContracts = useMemo(() => {
+    return filterCp==="Все" ? contracts : contracts.filter(c => cpKey(c.counterparty)===filterCp);
+  }, [contracts, filterCp]);
 
-  const btnFilter = (active: boolean, amber?: boolean) => ({
+  const totalRev = useMemo(() => {
+    return visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
+      .reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
+  }, [visibleContracts, filtered]);
+
+  const btnFilter = useCallback((active: boolean, amber?: boolean) => ({
     padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
     borderColor: active ? (amber ? T.amber : T.accent) : T.border,
     background: active ? (amber ? T.amber : T.accent) : T.bg2,
     color: active ? "#ffffff" : T.text2
-  } as React.CSSProperties);
+  } as React.CSSProperties), []);
 
-  function fmoney(n: number) {
+  const fmoney = useCallback((n: number) => {
     if (!n && n !== 0) return "—";
     return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
-  }
+  }, []);
 
-  function accessLabel() {
+  const accessLabel = useCallback(() => {
     if (access === "admin") return "👤 Админ";
     if (access === "viewer") return "👁 Просмотр";
     return null;
-  }
+  }, [access]);
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
