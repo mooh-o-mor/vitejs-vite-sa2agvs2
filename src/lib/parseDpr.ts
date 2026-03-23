@@ -27,7 +27,6 @@ export interface DprVessel {
 function normalizeStatus(raw: string): { status: string; extra: string } {
   const s = raw.trim();
 
-  // Split on first / or ,
   const sep = s.search(/[\/,]/);
   const firstPart = (sep >= 0 ? s.slice(0, sep) : s).trim();
   const afterSep = sep >= 0 ? s.slice(sep + 1).trim() : "";
@@ -57,7 +56,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
 
-  // DD-MM,M [NSСЮ] DDD-MM,M [EWВЗ]
   const m1 = s.match(
     /(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
@@ -67,7 +65,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // DD°MM[,M]N / DDD°MM[,M]E  (например: 45°04N/036°32E)
   const m2 = s.match(
     /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
@@ -77,16 +74,15 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // DD MM,M [N] DDD MM,M [E]  (пробел вместо дефиса: 55 31,4N 020 08,5E)
-const m3 = s.match(
-  /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
-);
-if (m3) {
-  const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
-  const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
-  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
-}
-  // Port lookup
+  const m3 = s.match(
+    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+  );
+  if (m3) {
+    const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
+    const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
   const low = s
     .toLowerCase()
     .replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "")
@@ -153,8 +149,8 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
   return best;
 }
 
-/* ── Filial data parser ── */
-export function parseFilial(rows: any[][]): DprVessel[] {
+/* ── Filial data parser (с поддержкой branchMap) ── */
+export function parseFilial(rows: any[][], branchMap?: Map<string, string>): DprVessel[] {
   let hRow = -1;
   for (let i = 0; i < Math.min(15, rows.length); i++) {
     if (rows[i] && rows[i].some((v: any) => v && String(v).includes("Название судна"))) {
@@ -261,14 +257,34 @@ export function parseFilial(rows: any[][]): DprVessel[] {
     const coordRaw = coordParts.join(" ").trim();
     const coords = parseCoord(coordRaw);
 
-    // Normalize status — split contract/extra info out of status field
     const { status: cleanStatus, extra: statusExtra } = normalizeStatus(statStr);
     const rawNote = C.note >= 0 && row[C.note] ? String(row[C.note]).trim() : "";
     const combinedNote = [statusExtra, rawNote].filter(Boolean).join(" / ");
 
+    // Определяем филиал: сначала из Excel, потом из справочника
+    let branch = C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "";
+    
+    // Если филиал не определён, пытаемся получить из справочника по названию судна
+    if (!branch && branchMap) {
+      const vesselNameClean = String(name).trim().toUpperCase();
+      // Прямое совпадение
+      const fromMap = branchMap.get(vesselNameClean);
+      if (fromMap) {
+        branch = fromMap;
+      } else {
+        // Поиск частичного совпадения (например, "ТБС УМКА" -> "УМКА")
+        for (const [key, val] of branchMap.entries()) {
+          if (vesselNameClean.includes(key) || key.includes(vesselNameClean)) {
+            branch = val;
+            break;
+          }
+        }
+      }
+    }
+
     vessels.push({
-  name: String(name).trim().replace(/\s+/g, " "),
-      branch: C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "",
+      name: String(name).trim(),
+      branch,
       status: cleanStatus,
       coordRaw,
       lat: coords ? coords[0] : null,
@@ -319,8 +335,11 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
   return null;
 }
 
-/* ── Full pipeline: File[] → DprVessel[] ── */
-export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel[]; date: Date | null }> {
+/* ── Full pipeline: File[] → DprVessel[] (с поддержкой branchMap) ── */
+export async function parseMsgFiles(
+  files: File[],
+  branchMap?: Map<string, string>
+): Promise<{ vessels: DprVessel[]; date: Date | null }> {
   let reportDate: Date | null = null;
   const all: DprVessel[] = [];
 
@@ -335,7 +354,7 @@ export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel
         rows = await extractXlsx(buf);
       }
       if (!rows) continue;
-      const vs = parseFilial(rows);
+      const vs = parseFilial(rows, branchMap);
       if (vs.length) {
         if (!reportDate && vs[0].reportDate) reportDate = vs[0].reportDate;
         all.push(...vs);
