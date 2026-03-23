@@ -300,7 +300,7 @@ export function FleetMap({
 
     let ok = 0, fail = 0;
     for (const v of parsed) {
-     const row = {
+    const row = {
   vessel_name: v.name,
   branch: v.branch,
   report_date: dateStr,
