@@ -56,6 +56,7 @@ export interface DprRow {
   note: string;
   supplies: DprSupply[];
   contract_info?: string;
+  work_period?: string;   // новое поле
 }
 
 export const YEAR = 2026;
