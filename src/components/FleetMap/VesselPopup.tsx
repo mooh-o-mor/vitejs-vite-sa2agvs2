@@ -1,6 +1,6 @@
 import { T } from "../../lib/types";
 import type { DprSupply } from "../../lib/parseDpr";
-import { CLR, STATUS_BG, STATUS_HEADER_BG } from "./mapIcons";
+import { STATUS_HEADER_BG } from "./mapIcons";
 
 interface Props {
   vessel: {
