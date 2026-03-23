@@ -21,6 +21,7 @@ export interface DprVessel {
   note: string;
   supplies: DprSupply[];
   reportDate: Date | null;
+  contract_info?: string;  // Добавляем
 }
 
 /* ── Status normalizer ── */
