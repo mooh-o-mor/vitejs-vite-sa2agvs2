@@ -76,6 +76,7 @@ function branchBg(b: string): string {
 }
 
 /* ── Универсальная редактируемая ячейка ── */
+/* ── Универсальная редактируемая ячейка ── */
 function EditableCell({ 
   value, 
   vesselName, 
@@ -188,7 +189,6 @@ function EditableCell({
 
   const isEmpty = !value || value === "";
   const isContract = field === "contract_info";
-  const isAsdOnly = isContract; // Контракт редактируется только для АСД
 
   return (
     <div
