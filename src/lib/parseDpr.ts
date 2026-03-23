@@ -23,6 +23,7 @@ export interface DprVessel {
   reportDate: Date | null;
   contract_info?: string;  // Добавляем
 }
+}
 
 /* ── Status normalizer ── */
 function normalizeStatus(raw: string): { status: string; extra: string } {
