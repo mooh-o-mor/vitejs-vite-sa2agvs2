@@ -21,8 +21,7 @@ export interface DprVessel {
   note: string;
   supplies: DprSupply[];
   reportDate: Date | null;
-  contract_info?: string;  // Добавляем
-}
+  contract_info?: string;
 }
 
 /* ── Status normalizer ── */
@@ -263,18 +262,14 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     const rawNote = C.note >= 0 && row[C.note] ? String(row[C.note]).trim() : "";
     const combinedNote = [statusExtra, rawNote].filter(Boolean).join(" / ");
 
-    // Определяем филиал: сначала из Excel, потом из справочника
     let branch = C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "";
     
-    // Если филиал не определён, пытаемся получить из справочника по названию судна
     if (!branch && branchMap) {
       const vesselNameClean = String(name).trim().toUpperCase();
-      // Прямое совпадение
       const fromMap = branchMap.get(vesselNameClean);
       if (fromMap) {
         branch = fromMap;
       } else {
-        // Поиск частичного совпадения (например, "ТБС УМКА" -> "УМКА")
         for (const [key, val] of branchMap.entries()) {
           if (vesselNameClean.includes(key) || key.includes(vesselNameClean)) {
             branch = val;
@@ -294,6 +289,7 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       note: combinedNote,
       supplies,
       reportDate: date,
+      contract_info: "",
     });
 
     i += 5;
