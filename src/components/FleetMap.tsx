@@ -23,13 +23,14 @@ const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8aa8" };
 const STATUS_BG = { asg: "#ffebee", asd: "#e8f5e9", rem: "#f5f5f5", oth: "#ffffff" };
 const STATUS_HEADER_BG = { asg: "#ffcdd2", asd: "#c8e6c9", rem: "#e0e0e0", oth: "#f5f5f5" };
 
-function shortStatus(stat: string): string {
-  const s = stat.toUpperCase();
-  if (s.startsWith("АСГ")) return "АСГ";
-  if (s.startsWith("АСД")) return "АСД";
-  if (s.startsWith("РЕМ")) return "РЕМ";
-  return stat;
-}
+// Удалить эту функцию:
+// function shortStatus(stat: string): string {
+//   const s = stat.toUpperCase();
+//   if (s.startsWith("АСГ")) return "АСГ";
+//   if (s.startsWith("АСД")) return "АСД";
+//   if (s.startsWith("РЕМ")) return "РЕМ";
+//   return stat;
+// }
 
 // Маркер цвета статуса (без учёта типа)
 function mkIcon(c: string) {
