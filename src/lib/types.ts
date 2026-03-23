@@ -4,6 +4,7 @@ export interface Vessel {
   branch: string;
   imo: string;
 }
+
 export interface Contract {
   id: number;
   vesselId: number;
@@ -18,6 +19,7 @@ export interface Contract {
   priority: "contract" | "kp" | "plan";
   altGroup: number | null;
 }
+
 export interface FormState {
   counterparty: string;
   start: string;
@@ -31,6 +33,17 @@ export interface FormState {
   altGroup: string;
 }
 
+// Добавляем тип для запасов ДПР
+export interface DprSupply {
+  type: string;
+  amt: string;
+  pct: string;
+  cons: string;
+  lim: string;
+  del: string;
+}
+
+// Добавляем тип для строки ДПР
 export interface DprRow {
   id: number;
   vessel_name: string;
@@ -42,7 +55,7 @@ export interface DprRow {
   lng: number | null;
   note: string;
   supplies: DprSupply[];
-  contract_info?: string;  // Добавляем
+  contract_info?: string;
 }
 
 export const YEAR = 2026;
@@ -51,8 +64,6 @@ export const yearEnd = new Date(YEAR, 11, 31);
 export const totalDays = (yearEnd.getTime() - yearStart.getTime()) / 86400000 + 1;
 export const typeOrder = ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС"];
 export const MONTHS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-// ⚠️ ВАЖНО: эти пароли должны быть перенесены на сервер!
-// Временно оставляем, но в продакшене нужно использовать Supabase Auth
 export const ADMIN_PASSWORD = "vjhcgfc";
 export const VIEWER_PASSWORD = "mss75";
 export const COLORS = [
