@@ -21,7 +21,6 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
 
 const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8aa8" };
 const STATUS_BG = { asg: "#ffebee", asd: "#e8f5e9", rem: "#f5f5f5", oth: "#ffffff" };
-const STATUS_BORDER = { asg: "#ffcdd2", asd: "#c8e6c9", rem: "#e0e0e0", oth: "#ffffff" };
 
 const TYPE_CLR: Record<string, string> = {
   "МФАСС": "#1e88e5",
@@ -474,7 +473,6 @@ export function FleetMap({
               const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
               const isSel = selVessel?.vessel_name === v.vessel_name;
               const bgColor = STATUS_BG[c];
-              const borderColor = STATUS_BORDER[c];
               
               return (
                 <div 
@@ -556,7 +554,7 @@ export function FleetMap({
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     {vesselType && <span style={{ fontSize: 10, color: "#fff", fontFamily: "monospace", fontWeight: 700, background: TYPE_CLR[vesselType] || "#6b8aa8", padding: "2px 8px", borderRadius: 3 }}>{vesselType}</span>}
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{selVessel.vessel_name}</span>
-                    <span style={{ padding: "2px 8px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: STATUS_BG[c], color: CLR[c], border: `1px solid ${STATUS_BORDER[c]}` }}>{shortStatus(selVessel.status)}</span>
+                    <span style={{ padding: "2px 8px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: STATUS_BG[c], color: CLR[c], border: `1px solid ${c === "asg" ? "#ffcdd2" : c === "asd" ? "#c8e6c9" : "#e0e0e0"}` }}>{shortStatus(selVessel.status)}</span>
                     {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
                   </div>
                   {selVessel.branch && <div style={{ fontSize: 11, color: T.amber, marginTop: 4 }}>{selVessel.branch}</div>}
