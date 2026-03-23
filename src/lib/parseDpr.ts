@@ -25,7 +25,7 @@ export interface DprVessel {
   work_period?: string;
 }
 
-// Добавляем экспорт DprRow
+// Экспорт DprRow для использования в компонентах
 export interface DprRow {
   id: number;
   vessel_name: string;
@@ -307,7 +307,7 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       supplies,
       reportDate: date,
       contract_info: "",
-      work_period: "",   // добавлено
+      work_period: "",
     });
 
     i += 5;
