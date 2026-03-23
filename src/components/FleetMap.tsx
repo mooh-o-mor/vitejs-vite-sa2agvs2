@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
@@ -376,14 +376,6 @@ export function FleetMap({
   const noPos = all.filter((v) => v.lat == null).length;
 
   const fmtDateRu = (d: string) => { const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
-
-  const btnStyle = (active: boolean, isAll?: boolean): React.CSSProperties => ({
-    padding: "4px 12px", borderRadius: 20, border: "1px solid",
-    cursor: "pointer", fontSize: 11, fontWeight: 600,
-    borderColor: active ? (isAll ? "#37474F" : T.accent) : T.border,
-    background: active ? (isAll ? "#37474F" : T.accent) : T.bg2,
-    color: active ? "#fff" : T.text2,
-  });
 
   const filterSelect = (label: string, value: string, options: string[], onChange: (v: string) => void) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
