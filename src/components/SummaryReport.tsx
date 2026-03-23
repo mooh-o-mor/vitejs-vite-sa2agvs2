@@ -76,7 +76,6 @@ function branchBg(b: string): string {
 }
 
 /* ── Универсальная редактируемая ячейка ── */
-/* ── Универсальная редактируемая ячейка ── */
 function EditableCell({ 
   value, 
   vesselName, 
@@ -460,10 +459,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
                 statusDisplay = shortStatus(v.status);
               }
 
-              // Контракт редактируется только для АСД
               const isAsd = sc === "asd";
-              // Примечание редактируется для всех
-              const noteEditable = true;
 
               return (
                 <tr key={v.vessel_name} style={{ background: rowBg }}>
@@ -494,7 +490,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
                         reportDate={selDate}
                         field="note"
                         onUpdate={updateField}
-                        editable={noteEditable}
+                        editable={true}
                       />
                     </td>
                   )}
