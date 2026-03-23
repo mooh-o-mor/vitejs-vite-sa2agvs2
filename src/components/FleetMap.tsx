@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
@@ -6,7 +6,8 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { supabase } from "../lib/supabase";
 import { parseMsgFiles, type DprSupply } from "../lib/parseDpr";
-import { T } from "../lib/types";
+import { T, typeOrder } from "../lib/types";
+import { getType } from "../lib/utils";
 
 /* ── Status helpers ── */
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
@@ -18,6 +19,17 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8aa8" };
+const TYPE_CLR: Record<string, string> = {
+  "МФАСС": "#1e88e5",
+  "ТБС": "#43a047",
+  "ССН": "#fb8c00",
+  "МБС": "#8e24aa",
+  "МВС": "#00acc1",
+  "МБ": "#546e7a",
+  "НИС": "#6d4c41",
+  "АСС": "#c2185b",
+  "БП": "#7cb342",
+};
 
 function shortStatus(stat: string): string {
   const s = stat.toUpperCase();
@@ -27,11 +39,12 @@ function shortStatus(stat: string): string {
   return stat;
 }
 
-function mkIcon(c: string) {
+function mkIcon(c: string, type?: string) {
   const color = CLR[c as keyof typeof CLR] || CLR.oth;
+  const typeColor = type ? TYPE_CLR[type] || color : color;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="32" viewBox="0 0 26 32">
     <path d="M13 0C5.8 0 0 5.8 0 13c0 9 13 19 13 19s13-10 13-19C26 5.8 20.2 0 13 0z" fill="white"/>
-    <path d="M13 1.5C6.6 1.5 1.5 6.6 1.5 13c0 8.3 11.5 17.5 11.5 17.5S24.5 21.3 24.5 13C24.5 6.6 19.4 1.5 13 1.5z" fill="${color}"/>
+    <path d="M13 1.5C6.6 1.5 1.5 6.6 1.5 13c0 8.3 11.5 17.5 11.5 17.5S24.5 21.3 24.5 13C24.5 6.6 19.4 1.5 13 1.5z" fill="${typeColor}"/>
     <circle cx="13" cy="13" r="4.5" fill="white" opacity=".9"/>
   </svg>`;
   return L.divIcon({ html: svg, iconSize: [26, 32], iconAnchor: [13, 32], popupAnchor: [0, -34], className: "" });
@@ -113,7 +126,12 @@ export function FleetMap({
   const [uploadMsg, setUploadMsg] = useState("");
 
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "asg" | "asd" | "rem">("all");
+  
+  // Фильтры
+  const [filterType, setFilterType] = useState<string>("Все");
+  const [filterBranch, setFilterBranch] = useState<string>("Все");
+  const [filterStatus, setFilterStatus] = useState<string>("Все");
+  
   const [selVessel, setSelVessel] = useState<DprRow | null>(null);
 
   const [dragging, setDragging] = useState(false);
@@ -136,11 +154,16 @@ export function FleetMap({
         const t = new Map<string, string>();
         data.forEach((v: any) => {
           const full = v.name.toUpperCase().trim();
-          const typeMatch = full.match(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/);
-          const short = typeMatch ? full.slice(typeMatch[0].length) : full;
-          const typeStr = typeMatch ? typeMatch[1] : "";
-          if (v.imo) { m.set(full, v.imo); m.set(short, v.imo); }
-          if (typeStr) { t.set(full, typeStr); t.set(short, typeStr); }
+          const typeStr = getType(v.name, typeOrder);
+          const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+          if (v.imo) { 
+            m.set(full, v.imo); 
+            m.set(short, v.imo);
+          }
+          if (typeStr) { 
+            t.set(full, typeStr); 
+            t.set(short, typeStr);
+          }
         });
         setImoMap(m);
         setTypeMap(t);
@@ -226,15 +249,47 @@ export function FleetMap({
     setLoading(false);
   }
 
+  // Получаем уникальные значения для фильтров
+  const allTypes = useMemo(() => {
+    const types = new Set<string>();
+    vessels.forEach(v => {
+      const t = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+      if (t) types.add(t);
+    });
+    return ["Все", ...Array.from(types).sort()];
+  }, [vessels, typeMap]);
+
+  const allBranches = useMemo(() => {
+    const branches = new Set<string>();
+    vessels.forEach(v => {
+      if (v.branch) branches.add(v.branch);
+    });
+    return ["Все", ...Array.from(branches).sort()];
+  }, [vessels]);
+
+  const allStatuses = ["Все", "АСГ", "АСД", "РЕМ"];
+
+  // Фильтруем суда
+  const filtered = useMemo(() => {
+    return vessels.filter(v => {
+      const typeOk = filterType === "Все" || typeMap.get(v.vessel_name.toUpperCase().trim()) === filterType;
+      const branchOk = filterBranch === "Все" || v.branch === filterBranch;
+      const statusOk = filterStatus === "Все" || cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem");
+      return typeOk && branchOk && statusOk;
+    });
+  }, [vessels, filterType, filterBranch, filterStatus, typeMap]);
+
+  // Обновляем карту при изменении фильтров
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
-    const vis = filtered();
+    const vis = filtered;
     const bounds: L.LatLng[] = [];
     vis.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
-      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
+      const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c, vType), _status: c } as any);
       marker.bindTooltip(v.vessel_name, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
         setSelVessel(v);
@@ -258,74 +313,63 @@ export function FleetMap({
     mapObj.current.on("zoomend", updateLabels);
     setTimeout(updateLabels, 300);
     return () => { if (mapObj.current) mapObj.current.off("zoomend", updateLabels); };
-  }, [vessels, filter, search]);
-
-  const filtered = useCallback(() => {
-    return vessels.filter((v) => {
-      const sq = search.toLowerCase();
-      const mq = !sq || v.vessel_name.toLowerCase().includes(sq) || v.branch.toLowerCase().includes(sq);
-      const mf = filter === "all" || cls(v.status) === filter;
-      return mq && mf;
-    });
-  }, [vessels, filter, search]);
+  }, [filtered, typeMap, isMobile]);
 
   async function handleUpload(files: FileList) {
-  setUploading(true);
-  setUploadMsg("Обработка...");
-  try {
-    // Создаём справочник филиалов из таблицы vessels
-    const { data: vesselList } = await supabase.from("vessels").select("name, branch");
-    const branchMap = new Map<string, string>();
-    (vesselList || []).forEach((v: any) => {
-      // Сохраняем в маппинг как в оригинальном названии, так и в uppercase
-      const original = v.name.trim();
-      const upper = original.toUpperCase();
-      branchMap.set(original, v.branch);
-      branchMap.set(upper, v.branch);
-      // Также добавляем вариант без префикса (ТБС УМКА -> УМКА)
-      const withoutPrefix = original.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/i, "");
-      if (withoutPrefix !== original) {
-        branchMap.set(withoutPrefix, v.branch);
-        branchMap.set(withoutPrefix.toUpperCase(), v.branch);
+    setUploading(true);
+    setUploadMsg("Обработка...");
+    try {
+      const { data: vesselList } = await supabase.from("vessels").select("name, branch");
+      const branchMap = new Map<string, string>();
+      (vesselList || []).forEach((v: any) => {
+        const original = v.name.trim();
+        const upper = original.toUpperCase();
+        branchMap.set(original, v.branch);
+        branchMap.set(upper, v.branch);
+        const withoutPrefix = original.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/i, "");
+        if (withoutPrefix !== original) {
+          branchMap.set(withoutPrefix, v.branch);
+          branchMap.set(withoutPrefix.toUpperCase(), v.branch);
+        }
+      });
+
+      const { vessels: parsed, date } = await parseMsgFiles(Array.from(files), branchMap);
+      
+      if (!parsed.length) { setUploadMsg("⚠ Данные не найдены"); setUploading(false); return; }
+      if (!date) { setUploadMsg("⚠ Дата не определена"); setUploading(false); return; }
+      
+      const dateStr = date.toISOString().slice(0, 10);
+      setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
+
+      let ok = 0, fail = 0;
+      for (const v of parsed) {
+        const row = {
+          vessel_name: v.name,
+          branch: v.branch,
+          report_date: dateStr,
+          status: v.status,
+          coord_raw: v.coordRaw,
+          lat: v.lat,
+          lng: v.lng,
+          note: v.note,
+          supplies: v.supplies,
+          contract_info: v.contract_info || null,
+          work_period: v.work_period || null,
+        };
+        const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
+        if (error) { fail++; console.error(v.name, error); } else ok++;
       }
-    });
-
-    const { vessels: parsed, date } = await parseMsgFiles(Array.from(files), branchMap);
-    
-    if (!parsed.length) { setUploadMsg("⚠ Данные не найдены"); setUploading(false); return; }
-    if (!date) { setUploadMsg("⚠ Дата не определена"); setUploading(false); return; }
-    
-    const dateStr = date.toISOString().slice(0, 10);
-    setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
-
-    let ok = 0, fail = 0;
-    for (const v of parsed) {
-  const row = {
-  vessel_name: v.name,
-  branch: v.branch,
-  report_date: dateStr,
-  status: v.status,
-  coord_raw: v.coordRaw,
-  lat: v.lat,
-  lng: v.lng,
-  note: v.note,
-  supplies: v.supplies,
-  contract_info: v.contract_info || null,
-  work_period: v.work_period || null,   // <-- добавить эту строку
-};
-      const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
-      if (error) { fail++; console.error(v.name, error); } else ok++;
+      
+      setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
+      await loadDates();
+      setSelDate(dateStr);
+    } catch (e: any) {
+      setUploadMsg("Ошибка: " + (e?.message || e));
     }
-    
-    setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
-    await loadDates();
-    setSelDate(dateStr);
-  } catch (e: any) {
-    setUploadMsg("Ошибка: " + (e?.message || e));
+    setUploading(false);
   }
-  setUploading(false);
-}
-  const all = filtered();
+
+  const all = filtered;
   const cAsg = all.filter((v) => cls(v.status) === "asg").length;
   const cAsd = all.filter((v) => cls(v.status) === "asd").length;
   const cRem = all.filter((v) => cls(v.status) === "rem").length;
@@ -333,13 +377,37 @@ export function FleetMap({
 
   const fmtDateRu = (d: string) => { const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
 
-  const fbtn = (active: boolean): React.CSSProperties => ({
-    flex: 1, padding: "5px 0", textAlign: "center", borderRadius: 4,
-    fontSize: 11, fontWeight: 600, cursor: "pointer",
-    border: `1px solid ${active ? T.accent : T.border}`,
-    background: active ? T.accent : "transparent",
+  const btnStyle = (active: boolean, isAll?: boolean): React.CSSProperties => ({
+    padding: "4px 12px", borderRadius: 20, border: "1px solid",
+    cursor: "pointer", fontSize: 11, fontWeight: 600,
+    borderColor: active ? (isAll ? "#37474F" : T.accent) : T.border,
+    background: active ? (isAll ? "#37474F" : T.accent) : T.bg2,
     color: active ? "#fff" : T.text2,
   });
+
+  const filterSelect = (label: string, value: string, options: string[], onChange: (v: string) => void) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ fontSize: 11, color: T.text3 }}>{label}:</span>
+      <select 
+        value={value} 
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          padding: "4px 8px",
+          borderRadius: 6,
+          border: `1px solid ${T.border}`,
+          fontSize: 11,
+          fontWeight: 500,
+          background: T.bg2,
+          color: T.text,
+          cursor: "pointer",
+        }}
+      >
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
 
   const showSidebar = isMobile ? sidebarOpen : true;
 
@@ -363,7 +431,7 @@ export function FleetMap({
       )}
 
       {showSidebar && (
-        <div style={{ width: 280, minWidth: 280, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
+        <div style={{ width: 300, minWidth: 300, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
 
           {isMobile && (
             <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 8px", borderBottom: `1px solid ${T.border}` }}>
@@ -378,7 +446,15 @@ export function FleetMap({
                 {dates.map((d) => <option key={d} value={d}>{fmtDateRu(d)}</option>)}
               </select>
             </div>
-            <div style={{ display: "flex", gap: 10, fontSize: 12 }}>
+            
+            {/* Фильтры */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              {filterSelect("Тип", filterType, allTypes, setFilterType)}
+              {filterSelect("Филиал", filterBranch, allBranches, setFilterBranch)}
+              {filterSelect("Статус", filterStatus, allStatuses, setFilterStatus)}
+            </div>
+            
+            <div style={{ display: "flex", gap: 10, fontSize: 12, marginTop: 10, flexWrap: "wrap" }}>
               <span><b style={{ color: CLR.asg }}>{cAsg}</b> <span style={{ color: T.text2 }}>АСГ</span></span>
               <span><b style={{ color: CLR.asd }}>{cAsd}</b> <span style={{ color: T.text2 }}>АСД</span></span>
               <span><b style={{ color: CLR.rem }}>{cRem}</b> <span style={{ color: T.text2 }}>РЕМ</span></span>
@@ -389,21 +465,14 @@ export function FleetMap({
           </div>
 
           <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
-            <input placeholder="Поиск судна, филиала..." value={search} onChange={(e) => setSearch(e.target.value)}
+            <input placeholder="Поиск судна..." value={search} onChange={(e) => setSearch(e.target.value)}
               style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12 }} />
           </div>
 
-          <div style={{ display: "flex", gap: 4, padding: "8px 10px", borderBottom: `1px solid ${T.border}` }}>
-            {(["all", "asg", "asd", "rem"] as const).map((f) => (
-              <button key={f} onClick={() => setFilter(f)} style={fbtn(filter === f)}>
-                {f === "all" ? "Все" : f === "asg" ? "АСГ" : f === "asd" ? "АСД" : "РЕМ"}
-              </button>
-            ))}
-          </div>
-
           <div style={{ flex: 1, overflowY: "auto" }}>
-            {all.map((v) => {
+            {all.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase())).map((v) => {
               const c = cls(v.status);
+              const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
               const isSel = selVessel?.vessel_name === v.vessel_name;
               return (
                 <div key={v.vessel_name} onClick={() => {
@@ -413,16 +482,45 @@ export function FleetMap({
                       mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
                     }
                   }}
-                  style={{ padding: "5px 10px", borderBottom: `1px solid ${T.border}`, cursor: "pointer", borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`, background: isSel ? "rgba(30,144,255,0.06)" : "transparent", display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}
+                  style={{ 
+                    padding: "6px 10px", 
+                    borderBottom: `1px solid ${T.border}`, 
+                    cursor: "pointer", 
+                    borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`, 
+                    background: isSel ? "rgba(30,144,255,0.06)" : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
                 >
-                  <span style={{ fontSize: 12, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel_name}</span>
-                  <span style={{ flexShrink: 0, display: "inline-block", padding: "1px 5px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c] }}>{shortStatus(v.status)}</span>
-                  {v.branch && v.branch !== "0" && <span style={{ fontSize: 10, color: T.text2, flexShrink: 0 }}>{v.branch}</span>}
-                  {v.lat == null && <span style={{ fontSize: 10, color: "#c07800", flexShrink: 0 }}>📍?</span>}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      {vType && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", fontWeight: 700, background: T.bg3, padding: "1px 4px", borderRadius: 3 }}>{vType}</span>}
+                      <span style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel_name}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                      <span style={{ 
+                        display: "inline-block", 
+                        padding: "1px 5px", 
+                        borderRadius: 3, 
+                        fontFamily: "monospace", 
+                        fontSize: 9, 
+                        fontWeight: 700, 
+                        background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", 
+                        color: CLR[c],
+                        minWidth: 32,
+                        textAlign: "center"
+                      }}>
+                        {shortStatus(v.status)}
+                      </span>
+                      {v.branch && v.branch !== "0" && <span style={{ fontSize: 10, color: T.text2 }}>{v.branch}</span>}
+                      {v.lat == null && <span style={{ fontSize: 10, color: "#c07800" }}>📍?</span>}
+                    </div>
+                  </div>
                 </div>
               );
             })}
-            {all.length === 0 && !loading && (
+            {all.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase())).length === 0 && !loading && (
               <div style={{ padding: 20, textAlign: "center", color: T.text2, fontSize: 13 }}>
                 {dates.length === 0 ? "Нет загруженных данных" : "Нет судов по фильтру"}
               </div>
@@ -446,38 +544,42 @@ export function FleetMap({
           const imo = imoMap.get(key) || "";
           const vesselType = typeMap.get(key) || "";
           const c = cls(selVessel.status);
-          // Extract БЭП/СЭП
           const powerMatch = /(БЭП|СЭП)/i.exec(selVessel.coord_raw || "");
           const power = powerMatch ? powerMatch[1].toUpperCase() : null;
           const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
-          // Clean coord for display
           const coordDisplay = (selVessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
 
           return (
             <div style={{ position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36, width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-              {/* Header: тип + название + статус + IMO */}
               <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {vesselType && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", fontWeight: 700, flexShrink: 0 }}>{vesselType}</span>}
+                    {vesselType && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", fontWeight: 700, background: T.bg3, padding: "1px 5px", borderRadius: 3 }}>{vesselType}</span>}
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{selVessel.vessel_name}</span>
                     <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: c === "asg" ? "#ffebee" : c === "asd" ? "#e8f5e9" : "#f5f5f5", color: CLR[c], flexShrink: 0 }}>{selVessel.status}</span>
                     {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
                   </div>
+                  {selVessel.branch && <div style={{ fontSize: 11, color: T.amber, marginTop: 2 }}>{selVessel.branch}</div>}
                 </div>
                 <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
               </div>
 
-              {/* Body */}
               <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
-                <DetailRow label="Местоположение" value={coordDisplay || "—"} small />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                  <span style={{ color: T.text2 }}>Местоположение</span>
+                  <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 180 }}>{coordDisplay || "—"}</span>
+                </div>
                 {canView && (
                   <>
-                    {selVessel.note && <DetailRow label="Примечание" value={selVessel.note} small />}
+                    {selVessel.note && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                        <span style={{ color: T.text2 }}>Примечание</span>
+                        <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 180 }}>{selVessel.note}</span>
+                      </div>
+                    )}
                     {(selVessel.supplies && selVessel.supplies.length > 0) && (
                       <>
-                        {/* ЗАПАСЫ header with power inline */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
                           <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
                           {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
@@ -515,15 +617,6 @@ export function FleetMap({
         .vessel-label-map::before { display: none !important; }
         .leaflet-control-attribution { display: none !important; }
       `}</style>
-    </div>
-  );
-}
-
-function DetailRow({ label, value, small }: { label: string; value: React.ReactNode; small?: boolean }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
-      <span style={{ color: T.text2, flexShrink: 0, paddingRight: 8 }}>{label}</span>
-      <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: small ? 10 : 11, maxWidth: 180, whiteSpace: small ? "normal" : undefined }}>{value}</span>
     </div>
   );
 }
