@@ -22,7 +22,23 @@ export interface DprVessel {
   supplies: DprSupply[];
   reportDate: Date | null;
   contract_info?: string;
-  work_period?: string;   // добавлено
+  work_period?: string;
+}
+
+// Добавляем экспорт DprRow для использования в компонентах
+export interface DprRow {
+  id: number;
+  vessel_name: string;
+  branch: string;
+  report_date: string;
+  status: string;
+  coord_raw: string;
+  lat: number | null;
+  lng: number | null;
+  note: string;
+  supplies: DprSupply[];
+  contract_info?: string;
+  work_period?: string;
 }
 
 /* ── Status normalizer ── */
