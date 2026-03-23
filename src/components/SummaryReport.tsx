@@ -461,14 +461,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      {/* Заголовок по центру */}
-      <div style={{ textAlign: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>
-          Сводная таблица судов МСС
-        </div>
-      </div>
-
-      {/* Строка с датой (слева) и статусами + экспорт (справа) */}
+      {/* Заголовок и дата в одной строке */}
       <div style={{ 
         display: "flex", 
         alignItems: "center", 
@@ -477,6 +470,10 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         flexWrap: "wrap",
         gap: 10
       }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>
+          Сводная таблица судов МСС
+        </div>
+        
         <select 
           value={selDate} 
           onChange={(e) => setSelDate(e.target.value)}
@@ -493,34 +490,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
           {dates.length === 0 && <option value="">— нет данных —</option>}
           {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
         </select>
-        
-        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
-            <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
-            <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
-            <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
-            <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
-          </div>
-          
-          {canView && (
-            <button 
-              onClick={exportXlsx}
-              style={{ 
-                padding: "6px 16px", 
-                borderRadius: 6, 
-                border: "none", 
-                background: "#2e7d32", 
-                color: "#fff", 
-                fontWeight: 600, 
-                fontSize: 12, 
-                cursor: "pointer",
-                whiteSpace: "nowrap"
-              }}
-            >
-              ⬇ Экспорт в Excel
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Фильтры в серой области */}
@@ -529,6 +498,42 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         {allBranches.length > 0 && filterRow("Филиал", allBranches, filterBranches, (v) => toggleFilter(setFilterBranches, v))}
         {statusRow()}
         {sortRow()}
+      </div>
+
+      {/* Статусы и кнопка экспорта под фильтрами */}
+      <div style={{ 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "space-between",
+        marginBottom: 12,
+        flexWrap: "wrap",
+        gap: 10
+      }}>
+        <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
+          <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
+          <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
+          <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
+          <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
+        </div>
+        
+        {canView && (
+          <button 
+            onClick={exportXlsx}
+            style={{ 
+              padding: "6px 16px", 
+              borderRadius: 6, 
+              border: "none", 
+              background: "#2e7d32", 
+              color: "#fff", 
+              fontWeight: 600, 
+              fontSize: 12, 
+              cursor: "pointer",
+              whiteSpace: "nowrap"
+            }}
+          >
+            ⬇ Экспорт в Excel
+          </button>
+        )}
       </div>
 
       {/* Таблица */}
@@ -629,9 +634,4 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         {filtered.length === 0 && !loading && (
           <div style={{ padding: 30, textAlign: "center", color: T.text2, fontSize: 13 }}>
             {dates.length === 0 ? "Нет загруженных данных ДПР" : "Нет судов по фильтру"}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+          </div
