@@ -300,7 +300,7 @@ export function FleetMap({
 
     let ok = 0, fail = 0;
     for (const v of parsed) {
-   const row = {
+  const row = {
   vessel_name: v.name,
   branch: v.branch,
   report_date: dateStr,
@@ -311,7 +311,7 @@ export function FleetMap({
   note: v.note,
   supplies: v.supplies,
   contract_info: v.contract_info || null,
-  work_period: v.work_period || null,   // добавить
+  work_period: v.work_period || null,   // <-- добавить эту строку
 };
       const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
       if (error) { fail++; console.error(v.name, error); } else ok++;
