@@ -270,45 +270,59 @@ export function FleetMap({
   }, [vessels, filter, search]);
 
   async function handleUpload(files: FileList) {
-    setUploading(true);
-    setUploadMsg("Обработка...");
-    try {
-      const { vessels: parsed, date } = await parseMsgFiles(Array.from(files));
-      if (!parsed.length) { setUploadMsg("⚠ Данные не найдены"); setUploading(false); return; }
-      if (!date) { setUploadMsg("⚠ Дата не определена"); setUploading(false); return; }
-      const dateStr = date.toISOString().slice(0, 10);
-      setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
-      const { data: vesselList } = await supabase.from("vessels").select("name, branch");
-      const BRANCH_MAP: Record<string, string> = { "СевФ": "СВРФ", "БФ": "БЛТФ", "ПримФ": "ПРМФ", "СахФ": "СХЛФ" };
-      const branchMap = new Map<string, string>();
-      (vesselList || []).forEach((v: any) => {
-        if (v.branch) branchMap.set(v.name.toUpperCase().trim(), BRANCH_MAP[v.branch] || v.branch);
-      });
-      let ok = 0, fail = 0;
-      for (const v of parsed) {
-        const row = {
-          vessel_name: v.name,
-          branch: (v.branch && v.branch.trim()) || branchMap.get(v.name.toUpperCase().trim()) || "",
-          report_date: dateStr,
-          status: v.status,
-          coord_raw: v.coordRaw,
-          lat: v.lat,
-          lng: v.lng,
-          note: v.note,
-          supplies: v.supplies,
-        };
-        const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
-        if (error) { fail++; console.error(v.name, error); } else ok++;
+  setUploading(true);
+  setUploadMsg("Обработка...");
+  try {
+    // Создаём справочник филиалов из таблицы vessels
+    const { data: vesselList } = await supabase.from("vessels").select("name, branch");
+    const branchMap = new Map<string, string>();
+    (vesselList || []).forEach((v: any) => {
+      // Сохраняем в маппинг как в оригинальном названии, так и в uppercase
+      const original = v.name.trim();
+      const upper = original.toUpperCase();
+      branchMap.set(original, v.branch);
+      branchMap.set(upper, v.branch);
+      // Также добавляем вариант без префикса (ТБС УМКА -> УМКА)
+      const withoutPrefix = original.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/i, "");
+      if (withoutPrefix !== original) {
+        branchMap.set(withoutPrefix, v.branch);
+        branchMap.set(withoutPrefix.toUpperCase(), v.branch);
       }
-      setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
-      await loadDates();
-      setSelDate(dateStr);
-    } catch (e: any) {
-      setUploadMsg("Ошибка: " + (e?.message || e));
-    }
-    setUploading(false);
-  }
+    });
 
+    const { vessels: parsed, date } = await parseMsgFiles(Array.from(files), branchMap);
+    
+    if (!parsed.length) { setUploadMsg("⚠ Данные не найдены"); setUploading(false); return; }
+    if (!date) { setUploadMsg("⚠ Дата не определена"); setUploading(false); return; }
+    
+    const dateStr = date.toISOString().slice(0, 10);
+    setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
+
+    let ok = 0, fail = 0;
+    for (const v of parsed) {
+      const row = {
+        vessel_name: v.name,
+        branch: v.branch,
+        report_date: dateStr,
+        status: v.status,
+        coord_raw: v.coordRaw,
+        lat: v.lat,
+        lng: v.lng,
+        note: v.note,
+        supplies: v.supplies,
+      };
+      const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
+      if (error) { fail++; console.error(v.name, error); } else ok++;
+    }
+    
+    setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
+    await loadDates();
+    setSelDate(dateStr);
+  } catch (e: any) {
+    setUploadMsg("Ошибка: " + (e?.message || e));
+  }
+  setUploading(false);
+}
   const all = filtered();
   const cAsg = all.filter((v) => cls(v.status) === "asg").length;
   const cAsd = all.filter((v) => cls(v.status) === "asd").length;
