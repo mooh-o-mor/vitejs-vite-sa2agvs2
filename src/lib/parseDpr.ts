@@ -280,17 +280,18 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     }
 
     vessels.push({
-      name: String(name).trim(),
-      branch,
-      status: cleanStatus,
-      coordRaw,
-      lat: coords ? coords[0] : null,
-      lng: coords ? coords[1] : null,
-      note: combinedNote,
-      supplies,
-      reportDate: date,
-      contract_info: "",
-    });
+  name: String(name).trim(),
+  branch,
+  status: cleanStatus,
+  coordRaw,
+  lat: coords ? coords[0] : null,
+  lng: coords ? coords[1] : null,
+  note: combinedNote,
+  supplies,
+  reportDate: date,
+  contract_info: "",
+  work_period: "",   // <-- добавить
+});
 
     i += 5;
   }
