@@ -1,10 +1,16 @@
 import { yearStart, yearEnd, totalDays } from "./types";
 
-export function getType(name: string, typeOrder: string[]) {
-  for (const t of typeOrder) if (name.startsWith(t)) return t;
-  return "Другие";
+export function getType(name: string, order: string[]): string {
+  const upper = name.toUpperCase().trim();
+  for (const t of order) {
+    if (upper.startsWith(t)) {
+      return t;
+    }
+  }
+  // Дополнительная проверка для АСС (если в названии есть АСС в середине)
+  if (upper.includes("АСС")) return "АСС";
+  return "";
 }
-
 export function cpKey(cp: string) {
   return cp.replace(/\s*\(.*$/g, "").trim();
 }
