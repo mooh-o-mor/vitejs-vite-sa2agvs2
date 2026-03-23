@@ -203,13 +203,7 @@ export default function App() {
     return null;
   }, [access]);
 
-  if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
-      <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
-    </div>
-  );
-
+  // Определяем вкладки
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
     ...(isAdmin ? [["economics", "💰 Экономика"]] as [string, string][] : []),
@@ -218,73 +212,109 @@ export default function App() {
     ...(isAdmin ? [["vessels", "🚢 Суда"]] as [string, string][] : []),
   ];
 
+  if (loading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
+      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
+      <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
+    </div>
+  );
+
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
-      <div style={{ background:T.header, padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
-        <span style={{ display:"flex", alignItems:"center", gap:8, fontSize:18, fontWeight:700, color:"#ffffff" }}>
-          <img src="/logo.png" style={{ height:32, width:32, objectFit:"contain" }} alt="МСС" />
-          Флот МСС
-        </span>
-        {syncing && <span style={{ fontSize:11, color:"#93c5fd" }}>⟳ сохранение...</span>}
-
-        {isAdmin && activeTab === "map" && (
-          <label style={{ cursor:"pointer", fontSize:12, color:"#bfdbfe", fontWeight:600, display:"flex", alignItems:"center", gap:4, padding:"6px 12px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.1)" }}>
-            📂 Загрузить .msg
-            <input type="file" multiple accept=".msg,.eml" style={{ display:"none" }}
-              onChange={(e) => { if (e.target.files) setHeaderUploadFiles(e.target.files); }} />
-          </label>
-        )}
-
-        <span style={{ marginLeft:"auto", fontSize:13, marginRight:12, color:"#ffffff" }}>
-          {isAdmin && activeTab==="gantt" && <>Выручка: <b style={{ color:"#86efac" }}>{fmoney(totalRev)}</b></>}
-        </span>
-        {access !== "guest" && (
-          <span style={{ fontSize:11, color:"#bfdbfe", marginRight:8 }}>{accessLabel()}</span>
-        )}
-        {access !== "guest" ? (
-          <button onClick={() => { setAccess("guest"); setActiveTab("gantt"); }} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔓 Выйти</button>
-        ) : (
-          <button onClick={() => setShowLogin(true)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600, marginRight:8 }}>🔒 Войти</button>
-        )}
-        {isAdmin && activeTab==="gantt" && (
-          <div style={{ position:"relative" }}>
-            <button onClick={() => setShowExportMenu(v => !v)} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid #93c5fd", background:"rgba(255,255,255,0.15)", color:"#ffffff", cursor:"pointer", fontSize:12, fontWeight:600 }}>⬇ Экспорт PPTX ▾</button>
-            {showExportMenu && (
-              <div style={{ position:"absolute", right:0, top:"110%", background:T.bg2, border:`1px solid ${T.border}`, borderRadius:8, padding:16, zIndex:50, width:300, boxShadow:"0 8px 32px rgba(0,0,0,0.15)" }}>
-                <div style={{ fontSize:12, color:T.text2, marginBottom:10 }}>Выберите что экспортировать:</div>
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Тип судна</div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{allTypes.map(t => <button key={t} onClick={() => toggleType(t)} style={btnFilter(t === "Все" ? filterTypes.length === 0 : filterTypes.includes(t))}>{t}</button>)}</div>
-                </div>
-                {allBranches.length>1 && (
-                  <div style={{ marginBottom:8 }}>
-                    <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Филиал</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{allBranches.map(b => <button key={b} onClick={() => toggleBranch(b)} style={btnFilter(b === "Все" ? filterBranches.length === 0 : filterBranches.includes(b), true)}>{b||"Без филиала"}</button>)}</div>
-                  </div>
-                )}
-                {allCps.length>1 && (
-                  <div style={{ marginBottom:12 }}>
-                    <div style={{ fontSize:11, color:T.text3, marginBottom:4 }}>Контрагент</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp===cp)}>{cp}</button>)}</div>
-                  </div>
-                )}
-                <div style={{ fontSize:11, color:T.text2, marginBottom:8 }}>Будет экспортировано: <b style={{ color:T.text }}>{filtered.length} судов</b></div>
-                <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, isAdmin, filterBranches, filterTypes); setShowExportMenu(false); }} style={{ width:"100%", padding:9, borderRadius:6, border:"none", background:T.accent, color:"#ffffff", fontWeight:700, cursor:"pointer", fontSize:13 }}>⬇ Скачать PPTX</button>
-              </div>
-            )}
+      {/* Верхняя строка с логотипом, вкладками и кнопками */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.header, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
+            <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="МСС" />
+            Флот МСС
+          </span>
+          
+          {/* Вкладки в той же строке */}
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {tabs.map(([k, l]) => (
+              <button 
+                key={k} 
+                onClick={() => setActiveTab(k)} 
+                style={{ 
+                  padding: "6px 14px", 
+                  border: "none", 
+                  cursor: "pointer", 
+                  fontSize: 13, 
+                  fontWeight: 600, 
+                  borderRadius: 6,
+                  background: activeTab === k ? "#ffffff" : "rgba(255,255,255,0.15)",
+                  color: activeTab === k ? T.accent : "#ffffff",
+                  transition: "all 0.2s"
+                }}
+              >
+                {l}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+        
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {syncing && <span style={{ fontSize: 11, color: "#93c5fd" }}>⟳ сохранение...</span>}
+          
+          {isAdmin && activeTab === "map" && (
+            <label style={{ cursor: "pointer", fontSize: 12, color: "#bfdbfe", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.1)" }}>
+              📂 Загрузить .msg
+              <input type="file" multiple accept=".msg,.eml" style={{ display: "none" }}
+                onChange={(e) => { if (e.target.files) setHeaderUploadFiles(e.target.files); }} />
+            </label>
+          )}
+          
+          {isAdmin && activeTab === "gantt" && (
+            <span style={{ fontSize: 12, color: "#bfdbfe" }}>
+              Выручка: <b style={{ color: "#86efac" }}>{fmoney(totalRev)}</b>
+            </span>
+          )}
+          
+          {access !== "guest" && (
+            <span style={{ fontSize: 11, color: "#bfdbfe" }}>{accessLabel()}</span>
+          )}
+          
+          {access !== "guest" ? (
+            <button onClick={() => { setAccess("guest"); setActiveTab("gantt"); }} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🔓 Выйти</button>
+          ) : (
+            <button onClick={() => setShowLogin(true)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🔒 Войти</button>
+          )}
+          
+          {isAdmin && activeTab === "gantt" && (
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowExportMenu(v => !v)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>⬇ Экспорт PPTX ▾</button>
+              {showExportMenu && (
+                <div style={{ position: "absolute", right: 0, top: "110%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 16, zIndex: 50, width: 300, boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
+                  <div style={{ fontSize: 12, color: T.text2, marginBottom: 10 }}>Выберите что экспортировать:</div>
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Тип судна</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{allTypes.map(t => <button key={t} onClick={() => toggleType(t)} style={btnFilter(t === "Все" ? filterTypes.length === 0 : filterTypes.includes(t))}>{t}</button>)}</div>
+                  </div>
+                  {allBranches.length > 1 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Филиал</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{allBranches.map(b => <button key={b} onClick={() => toggleBranch(b)} style={btnFilter(b === "Все" ? filterBranches.length === 0 : filterBranches.includes(b), true)}>{b || "Без филиала"}</button>)}</div>
+                    </div>
+                  )}
+                  {allCps.length > 1 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Контрагент</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp === cp)}>{cp}</button>)}</div>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: T.text2, marginBottom: 8 }}>Будет экспортировано: <b style={{ color: T.text }}>{filtered.length} судов</b></div>
+                  <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, isAdmin, filterBranches, filterTypes); setShowExportMenu(false); }} style={{ width: "100%", padding: 9, borderRadius: 6, border: "none", background: T.accent, color: "#ffffff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>⬇ Скачать PPTX</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      <div style={{ display:"flex", background:T.bg2, borderBottom:`1px solid ${T.border}`, padding:"0 8px" }}>
-        {tabs.map(([k, l]) => (
-          <button key={k} onClick={() => setActiveTab(k)} style={{ padding:"10px 18px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, marginRight:4, background:"transparent", color:activeTab===k?T.accent:T.text2, borderBottom:activeTab===k?`2px solid ${T.accent}`:"2px solid transparent", ...(k==="vessels" ? { marginLeft:"auto" } : {}) }}>{l}</button>
-        ))}
-      </div>
-
+      {/* Основной контент */}
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
-        {(activeTab==="gantt"||activeTab==="economics") && (
+        {(activeTab === "gantt" || activeTab === "economics") && (
           <FilterBar
             allTypes={allTypes}
             allBranches={allBranches}
@@ -301,7 +331,7 @@ export default function App() {
           />
         )}
 
-        {activeTab==="gantt" && (
+        {activeTab === "gantt" && (
           <GanttChart
             vessels={filtered}
             contracts={visibleContracts}
@@ -311,7 +341,7 @@ export default function App() {
             onEditContract={openEditContract}
           />
         )}
-        {activeTab==="map" && (
+        {activeTab === "map" && (
           <FleetMap
             isAdmin={isAdmin}
             canView={canView}
@@ -319,13 +349,13 @@ export default function App() {
             onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
           />
         )}
-        {activeTab==="summary" && (
+        {activeTab === "summary" && (
           <SummaryReport isAdmin={isAdmin} canView={canView} />
         )}
-        {activeTab==="economics" && isAdmin && (
+        {activeTab === "economics" && isAdmin && (
           <Economics vessels={filtered} contracts={visibleContracts} />
         )}
-        {activeTab==="vessels" && isAdmin && (
+        {activeTab === "vessels" && isAdmin && (
           <VesselList
             vessels={vessels}
             contracts={contracts}
@@ -347,7 +377,7 @@ export default function App() {
         <ContractForm
           form={contractForm}
           editId={editContractId}
-          vesselName={vessels.find(v => v.id===activeVesselId)?.name||""}
+          vesselName={vessels.find(v => v.id === activeVesselId)?.name || ""}
           readOnly={!isAdmin}
           onChange={setContractForm}
           onSave={saveContract}
@@ -364,7 +394,7 @@ export default function App() {
         />
       )}
 
-      {showExportMenu && <div style={{ position:"fixed", inset:0, zIndex:40 }} onClick={() => setShowExportMenu(false)} />}
+      {showExportMenu && <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setShowExportMenu(false)} />}
     </div>
   );
 }
