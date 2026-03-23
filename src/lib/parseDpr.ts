@@ -25,7 +25,7 @@ export interface DprVessel {
   work_period?: string;
 }
 
-// Добавляем экспорт DprRow для использования в компонентах
+// Добавляем экспорт DprRow
 export interface DprRow {
   id: number;
   vessel_name: string;
