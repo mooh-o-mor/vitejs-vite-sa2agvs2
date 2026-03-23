@@ -278,8 +278,8 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   /* ── Styled Excel export ── */
   function exportXlsx() {
     const wb = XLSX.utils.book_new();
-    const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус по План-графику", "Контракт", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
-    const colWidths = [6, 8, 30, 10, 28, 20, 28, 6, 35, 12, 12];
+   const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус", "Контракт", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
+const colWidths = [6, 8, 30, 10, 12, 40, 28, 6, 35, 12, 12];
 
     const aoa: any[][] = [];
 
