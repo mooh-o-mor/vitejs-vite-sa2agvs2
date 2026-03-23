@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import XLSX from "xlsx-js-style";
 import { supabase } from "../lib/supabase";
 import { T, type DprSupply, type DprRow } from "../lib/types";
@@ -82,14 +82,16 @@ function EditableCell({
   reportDate, 
   field,
   onUpdate,
-  editable = true
+  editable = true,
+  placeholder = "✎ добавить"
 }: { 
   value: string; 
   vesselName: string; 
   reportDate: string; 
-  field: "contract_info" | "note";
+  field: "contract_info" | "note" | "work_period";
   onUpdate: (vesselName: string, field: string, newValue: string) => void;
   editable?: boolean;
+  placeholder?: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value || "");
@@ -98,10 +100,7 @@ function EditableCell({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updateData = field === "contract_info" 
-        ? { contract_info: editValue }
-        : { note: editValue };
-      
+      const updateData = { [field]: editValue };
       const { error } = await supabase
         .from("dpr_entries")
         .update(updateData)
@@ -147,7 +146,7 @@ function EditableCell({
             border: `1px solid ${T.accent}`,
             fontSize: 11,
             width: "100%",
-            minWidth: field === "contract_info" ? 120 : 160,
+            minWidth: field === "contract_info" ? 120 : field === "work_period" ? 140 : 160,
             background: "#fff",
           }}
         />
@@ -188,6 +187,7 @@ function EditableCell({
 
   const isEmpty = !value || value === "";
   const isContract = field === "contract_info";
+  const isWorkPeriod = field === "work_period";
 
   return (
     <div
@@ -197,7 +197,7 @@ function EditableCell({
         padding: "2px 4px",
         borderRadius: 4,
         background: isEmpty ? "#fef3c7" : "transparent",
-        minWidth: isContract ? 120 : 160,
+        minWidth: isContract ? 120 : isWorkPeriod ? 140 : 160,
         color: isEmpty ? "#b45309" : T.text,
         border: "1px solid transparent",
         transition: "all 0.2s",
@@ -211,7 +211,7 @@ function EditableCell({
         e.currentTarget.style.background = isEmpty ? "#fef3c7" : "transparent";
       }}
     >
-      {value || (isContract ? "✎ добавить" : "✎ добавить примечание")}
+      {value || placeholder}
     </div>
   );
 }
@@ -223,7 +223,12 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   const [vessels, setVessels] = useState<DprRow[]>([]);
   const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [filterBranch, setFilterBranch] = useState("Все");
+  
+  // Фильтры и сортировка
+  const [filterTypes, setFilterTypes] = useState<string[]>([]);
+  const [filterBranches, setFilterBranches] = useState<string[]>([]);
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("name");
 
   useEffect(() => { loadDates(); }, []);
 
@@ -276,15 +281,44 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     return `${day}.${m}.${y}`;
   };
 
-  const branches = ["Все", ...Array.from(new Set(vessels.map((v) => v.branch).filter(Boolean)))].sort((a, b) => branchOrder(a) - branchOrder(b));
-
-  const filtered = vessels
-    .filter((v) => filterBranch === "Все" || v.branch === filterBranch)
-    .sort((a, b) => {
-      const bo = branchOrder(a.branch) - branchOrder(b.branch);
-      if (bo !== 0) return bo;
-      return a.vessel_name.localeCompare(b.vessel_name, "ru");
+  // Уникальные значения для фильтров
+  const allTypes = useMemo(() => {
+    const types = new Set<string>();
+    vessels.forEach(v => {
+      const t = typeMap.get(v.vessel_name.toUpperCase().trim().replace(/\s+/g, " ")) || "";
+      if (t) types.add(t);
     });
+    return Array.from(types).sort();
+  }, [vessels, typeMap]);
+
+  const allBranches = useMemo(() => {
+    return [...new Set(vessels.map(v => v.branch).filter(Boolean))].sort((a,b) => branchOrder(a)-branchOrder(b));
+  }, [vessels]);
+
+  const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string, allValue?: string) => {
+    if (value === "Все") {
+      setter([]);
+      return;
+    }
+    setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+  };
+
+  const filtered = useMemo(() => {
+    let result = vessels.filter(v => {
+      const typeOk = filterTypes.length === 0 || filterTypes.includes(typeMap.get(v.vessel_name.toUpperCase().trim().replace(/\s+/g, " ")) || "");
+      const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
+      const statusOk = filterStatuses.length === 0 || filterStatuses.includes(statusCls(v.status));
+      return typeOk && branchOk && statusOk;
+    });
+
+    result.sort((a,b) => {
+      if (sortBy === "name") return a.vessel_name.localeCompare(b.vessel_name, "ru");
+      if (sortBy === "branch") return (a.branch || "").localeCompare(b.branch || "", "ru");
+      if (sortBy === "status") return statusCls(a.status).localeCompare(statusCls(b.status));
+      return 0;
+    });
+    return result;
+  }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, typeMap]);
 
   const cAsg = filtered.filter((v) => statusCls(v.status) === "asg").length;
   const cAsd = filtered.filter((v) => statusCls(v.status) === "asd").length;
@@ -293,8 +327,8 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   /* ── Styled Excel export ── */
   function exportXlsx() {
     const wb = XLSX.utils.book_new();
-    const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус", "Контракт", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
-    const colWidths = [6, 8, 30, 10, 12, 40, 28, 6, 35, 12, 12];
+    const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус", "Контракт", "Период работ", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
+    const colWidths = [6, 8, 30, 10, 12, 32, 28, 28, 6, 35, 12, 12];
 
     const aoa: any[][] = [];
 
@@ -349,6 +383,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         { v: v.branch, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "37474F" } } } },
         { v: v.status, t: "s", s: { fill: statusFill, alignment: { ...wrap }, border: baseBorder, font: statusFont } },
         { v: v.contract_info || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
+        { v: v.work_period || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
         { v: (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim(), t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
         { v: power, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: power === "БЭП" ? "1565C0" : "2E7D32" } } } },
         { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
@@ -369,7 +404,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     XLSX.writeFile(wb, `Сводная_МСС_${selDate}.xlsx`);
   }
 
-  /* ── Styles for HTML table ── */
+  /* ── Styles for HTML table and filter buttons ── */
   const thStyle: React.CSSProperties = {
     padding: "8px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
     color: "#fff", borderBottom: "2px solid #90a4ae", borderRight: "1px solid #546E7A",
@@ -381,13 +416,48 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     borderRight: "1px solid #e8eaed", verticalAlign: "top",
   };
 
-  const fbtn = (active: boolean): React.CSSProperties => ({
+  const btnStyle = (active: boolean, isAll?: boolean): React.CSSProperties => ({
     padding: "4px 12px", borderRadius: 20, border: "1px solid",
     cursor: "pointer", fontSize: 11, fontWeight: 600,
-    borderColor: active ? "#37474F" : T.border,
-    background: active ? "#37474F" : "transparent",
+    borderColor: active ? (isAll ? "#37474F" : T.accent) : T.border,
+    background: active ? (isAll ? "#37474F" : T.accent) : T.bg2,
     color: active ? "#fff" : T.text2,
   });
+
+  const filterRow = (label: string, items: string[], active: string[], onToggle: (v: string) => void) => (
+    <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>{label}:</span>
+      <button onClick={() => onToggle("Все")} style={btnStyle(active.length === 0, true)}>Все</button>
+      {items.map(v => (
+        <button key={v} onClick={() => onToggle(v)} style={btnStyle(active.includes(v))}>{v}</button>
+      ))}
+    </div>
+  );
+
+  const statusRow = () => (
+    <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>Статус:</span>
+      <button onClick={() => setFilterStatuses([])} style={btnStyle(filterStatuses.length === 0, true)}>Все</button>
+      {["asg","asd","rem"].map(s => (
+        <button key={s} onClick={() => toggleFilter(setFilterStatuses, s)} style={btnStyle(filterStatuses.includes(s))}>
+          {s === "asg" ? "АСГ" : s === "asd" ? "АСД" : "РЕМ"}
+        </button>
+      ))}
+    </div>
+  );
+
+  const sortRow = () => (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>Сортировка:</span>
+      {[
+        ["name", "По названию"],
+        ["branch", "По филиалу"],
+        ["status", "По статусу"]
+      ].map(([key, label]) => (
+        <button key={key} onClick={() => setSortBy(key as any)} style={btnStyle(sortBy === key)}>{label}</button>
+      ))}
+    </div>
+  );
 
   return (
     <div>
@@ -402,13 +472,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
           {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
         </select>
 
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {branches.map((b) => (
-            <button key={b} onClick={() => setFilterBranch(b)} style={fbtn(filterBranch === b)}>{b}</button>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
           <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
           <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
           <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
@@ -417,13 +481,21 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
         {canView && (
           <button onClick={exportXlsx}
-            style={{ marginLeft: "auto", padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+            style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
             ⬇ Экспорт в Excel
           </button>
         )}
       </div>
 
-      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 220px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
+      {/* Фильтры */}
+      <div style={{ background: T.bg3, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
+        {allTypes.length > 0 && filterRow("Тип судна", allTypes, filterTypes, (v) => toggleFilter(setFilterTypes, v))}
+        {allBranches.length > 0 && filterRow("Филиал", allBranches, filterBranches, (v) => toggleFilter(setFilterBranches, v))}
+        {statusRow()}
+        {sortRow()}
+      </div>
+
+      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
@@ -433,6 +505,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
               <th style={thStyle}>Филиал</th>
               <th style={{ ...thStyle, textAlign: "left", minWidth: 80 }}>Статус</th>
               {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Контракт</th>}
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Период работ</th>}
               <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
               <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
               {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
@@ -477,6 +550,20 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
                         field="contract_info"
                         onUpdate={updateField}
                         editable={isAsd}
+                        placeholder="✎ добавить"
+                      />
+                    </td>
+                  )}
+                  {canView && (
+                    <td style={{ ...tdBase, background: rowBg }}>
+                      <EditableCell
+                        value={v.work_period || ""}
+                        vesselName={v.vessel_name}
+                        reportDate={selDate}
+                        field="work_period"
+                        onUpdate={updateField}
+                        editable={true}
+                        placeholder="✎ добавить период"
                       />
                     </td>
                   )}
@@ -491,6 +578,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
                         field="note"
                         onUpdate={updateField}
                         editable={true}
+                        placeholder="✎ добавить примечание"
                       />
                     </td>
                   )}
