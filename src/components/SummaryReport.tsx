@@ -634,4 +634,9 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         {filtered.length === 0 && !loading && (
           <div style={{ padding: 30, textAlign: "center", color: T.text2, fontSize: 13 }}>
             {dates.length === 0 ? "Нет загруженных данных ДПР" : "Нет судов по фильтру"}
-          </div
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
