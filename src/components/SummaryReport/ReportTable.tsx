@@ -1,7 +1,6 @@
-import { T } from "../../lib/types";
 import { EditableCell } from "./EditableCell";
+import type { DprRow } from "./types";
 import {
-  DprRow,
   STATUS_BG,
   STATUS_COLOR,
   branchBg,
