@@ -461,7 +461,14 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      {/* Заголовок с датой, статусами и кнопкой экспорта в одной строке */}
+      {/* Заголовок по центру */}
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>
+          Сводная таблица судов МСС
+        </div>
+      </div>
+
+      {/* Строка с датой (слева) и статусами + экспорт (справа) */}
       <div style={{ 
         display: "flex", 
         alignItems: "center", 
@@ -470,28 +477,24 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         flexWrap: "wrap",
         gap: 10
       }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>
-          Сводная таблица судов МСС
-        </div>
+        <select 
+          value={selDate} 
+          onChange={(e) => setSelDate(e.target.value)}
+          style={{ 
+            padding: "5px 8px", 
+            borderRadius: 4, 
+            border: `1px solid ${T.border}`, 
+            fontSize: 13, 
+            fontFamily: "monospace", 
+            fontWeight: 600,
+            background: "#fff"
+          }}
+        >
+          {dates.length === 0 && <option value="">— нет данных —</option>}
+          {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
+        </select>
         
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <select 
-            value={selDate} 
-            onChange={(e) => setSelDate(e.target.value)}
-            style={{ 
-              padding: "5px 8px", 
-              borderRadius: 4, 
-              border: `1px solid ${T.border}`, 
-              fontSize: 13, 
-              fontFamily: "monospace", 
-              fontWeight: 600,
-              background: "#fff"
-            }}
-          >
-            {dates.length === 0 && <option value="">— нет данных —</option>}
-            {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
-          </select>
-          
           <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
             <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
             <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
@@ -625,10 +628,4 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         </table>
         {filtered.length === 0 && !loading && (
           <div style={{ padding: 30, textAlign: "center", color: T.text2, fontSize: 13 }}>
-            {dates.length === 0 ? "Нет загруженных данных ДПР" : "Нет судов по фильтру"}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+            {dates.length === 0 ? "Нет загруженных данных ДПР" : "Н
