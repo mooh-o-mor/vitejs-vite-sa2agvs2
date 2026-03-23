@@ -39,24 +39,23 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick }: Prop
         transition: "all 0.2s",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         {vesselType && (
           <span style={{ 
-            fontSize: 10, 
-            color: T.text2, 
+            fontSize: 11, 
+            color: T.text, 
             fontFamily: "monospace", 
             fontWeight: 500, 
-            background: "#f0f0f0", 
-            padding: "2px 6px", 
-            borderRadius: 3,
+            padding: "0px", 
+            borderRadius: 0,
             display: "inline-block"
           }}>
             {vesselType}
           </span>
         )}
-        <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{vessel.vessel_name}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1 }}>{vessel.vessel_name}</span>
         {vessel.branch && vessel.branch !== "0" && (
-          <span style={{ fontSize: 10, color: T.text2, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{vessel.branch}</span>
+          <span style={{ fontSize: 11, color: T.text, padding: "0px", borderRadius: 0 }}>{vessel.branch}</span>
         )}
         {vessel.lat == null && <span style={{ fontSize: 10, color: "#c07800" }}>📍?</span>}
       </div>
