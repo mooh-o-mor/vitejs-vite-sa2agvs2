@@ -461,7 +461,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      {/* Заголовок и дата в одной строке */}
+      {/* Верхняя строка: заголовок, дата, статусы и кнопка экспорта */}
       <div style={{ 
         display: "flex", 
         alignItems: "center", 
@@ -474,22 +474,50 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
           Сводная таблица судов МСС
         </div>
         
-        <select 
-          value={selDate} 
-          onChange={(e) => setSelDate(e.target.value)}
-          style={{ 
-            padding: "5px 8px", 
-            borderRadius: 4, 
-            border: `1px solid ${T.border}`, 
-            fontSize: 13, 
-            fontFamily: "monospace", 
-            fontWeight: 600,
-            background: "#fff"
-          }}
-        >
-          {dates.length === 0 && <option value="">— нет данных —</option>}
-          {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
-        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <select 
+            value={selDate} 
+            onChange={(e) => setSelDate(e.target.value)}
+            style={{ 
+              padding: "5px 8px", 
+              borderRadius: 4, 
+              border: `1px solid ${T.border}`, 
+              fontSize: 13, 
+              fontFamily: "monospace", 
+              fontWeight: 600,
+              background: "#fff"
+            }}
+          >
+            {dates.length === 0 && <option value="">— нет данных —</option>}
+            {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
+          </select>
+          
+          <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
+            <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
+            <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
+            <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
+            <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
+          </div>
+          
+          {canView && (
+            <button 
+              onClick={exportXlsx}
+              style={{ 
+                padding: "6px 16px", 
+                borderRadius: 6, 
+                border: "none", 
+                background: "#2e7d32", 
+                color: "#fff", 
+                fontWeight: 600, 
+                fontSize: 12, 
+                cursor: "pointer",
+                whiteSpace: "nowrap"
+              }}
+            >
+              ⬇ Экспорт в Excel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Фильтры в серой области */}
@@ -498,42 +526,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         {allBranches.length > 0 && filterRow("Филиал", allBranches, filterBranches, (v) => toggleFilter(setFilterBranches, v))}
         {statusRow()}
         {sortRow()}
-      </div>
-
-      {/* Статусы и кнопка экспорта под фильтрами */}
-      <div style={{ 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "space-between",
-        marginBottom: 12,
-        flexWrap: "wrap",
-        gap: 10
-      }}>
-        <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
-          <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
-          <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
-          <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
-          <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
-        </div>
-        
-        {canView && (
-          <button 
-            onClick={exportXlsx}
-            style={{ 
-              padding: "6px 16px", 
-              borderRadius: 6, 
-              border: "none", 
-              background: "#2e7d32", 
-              color: "#fff", 
-              fontWeight: 600, 
-              fontSize: 12, 
-              cursor: "pointer",
-              whiteSpace: "nowrap"
-            }}
-          >
-            ⬇ Экспорт в Excel
-          </button>
-        )}
       </div>
 
       {/* Таблица */}
