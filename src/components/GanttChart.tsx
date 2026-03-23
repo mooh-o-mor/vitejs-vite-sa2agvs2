@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { Vessel, Contract } from "../lib/types";
 import { MONTHS, COLORS, SPECIAL_COLORS, YEAR, totalDays, T, PRIORITY_LABELS, PRIORITY_ORDER } from "../lib/types";
 import { cpKey, dayOffset, contractDaysGantt, fdate, addDays } from "../lib/utils";
@@ -17,21 +18,28 @@ function priorityIdx(p: string): number {
 }
 
 export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract, onEditContract }: Props) {
-  // Only contracts for visible vessels
-  const vesselIds = new Set(vessels.map(v => v.id));
-  const visibleContracts = contracts.filter(c => vesselIds.has(c.vesselId));
+  // Мемоизируем видимые контракты
+  const vesselIds = useMemo(() => new Set(vessels.map(v => v.id)), [vessels]);
+  const visibleContracts = useMemo(() => contracts.filter(c => vesselIds.has(c.vesselId)), [contracts, vesselIds]);
 
-  // Legend: only counterparties in visible contracts
-  const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
-  const colorMap: Record<string,string> = Object.fromEntries(
-    cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
-  );
+  // Мемоизируем цветовую карту
+  const colorMap = useMemo(() => {
+    const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
+    return Object.fromEntries(
+      cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
+    );
+  }, [visibleContracts]);
+
+  // Мемоизируем легенду
+  const legendItems = useMemo(() => {
+    return cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp));
+  }, [visibleContracts]);
 
   return (
     <div style={{ background:T.bg2, borderRadius:8, padding:12, border:`1px solid ${T.border}` }}>
-      {canView && cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).length>0 && (
+      {canView && legendItems.length > 0 && (
         <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
-          {cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp)).map(cp => (
+          {legendItems.map(cp => (
             <div key={cp} style={{ display:"flex", alignItems:"center", gap:5, background:T.bg3, padding:"2px 10px", borderRadius:20, fontSize:11, border:`1px solid ${T.border2}` }}>
               <div style={{ width:9, height:9, borderRadius:2, background:colorMap[cp] }}/>{cp}
             </div>
@@ -47,10 +55,10 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
       </div>
 
       {vessels.map((v,idx) => {
-        const vc = contracts.filter(c => c.vesselId===v.id);
+        const vc = useMemo(() => contracts.filter(c => c.vesselId === v.id), [contracts, v.id]);
 
         // Split into main row and alt row
-        const altGroups = new Set(vc.filter(c => c.altGroup).map(c => c.altGroup!));
+        const altGroups = useMemo(() => new Set(vc.filter(c => c.altGroup).map(c => c.altGroup!)), [vc]);
         const mainContracts: Contract[] = [];
         const altContracts: Contract[] = [];
 
@@ -105,6 +113,7 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
   );
 }
 
+// Вынесена в отдельную функцию для чистоты
 function renderBar(
   c: Contract,
   colorMap: Record<string,string>,
@@ -151,40 +160,4 @@ function renderBar(
           bottom: bottomPx,
           background:bgStyle,
           borderRadius:3,
-          cursor:canView?"pointer":"default",
-          display:"flex", alignItems:"center", justifyContent:"center",
-          overflow:"hidden", fontSize: position === "full" ? 10 : 9,
-          fontWeight:600, color:"#fff",
-          boxShadow:"0 1px 3px rgba(0,0,0,0.2)",
-          pointerEvents:"all",
-          opacity,
-        }}
-      >
-        {canView && (
-          <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>
-            {c.counterparty}
-            {isKpOrPlan && <span style={{ opacity:0.7, fontSize:8 }}> {PRIORITY_LABELS[c.priority]}</span>}
-          </span>
-        )}
-      </div>
-      {hasOption && optStart && (
-        <div
-          title={canView ? `${c.counterparty} (опцион)${priorityBadge}\n${fdate(optStart)} → ${fdate(c.end)}` : `${fdate(optStart)} → ${fdate(c.end)}`}
-          onClick={e => { e.stopPropagation(); if (canView) onEditContract(c); }}
-          style={{
-            position:"absolute",
-            left:`${optLeft}%`,
-            width:`${Math.max(optWidth,0.4)}%`,
-            top: topPx,
-            bottom: bottomPx,
-            background:color,
-            borderRadius:3,
-            cursor:canView?"pointer":"default",
-            opacity: isAlt ? 0.3 : 0.4,
-            pointerEvents:"all",
-          }}
-        />
-      )}
-    </div>
-  );
-}
+          cursor
