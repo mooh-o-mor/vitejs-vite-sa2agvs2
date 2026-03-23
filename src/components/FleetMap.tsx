@@ -21,18 +21,7 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
 
 const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8aa8" };
 const STATUS_BG = { asg: "#ffebee", asd: "#e8f5e9", rem: "#f5f5f5", oth: "#ffffff" };
-
-const TYPE_CLR: Record<string, string> = {
-  "МФАСС": "#1e88e5",
-  "ТБС": "#43a047",
-  "ССН": "#fb8c00",
-  "МБС": "#8e24aa",
-  "МВС": "#00acc1",
-  "МБ": "#546e7a",
-  "НИС": "#6d4c41",
-  "АСС": "#c2185b",  // Добавлено
-  "БП": "#7cb342",
-};
+const STATUS_HEADER_BG = { asg: "#ffcdd2", asd: "#c8e6c9", rem: "#e0e0e0", oth: "#f5f5f5" };
 
 function shortStatus(stat: string): string {
   const s = stat.toUpperCase();
@@ -42,12 +31,12 @@ function shortStatus(stat: string): string {
   return stat;
 }
 
-function mkIcon(c: string, type?: string) {
+// Маркер цвета статуса (без учёта типа)
+function mkIcon(c: string) {
   const color = CLR[c as keyof typeof CLR] || CLR.oth;
-  const typeColor = type ? TYPE_CLR[type] || color : color;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="32" viewBox="0 0 26 32">
     <path d="M13 0C5.8 0 0 5.8 0 13c0 9 13 19 13 19s13-10 13-19C26 5.8 20.2 0 13 0z" fill="white"/>
-    <path d="M13 1.5C6.6 1.5 1.5 6.6 1.5 13c0 8.3 11.5 17.5 11.5 17.5S24.5 21.3 24.5 13C24.5 6.6 19.4 1.5 13 1.5z" fill="${typeColor}"/>
+    <path d="M13 1.5C6.6 1.5 1.5 6.6 1.5 13c0 8.3 11.5 17.5 11.5 17.5S24.5 21.3 24.5 13C24.5 6.6 19.4 1.5 13 1.5z" fill="${color}"/>
     <circle cx="13" cy="13" r="4.5" fill="white" opacity=".9"/>
   </svg>`;
   return L.divIcon({ html: svg, iconSize: [26, 32], iconAnchor: [13, 32], popupAnchor: [0, -34], className: "" });
@@ -102,6 +91,8 @@ interface DprRow {
   lng: number | null;
   note: string;
   supplies: DprSupply[];
+  contract_info?: string;
+  work_period?: string;
 }
 
 export function FleetMap({
@@ -291,8 +282,7 @@ export function FleetMap({
     vis.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
-      const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
-      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c, vType), _status: c } as any);
+      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
       marker.bindTooltip(v.vessel_name, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
         setSelVessel(v);
@@ -316,7 +306,7 @@ export function FleetMap({
     mapObj.current.on("zoomend", updateLabels);
     setTimeout(updateLabels, 300);
     return () => { if (mapObj.current) mapObj.current.off("zoomend", updateLabels); };
-  }, [filtered, typeMap, isMobile]);
+  }, [filtered, isMobile]);
 
   async function handleUpload(files: FileList) {
     setUploading(true);
@@ -497,10 +487,10 @@ export function FleetMap({
                     {vType && (
                       <span style={{ 
                         fontSize: 10, 
-                        color: "#fff", 
+                        color: T.text2, 
                         fontFamily: "monospace", 
-                        fontWeight: 700, 
-                        background: TYPE_CLR[vType] || "#6b8aa8", 
+                        fontWeight: 500, 
+                        background: "#f0f0f0", 
                         padding: "2px 6px", 
                         borderRadius: 3,
                         display: "inline-block"
@@ -549,15 +539,47 @@ export function FleetMap({
           return (
             <div style={{ position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36, width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {vesselType && <span style={{ fontSize: 10, color: "#fff", fontFamily: "monospace", fontWeight: 700, background: TYPE_CLR[vesselType] || "#6b8aa8", padding: "2px 8px", borderRadius: 3 }}>{vesselType}</span>}
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>{selVessel.vessel_name}</span>
-                    <span style={{ padding: "2px 8px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: STATUS_BG[c], color: CLR[c], border: `1px solid ${c === "asg" ? "#ffcdd2" : c === "asd" ? "#c8e6c9" : "#e0e0e0"}` }}>{shortStatus(selVessel.status)}</span>
-                    {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
-                  </div>
-                  {selVessel.branch && <div style={{ fontSize: 11, color: T.amber, marginTop: 4 }}>{selVessel.branch}</div>}
+              {/* Заголовок с фоном статуса */}
+              <div style={{ 
+                padding: "10px 14px", 
+                borderBottom: `1px solid ${T.border}`, 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 8,
+                background: STATUS_HEADER_BG[c],
+                flexShrink: 0
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 }}>
+                  {vesselType && (
+                    <span style={{ 
+                      fontSize: 11, 
+                      color: T.text2, 
+                      fontFamily: "monospace", 
+                      fontWeight: 500, 
+                      background: "rgba(0,0,0,0.05)", 
+                      padding: "2px 8px", 
+                      borderRadius: 3 
+                    }}>
+                      {vesselType}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{selVessel.vessel_name}</span>
+                  {imo && <span style={{ fontSize: 11, color: T.text3, fontFamily: "monospace" }}>IMO {imo}</span>}
+                  {selVessel.branch && (
+                    <span style={{ 
+                      fontSize: 11, 
+                      color: T.amber, 
+                      fontFamily: "monospace", 
+                      fontWeight: 500,
+                      background: "rgba(0,0,0,0.05)", 
+                      padding: "2px 8px", 
+                      borderRadius: 3 
+                    }}>
+                      {selVessel.branch}
+                    </span>
+                  )}
                 </div>
                 <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
               </div>
