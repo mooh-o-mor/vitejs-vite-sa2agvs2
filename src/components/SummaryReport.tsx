@@ -461,15 +461,12 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      {/* Заголовок с датой, статусами и кнопкой экспорта */}
+      {/* Заголовок с датой, статусами и кнопкой экспорта в одной строке */}
       <div style={{ 
         display: "flex", 
         alignItems: "center", 
         justifyContent: "space-between",
-        margin: "4px 0 12px",
-        padding: "8px 12px",
-        background: T.bg3,
-        borderRadius: 8,
+        marginBottom: 12,
         flexWrap: "wrap",
         gap: 10
       }}>
@@ -523,7 +520,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         </div>
       </div>
 
-      {/* Фильтры */}
+      {/* Фильтры в серой области */}
       <div style={{ background: T.bg3, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
         {allTypes.length > 0 && filterRow("Тип судна", allTypes, filterTypes, (v) => toggleFilter(setFilterTypes, v))}
         {allBranches.length > 0 && filterRow("Филиал", allBranches, filterBranches, (v) => toggleFilter(setFilterBranches, v))}
