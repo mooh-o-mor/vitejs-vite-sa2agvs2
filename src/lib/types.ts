@@ -30,6 +30,21 @@ export interface FormState {
   priority: "contract" | "kp" | "plan";
   altGroup: string;
 }
+
+export interface DprRow {
+  id: number;
+  vessel_name: string;
+  branch: string;
+  report_date: string;
+  status: string;
+  coord_raw: string;
+  lat: number | null;
+  lng: number | null;
+  note: string;
+  supplies: DprSupply[];
+  contract_info?: string;  // Добавляем
+}
+
 export const YEAR = 2026;
 export const yearStart = new Date(YEAR, 0, 1);
 export const yearEnd = new Date(YEAR, 11, 31);
