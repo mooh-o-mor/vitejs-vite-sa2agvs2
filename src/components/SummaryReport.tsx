@@ -75,17 +75,21 @@ function branchBg(b: string): string {
   return BRANCH_COLORS[b] || "#FFFFFF";
 }
 
-/* ── Компонент редактируемой ячейки ── */
+/* ── Универсальная редактируемая ячейка ── */
 function EditableCell({ 
   value, 
   vesselName, 
   reportDate, 
-  onUpdate 
+  field,
+  onUpdate,
+  editable = true
 }: { 
   value: string; 
   vesselName: string; 
   reportDate: string; 
-  onUpdate: (newValue: string) => void;
+  field: "contract_info" | "note";
+  onUpdate: (vesselName: string, field: string, newValue: string) => void;
+  editable?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value || "");
@@ -94,14 +98,18 @@ function EditableCell({
   const handleSave = async () => {
     setSaving(true);
     try {
+      const updateData = field === "contract_info" 
+        ? { contract_info: editValue }
+        : { note: editValue };
+      
       const { error } = await supabase
         .from("dpr_entries")
-        .update({ contract_info: editValue })
+        .update(updateData)
         .eq("vessel_name", vesselName)
         .eq("report_date", reportDate);
       
       if (error) throw error;
-      onUpdate(editValue);
+      onUpdate(vesselName, field, editValue);
       setIsEditing(false);
     } catch (err) {
       console.error("Ошибка сохранения:", err);
@@ -120,6 +128,10 @@ function EditableCell({
     }
   };
 
+  if (!editable) {
+    return <span style={{ color: T.text2, fontSize: 11 }}>{value || "—"}</span>;
+  }
+
   if (isEditing) {
     return (
       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -135,7 +147,7 @@ function EditableCell({
             border: `1px solid ${T.accent}`,
             fontSize: 11,
             width: "100%",
-            minWidth: 120,
+            minWidth: field === "contract_info" ? 120 : 160,
             background: "#fff",
           }}
         />
@@ -174,6 +186,10 @@ function EditableCell({
     );
   }
 
+  const isEmpty = !value || value === "";
+  const isContract = field === "contract_info";
+  const isAsdOnly = isContract; // Контракт редактируется только для АСД
+
   return (
     <div
       onClick={() => setIsEditing(true)}
@@ -181,22 +197,22 @@ function EditableCell({
         cursor: "pointer",
         padding: "2px 4px",
         borderRadius: 4,
-        background: value ? "transparent" : "#fef3c7",
-        minWidth: 120,
-        color: value ? T.text : "#b45309",
+        background: isEmpty ? "#fef3c7" : "transparent",
+        minWidth: isContract ? 120 : 160,
+        color: isEmpty ? "#b45309" : T.text,
         border: "1px solid transparent",
         transition: "all 0.2s",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = T.accent;
-        e.currentTarget.style.background = "#f8fafc";
+        e.currentTarget.style.background = isEmpty ? "#fff3e0" : "#f8fafc";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.borderColor = "transparent";
-        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.background = isEmpty ? "#fef3c7" : "transparent";
       }}
     >
-      {value || "✎ добавить"}
+      {value || (isContract ? "✎ добавить" : "✎ добавить примечание")}
     </div>
   );
 }
@@ -248,10 +264,10 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     setLoading(false);
   }
 
-  const updateContractInfo = useCallback((vesselName: string, newValue: string) => {
+  const updateField = useCallback((vesselName: string, field: string, newValue: string) => {
     setVessels(prev => prev.map(v => 
       v.vessel_name === vesselName 
-        ? { ...v, contract_info: newValue }
+        ? { ...v, [field]: newValue }
         : v
     ));
   }, []);
@@ -278,8 +294,8 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   /* ── Styled Excel export ── */
   function exportXlsx() {
     const wb = XLSX.utils.book_new();
-   const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус", "Контракт", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
-const colWidths = [6, 8, 30, 10, 12, 40, 28, 6, 35, 12, 12];
+    const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус", "Контракт", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
+    const colWidths = [6, 8, 30, 10, 12, 40, 28, 6, 35, 12, 12];
 
     const aoa: any[][] = [];
 
@@ -416,11 +432,11 @@ const colWidths = [6, 8, 30, 10, 12, 40, 28, 6, 35, 12, 12];
               <th style={{ ...thStyle, width: 50 }}>Тип</th>
               <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Название судна</th>
               <th style={thStyle}>Филиал</th>
-              <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Статус</th>
-              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Контракт</th>}
+              <th style={{ ...thStyle, textAlign: "left", minWidth: 80 }}>Статус</th>
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Контракт</th>}
               <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
               <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
-              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Примечание</th>}
+              {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
               {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
               {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
             </tr>
@@ -444,6 +460,11 @@ const colWidths = [6, 8, 30, 10, 12, 40, 28, 6, 35, 12, 12];
                 statusDisplay = shortStatus(v.status);
               }
 
+              // Контракт редактируется только для АСД
+              const isAsd = sc === "asd";
+              // Примечание редактируется для всех
+              const noteEditable = true;
+
               return (
                 <tr key={v.vessel_name} style={{ background: rowBg }}>
                   <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
@@ -457,13 +478,26 @@ const colWidths = [6, 8, 30, 10, 12, 40, 28, 6, 35, 12, 12];
                         value={v.contract_info || ""}
                         vesselName={v.vessel_name}
                         reportDate={selDate}
-                        onUpdate={(newValue) => updateContractInfo(v.vessel_name, newValue)}
+                        field="contract_info"
+                        onUpdate={updateField}
+                        editable={isAsd}
                       />
                     </td>
                   )}
                   <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"}</td>
                   <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"}</td>
-                  {canView && <td style={{ ...tdBase, fontSize: 11, color: "#546E7A", maxWidth: 220 }}>{v.note || ""}</td>}
+                  {canView && (
+                    <td style={{ ...tdBase, background: rowBg }}>
+                      <EditableCell
+                        value={v.note || ""}
+                        vesselName={v.vessel_name}
+                        reportDate={selDate}
+                        field="note"
+                        onUpdate={updateField}
+                        editable={noteEditable}
+                      />
+                    </td>
+                  )}
                   {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
                   {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
                 </tr>
