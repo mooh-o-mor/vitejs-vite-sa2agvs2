@@ -20,7 +20,6 @@ const EMPTY_FORM: FormState = {
   priority:"contract", altGroup:""
 };
 
-
 export default function App() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
