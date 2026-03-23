@@ -295,13 +295,13 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     return [...new Set(vessels.map(v => v.branch).filter(Boolean))].sort((a,b) => branchOrder(a)-branchOrder(b));
   }, [vessels]);
 
-  const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string, allValue?: string) => {
-    if (value === "Все") {
-      setter([]);
-      return;
-    }
-    setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-  };
+  const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
+  if (value === "Все") {
+    setter([]);
+    return;
+  }
+  setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+};
 
   const filtered = useMemo(() => {
     let result = vessels.filter(v => {
