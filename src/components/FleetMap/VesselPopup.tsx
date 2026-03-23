@@ -51,27 +51,23 @@ export function VesselPopup({ vessel, vesselType, imo, canView, onClose }: Props
           {vesselType && (
             <span style={{ 
               fontSize: 11, 
-              color: T.text2, 
+              color: T.text, 
               fontFamily: "monospace", 
               fontWeight: 500, 
-              background: "rgba(0,0,0,0.05)", 
-              padding: "2px 8px", 
-              borderRadius: 3 
+              padding: "0px"
             }}>
               {vesselType}
             </span>
           )}
           <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{vessel.vessel_name}</span>
-          {imo && <span style={{ fontSize: 11, color: T.text3, fontFamily: "monospace" }}>IMO {imo}</span>}
+          {imo && <span style={{ fontSize: 11, color: T.text2, fontFamily: "monospace" }}>IMO {imo}</span>}
           {vessel.branch && (
             <span style={{ 
               fontSize: 11, 
-              color: T.amber, 
+              color: T.text, 
               fontFamily: "monospace", 
               fontWeight: 500,
-              background: "rgba(0,0,0,0.05)", 
-              padding: "2px 8px", 
-              borderRadius: 3 
+              padding: "0px"
             }}>
               {vessel.branch}
             </span>
