@@ -1,14 +1,9 @@
 import { T } from "../../lib/types";
 import { STATUS_BG } from "./mapIcons";
+import type { DprRow } from "../../lib/parseDpr";
 
 interface Props {
-  vessel: {
-    vessel_name: string;
-    branch: string;
-    status: string;
-    lat: number | null;
-    lng: number | null;
-  };
+  vessel: DprRow;
   vesselType: string;
   isSelected: boolean;
   onClick: () => void;

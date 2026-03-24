@@ -5,27 +5,12 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
-import { parseMsgFiles, type DprSupply } from "../../lib/parseDpr";
+import { parseMsgFiles, type DprSupply, type DprRow } from "../../lib/parseDpr";
 import { T, typeOrder } from "../../lib/types";
 import { getType } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
-
-interface DprRow {
-  id: number;
-  vessel_name: string;VesselPopup 
-  branch: string;
-  report_date: string;
-  status: string;
-  coord_raw: string;
-  lat: number | null;
-  lng: number | null;
-  note: string;
-  supplies: DprSupply[];
-  contract_info?: string;
-  work_period?: string;
-}
 
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
@@ -54,7 +39,6 @@ export function FleetMap({
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
-  const [imoMap, setImoMap] = useState<Map<string, string>>(new Map());
   const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -77,26 +61,20 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Load IMO + type maps from vessels table
+  // Load type maps from vessels table
   useEffect(() => {
     supabase.from("vessels").select("name, imo").then(({ data }) => {
       if (data) {
-        const m = new Map<string, string>();
         const t = new Map<string, string>();
         data.forEach((v: any) => {
           const full = v.name.toUpperCase().trim();
           const typeStr = getType(v.name, typeOrder);
           const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-          if (v.imo) { 
-            m.set(full, v.imo); 
-            m.set(short, v.imo);
-          }
           if (typeStr) { 
             t.set(full, typeStr); 
             t.set(short, typeStr);
           }
         });
-        setImoMap(m);
         setTypeMap(t);
       }
     });
@@ -212,7 +190,6 @@ export function FleetMap({
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
   }, [filtered, search]);
 
-  // Обновляем карту при изменении фильтров
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
@@ -274,7 +251,8 @@ export function FleetMap({
 
       let ok = 0, fail = 0;
       for (const v of parsed) {
-        const row = {
+        const row: DprRow = {
+          id: 0,
           vessel_name: v.name,
           branch: v.branch,
           report_date: dateStr,
@@ -370,14 +348,14 @@ export function FleetMap({
           </div>
         )}
 
-       {selVessel && (
-  <VesselPopup
-    vessel={selVessel}
-    vesselType={typeMap.get(selVessel.vessel_name.toUpperCase().trim()) || ""}
-    canView={canView}
-    onClose={() => setSelVessel(null)}
-  />
-)}
+        {selVessel && (
+          <VesselPopup
+            vessel={selVessel}
+            vesselType={typeMap.get(selVessel.vessel_name.toUpperCase().trim()) || ""}
+            canView={canView}
+            onClose={() => setSelVessel(null)}
+          />
+        )}
       </div>
 
       <style>{`
