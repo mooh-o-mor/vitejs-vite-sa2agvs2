@@ -30,6 +30,16 @@ function shortStatus(stat: string): string {
   return stat;
 }
 
+function formatVesselName(name: string): string {
+  return name.split(' ').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1)
+  ).join(' ');
+}
+
+function formatVesselType(type: string): string {
+  return type.toUpperCase();
+}
+
 function mkIcon(c: string) {
   const color = CLR[c as keyof typeof CLR] || CLR.oth;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="32" viewBox="0 0 26 32">
@@ -134,23 +144,44 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Load type maps from vessels table (lowercase keys)
   useEffect(() => {
     supabase.from("vessels").select("name, imo").then(({ data }) => {
       if (data) {
         const m = new Map<string, string>();
         const t = new Map<string, string>();
         data.forEach((v: any) => {
-          const full = v.name.toUpperCase().trim();
-          const typeStr = getType(v.name, typeOrder);
-          const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-          if (v.imo) { m.set(full, v.imo); m.set(short, v.imo); }
-          if (typeStr) { t.set(full, typeStr); t.set(short, typeStr); }
+          const originalName = v.name;
+          const nameLower = originalName.toLowerCase().trim().replace(/\s+/g, ' ');
+          const typeStr = getType(originalName, typeOrder);
+          
+          if (v.imo) {
+            m.set(nameLower, v.imo);
+          }
+          if (typeStr) {
+            t.set(nameLower, typeStr);
+            // Add key without prefix
+            const withoutPrefix = nameLower.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/, '');
+            if (withoutPrefix !== nameLower) {
+              t.set(withoutPrefix, typeStr);
+            }
+          }
         });
         setImoMap(m);
         setTypeMap(t);
       }
     });
   }, []);
+
+  const getVesselType = (vesselName: string): string => {
+    const normalized = vesselName.toLowerCase().trim().replace(/\s+/g, ' ');
+    let type = typeMap.get(normalized);
+    if (type) return type;
+    const withoutPrefix = normalized.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/, '');
+    type = typeMap.get(withoutPrefix);
+    if (type) return type;
+    return "";
+  };
 
   useEffect(() => {
     if (externalFiles && externalFiles.length > 0 && isAdmin) {
@@ -232,11 +263,11 @@ export function FleetMap({
   const allTypes = useMemo(() => {
     const types = new Set<string>();
     vessels.forEach(v => {
-      const t = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+      const t = getVesselType(v.vessel_name);
       if (t) types.add(t);
     });
     return ["Все", ...Array.from(types).sort()];
-  }, [vessels, typeMap]);
+  }, [vessels]);
 
   const allBranches = useMemo(() => {
     const branches = new Set<string>();
@@ -250,12 +281,12 @@ export function FleetMap({
 
   const filtered = useMemo(() => {
     return vessels.filter(v => {
-      const typeOk = filterType === "Все" || typeMap.get(v.vessel_name.toUpperCase().trim()) === filterType;
+      const typeOk = filterType === "Все" || getVesselType(v.vessel_name) === filterType;
       const branchOk = filterBranch === "Все" || v.branch === filterBranch;
       const statusOk = filterStatus === "Все" || cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem");
       return typeOk && branchOk && statusOk;
     });
-  }, [vessels, filterType, filterBranch, filterStatus, typeMap]);
+  }, [vessels, filterType, filterBranch, filterStatus]);
 
   const searchFiltered = useMemo(() => {
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
@@ -269,7 +300,7 @@ export function FleetMap({
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      marker.bindTooltip(v.vessel_name, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
+      marker.bindTooltip(formatVesselName(v.vessel_name), { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
         setSelVessel(v);
         if (isMobile) setSidebarOpen(false);
@@ -301,14 +332,11 @@ export function FleetMap({
       const { data: vesselList } = await supabase.from("vessels").select("name, branch");
       const branchMap = new Map<string, string>();
       (vesselList || []).forEach((v: any) => {
-        const original = v.name.trim();
-        const upper = original.toUpperCase();
+        const original = v.name.toLowerCase().trim();
         branchMap.set(original, v.branch);
-        branchMap.set(upper, v.branch);
-        const withoutPrefix = original.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/i, "");
+        const withoutPrefix = original.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис)\s+/, '');
         if (withoutPrefix !== original) {
           branchMap.set(withoutPrefix, v.branch);
-          branchMap.set(withoutPrefix.toUpperCase(), v.branch);
         }
       });
       const { vessels: parsed, date } = await parseMsgFiles(Array.from(files), branchMap);
@@ -420,14 +448,14 @@ export function FleetMap({
           <div style={{ flex: 1, overflowY: "auto" }}>
             {searchFiltered.map((v) => {
               const c = cls(v.status);
-              const vType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+              const vType = getVesselType(v.vessel_name);
               const isSel = selVessel?.vessel_name === v.vessel_name;
               const bgColor = STATUS_BG[c];
               return (
                 <div key={v.vessel_name} onClick={() => { setSelVessel(v); if (isMobile) setSidebarOpen(false); if (v.lat != null && v.lng != null && mapObj.current) mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true }); }} style={{ padding: "8px 10px", borderBottom: `1px solid ${T.border}`, cursor: "pointer", borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`, background: isSel ? "rgba(30,144,255,0.06)" : bgColor, transition: "all 0.2s" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {vType && <span style={{ fontSize: 10, color: T.text2, fontFamily: "monospace", fontWeight: 500, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{vType}</span>}
-                    <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{v.vessel_name}</span>
+                    {vType && <span style={{ fontSize: 10, color: T.text2, fontFamily: "monospace", fontWeight: 500, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{formatVesselType(vType)}</span>}
+                    <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{formatVesselName(v.vessel_name)}</span>
                     {v.branch && v.branch !== "0" && <span style={{ fontSize: 10, color: T.text2, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{v.branch}</span>}
                     {v.lat == null && <span style={{ fontSize: 10, color: "#c07800" }}>📍?</span>}
                   </div>
@@ -449,9 +477,9 @@ export function FleetMap({
         )}
 
         {selVessel && (() => {
-          const key = selVessel.vessel_name.toUpperCase().trim();
+          const key = selVessel.vessel_name.toLowerCase().trim();
           const imo = imoMap.get(key) || "";
-          const vesselType = typeMap.get(key) || "";
+          const vesselType = getVesselType(selVessel.vessel_name);
           const c = cls(selVessel.status);
           const powerMatch = /(БЭП|СЭП)/i.exec(selVessel.coord_raw || "");
           const power = powerMatch ? powerMatch[1].toUpperCase() : null;
@@ -462,8 +490,8 @@ export function FleetMap({
               <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, background: STATUS_HEADER_BG[c] }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {vesselType && <span style={{ fontSize: 10, color: T.text2, fontFamily: "monospace", fontWeight: 700, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{vesselType}</span>}
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>{selVessel.vessel_name}</span>
+                    {vesselType && <span style={{ fontSize: 10, color: T.text2, fontFamily: "monospace", fontWeight: 700, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{formatVesselType(vesselType)}</span>}
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>{formatVesselName(selVessel.vessel_name)}</span>
                     <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: STATUS_BG[c], color: CLR[c], flexShrink: 0 }}>{shortStatus(selVessel.status)}</span>
                     {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
                   </div>
@@ -491,7 +519,7 @@ export function FleetMap({
                           {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
                         </div>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                          <thead><tr>{["Вид", "Остаток", "%", "Расход", "До"].map(h => <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>)}</tr></thead>
+                          <thead><tr>{["Вид", "Остаток", "%", "Расход", "До"].map(h => <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>)}</thead>
                           <tbody>{(selVessel.supplies as DprSupply[]).map((s, i) => <tr key={i}><td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td><td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td><td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td><td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td><td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td></tr>)}</tbody>
                         </table>
                       </>
