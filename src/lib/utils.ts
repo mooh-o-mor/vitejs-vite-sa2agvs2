@@ -1,59 +1,63 @@
-import { yearStart, yearEnd, totalDays } from "./types";
+import { typeOrder } from "./types";
 
-export function getType(name: string, order: string[]): string {
+export function getType(name: string, order: string[] = typeOrder): string {
   const upper = name.toUpperCase().trim();
   for (const t of order) {
     if (upper.startsWith(t)) {
       return t;
     }
   }
-  // Дополнительная проверка для АСС (если в названии есть АСС в середине)
-  if (upper.includes("АСС")) return "АСС";
   return "";
 }
-export function cpKey(cp: string) {
-  return cp.replace(/\s*\(.*$/g, "").trim();
+
+export function cpKey(counterparty: string): string {
+  if (!counterparty) return "";
+  const c = counterparty.trim();
+  if (c.includes("Ремонт")) return "Ремонт";
+  if (c.includes("АСГ")) return "АСГ";
+  return c;
 }
 
-export function dayOffset(dateStr: string) {
+export function dayOffset(dateStr: string): number {
   const d = new Date(dateStr);
-  return Math.max(0, Math.min((d.getTime() - yearStart.getTime()) / 86400000, totalDays));
+  const start = new Date(2026, 0, 1);
+  return Math.floor((d.getTime() - start.getTime()) / 86400000);
 }
 
-export function contractDaysGantt(start: string, end: string) {
-  const s = new Date(Math.max(new Date(start).getTime(), yearStart.getTime()));
-  const e = new Date(Math.min(new Date(end).getTime(), yearEnd.getTime()));
-  return Math.max(0, (e.getTime() - s.getTime()) / 86400000 + 1);
+export function contractDays(start: string, end: string): number {
+  const s = new Date(start);
+  const e = new Date(end);
+  return Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
 }
 
-export function contractDays(start: string, end: string) {
-  return Math.max(0, (new Date(end).getTime() - new Date(start).getTime()) / 86400000 + 1);
+export function contractDaysGantt(start: string, end: string): number {
+  const s = new Date(start);
+  const e = new Date(end);
+  return Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
 }
 
-export function fmoney(n: number) {
+export function fdate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getDate()}.${d.getMonth() + 1}`;
+}
+
+export function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function fmoney(n: number): string {
   if (!n && n !== 0) return "—";
   return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
 }
 
-export function fdate(dateStr: string): string {
-  if (!dateStr) return "";
-  const [y, m, d] = dateStr.split("-");
-  return `${d}.${m}.${y}`;
+export function formatInput(v: string): string {
+  const n = parseInt(v);
+  if (isNaN(n)) return v;
+  return new Intl.NumberFormat("ru-RU").format(n);
 }
 
-export function formatInput(val: string): string {
-  const digits = val.replace(/\D/g, "");
-  if (!digits) return "";
-  return new Intl.NumberFormat("ru-RU").format(Number(digits));
-}
-
-export function unformat(val: string): string {
-  return val.replace(/\D/g, "");
-}
-
-export function addDays(dateStr: string, days: number): string {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days - 1);
-  return d.toISOString().split("T")[0];
+export function unformat(v: string): string {
+  return v.replace(/\s/g, "");
 }
