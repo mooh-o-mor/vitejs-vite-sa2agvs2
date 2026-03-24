@@ -20,14 +20,26 @@ interface Props {
 }
 
 const thStyle: React.CSSProperties = {
-  padding: "8px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
-  color: "#fff", borderBottom: "2px solid #90a4ae", borderRight: "1px solid #546E7A",
-  whiteSpace: "nowrap", position: "sticky", top: 0, background: "#37474F", zIndex: 1,
+  padding: "8px 8px",
+  textAlign: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#fff",
+  borderBottom: "2px solid #90a4ae",
+  borderRight: "1px solid #546E7A",
+  whiteSpace: "nowrap",
+  position: "sticky",
+  top: 0,
+  background: "#37474F",
+  zIndex: 1,
 };
 
 const tdBase: React.CSSProperties = {
-  padding: "5px 8px", fontSize: 12, borderBottom: "1px solid #cfd8dc",
-  borderRight: "1px solid #e8eaed", verticalAlign: "top",
+  padding: "5px 8px",
+  fontSize: 12,
+  borderBottom: "1px solid #cfd8dc",
+  borderRight: "1px solid #e8eaed",
+  verticalAlign: "top",
 };
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
@@ -48,7 +60,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
-          </thead>
+          </tr>
+        </thead>
         <tbody>
           {vessels.map((v, i) => {
             const sc = statusCls(v.status);
@@ -72,7 +85,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
 
             return (
               <tr key={v.vessel_name} style={{ background: rowBg }}>
-                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}也不
+                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
                 <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)}</td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
