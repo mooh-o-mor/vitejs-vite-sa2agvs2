@@ -257,7 +257,6 @@ export function FleetMap({
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
   }, [filtered, search]);
 
-  // Обновляем карту при изменении фильтров
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
