@@ -19,6 +19,7 @@ interface Props {
   onUpdateField: (vesselName: string, field: string, newValue: string) => void;
 }
 
+
 const thStyle: React.CSSProperties = {
   padding: "8px 8px",
   textAlign: "center",
