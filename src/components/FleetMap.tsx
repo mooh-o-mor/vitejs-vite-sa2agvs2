@@ -111,7 +111,7 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Load type maps from vessels table
+  // Загрузка типов судов из таблицы vessels
   useEffect(() => {
     supabase.from("vessels").select("name").then(({ data }) => {
       if (data) {
@@ -257,6 +257,7 @@ export function FleetMap({
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
   }, [filtered, search]);
 
+  // Обновляем карту при изменении фильтров
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
