@@ -5,7 +5,7 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
-import { parseMsgFiles, type DprSupply, type DprRow } from "../../lib/parseDpr";
+import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
 import { T, typeOrder } from "../../lib/types";
 import { getType } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
@@ -63,7 +63,7 @@ export function FleetMap({
 
   // Load type maps from vessels table
   useEffect(() => {
-    supabase.from("vessels").select("name, imo").then(({ data }) => {
+    supabase.from("vessels").select("name").then(({ data }) => {
       if (data) {
         const t = new Map<string, string>();
         data.forEach((v: any) => {
@@ -262,8 +262,8 @@ export function FleetMap({
           lng: v.lng,
           note: v.note,
           supplies: v.supplies,
-          contract_info: v.contract_info || null,
-          work_period: v.work_period || null,
+          contract_info: v.contract_info || undefined,
+          work_period: v.work_period || undefined,
         };
         const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
         if (error) { fail++; console.error(v.name, error); } else ok++;
