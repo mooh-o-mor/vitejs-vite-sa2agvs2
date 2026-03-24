@@ -93,7 +93,8 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                       {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
                         <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
                       ))}
-                    </thead>
+                    </tr>
+                  </thead>
                   <tbody>
                     {(vessel.supplies as DprSupply[]).map((s, i) => (
                       <tr key={i}>
