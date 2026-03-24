@@ -25,7 +25,7 @@ export interface DprVessel {
 }
 
 export interface DprRow {
-  id?: number;  // делаем необязательным
+  id?: number; // опционально
   vessel_name: string;
   branch: string;
   report_date: string;
