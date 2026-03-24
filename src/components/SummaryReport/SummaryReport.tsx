@@ -14,7 +14,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   
-  // Фильтры и сортировка
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
@@ -43,14 +42,23 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
       supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name"),
       supabase.from("vessels").select("name"),
     ]);
+    
+    // Строим карту типов (case-insensitive)
     const t = new Map<string, string>();
     (vData || []).forEach((v: any) => {
-      const full = v.name.toUpperCase().trim();
-      const typeMatch = full.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|БП|ВСП|Баржа)\s+/);
-      if (typeMatch) {
-        const short = full.slice(typeMatch[0].length);
-        t.set(full, typeMatch[1]);
-        t.set(short, typeMatch[1]);
+      const originalName = v.name;
+      const upperName = originalName.toUpperCase().trim();
+      const typeMatch = upperName.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|БП|ВСП|Баржа)\s+/);
+      const typeStr = typeMatch ? typeMatch[1] : "";
+      
+      if (typeStr) {
+        t.set(originalName, typeStr);
+        t.set(upperName, typeStr);
+        const withoutPrefix = upperName.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+        if (withoutPrefix !== upperName) {
+          t.set(withoutPrefix, typeStr);
+        }
+        t.set(originalName.toLowerCase(), typeStr);
       }
     });
     setTypeMap(t);
@@ -71,15 +79,31 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     return `${day}.${m}.${y}`;
   };
 
-  // Уникальные значения для фильтров
+  const getVesselType = useCallback((vesselName: string): string => {
+    const normalized = vesselName.toUpperCase().trim();
+    let type = typeMap.get(normalized);
+    if (type) return type;
+    
+    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+    type = typeMap.get(withoutPrefix);
+    if (type) return type;
+    
+    for (const [key, val] of typeMap.entries()) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        return val;
+      }
+    }
+    return "";
+  }, [typeMap]);
+
   const allTypes = useMemo(() => {
     const types = new Set<string>();
     vessels.forEach(v => {
-      const t = typeMap.get(v.vessel_name.toUpperCase().trim().replace(/\s+/g, " ")) || "";
+      const t = getVesselType(v.vessel_name);
       if (t) types.add(t);
     });
     return Array.from(types).sort();
-  }, [vessels, typeMap]);
+  }, [vessels, getVesselType]);
 
   const allBranches = useMemo(() => {
     return [...new Set(vessels.map(v => v.branch).filter(Boolean))].sort((a,b) => branchOrder(a)-branchOrder(b));
@@ -104,7 +128,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   const filtered = useMemo(() => {
     let result = vessels.filter(v => {
-      const typeOk = filterTypes.length === 0 || filterTypes.includes(typeMap.get(v.vessel_name.toUpperCase().trim().replace(/\s+/g, " ")) || "");
+      const typeOk = filterTypes.length === 0 || filterTypes.includes(getVesselType(v.vessel_name));
       const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
       const statusOk = filterStatuses.length === 0 || filterStatuses.includes(statusCls(v.status));
       return typeOk && branchOk && statusOk;
@@ -117,7 +141,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
       return 0;
     });
     return result;
-  }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, typeMap]);
+  }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselType]);
 
   const cAsg = filtered.filter((v) => statusCls(v.status) === "asg").length;
   const cAsd = filtered.filter((v) => statusCls(v.status) === "asd").length;
@@ -125,7 +149,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      {/* Верхняя строка: заголовок, дата, статусы и кнопка экспорта */}
       <div style={{ 
         display: "flex", 
         alignItems: "center", 
@@ -184,7 +207,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         </div>
       </div>
 
-      {/* Фильтры */}
       <FilterBar
         allTypes={allTypes}
         allBranches={allBranches}
@@ -198,12 +220,11 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         onSortBy={setSortBy}
       />
 
-      {/* Таблица */}
       <ReportTable
         vessels={filtered}
         selDate={selDate}
         canView={canView}
-        typeMap={typeMap}
+        getVesselType={getVesselType}
         onUpdateField={updateField}
       />
 

@@ -14,7 +14,7 @@ interface Props {
   vessels: DprRow[];
   selDate: string;
   canView: boolean;
-  typeMap: Map<string, string>;
+  getVesselType: (name: string) => string;
   onUpdateField: (vesselName: string, field: string, newValue: string) => void;
 }
 
@@ -29,7 +29,7 @@ const tdBase: React.CSSProperties = {
   borderRight: "1px solid #e8eaed", verticalAlign: "top",
 };
 
-export function ReportTable({ vessels, selDate, canView, typeMap, onUpdateField }: Props) {
+export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -48,12 +48,12 @@ export function ReportTable({ vessels, selDate, canView, typeMap, onUpdateField 
             {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
           </tr>
-        </thead>
+          </thead>
         <tbody>
           {vessels.map((v, i) => {
             const sc = statusCls(v.status);
             const rowBg = branchBg(v.branch);
-            const vType = typeMap.get(v.vessel_name.toUpperCase().trim().replace(/\s+/g, " ")) || "";
+            const vType = getVesselType(v.vessel_name);
             const power = getPower(v.coord_raw);
             const coordDisplay = (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
 
