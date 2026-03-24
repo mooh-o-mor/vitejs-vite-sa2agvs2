@@ -4,14 +4,12 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
-import { supabase } from "../../lib/supabase";
-import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
-import { T, typeOrder } from "../../lib/types";
-import { getType } from "../../lib/utils";
-import { mkIcon, mkPieIcon } from "./mapIcons";
-import { Sidebar } from "./Sidebar";
-import { VesselPopup } from "./VesselPopup";
+import { supabase } from "../lib/supabase";
+import { parseMsgFiles, type DprRow } from "../lib/parseDpr";
+import { T, typeOrder } from "../lib/types";
+import { getType } from "../lib/utils";
 
+/* ── Status helpers ── */
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
   const s = stat.toUpperCase();
@@ -19,6 +17,58 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (s.startsWith("АСД")) return "asd";
   if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
+}
+
+const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8aa8" };
+const STATUS_BG = { asg: "#ffebee", asd: "#e8f5e9", rem: "#f5f5f5", oth: "#ffffff" };
+const STATUS_HEADER_BG = { asg: "#ffcdd2", asd: "#c8e6c9", rem: "#e0e0e0", oth: "#f5f5f5" };
+
+function mkIcon(c: string) {
+  const color = CLR[c as keyof typeof CLR] || CLR.oth;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="32" viewBox="0 0 26 32">
+    <path d="M13 0C5.8 0 0 5.8 0 13c0 9 13 19 13 19s13-10 13-19C26 5.8 20.2 0 13 0z" fill="white"/>
+    <path d="M13 1.5C6.6 1.5 1.5 6.6 1.5 13c0 8.3 11.5 17.5 11.5 17.5S24.5 21.3 24.5 13C24.5 6.6 19.4 1.5 13 1.5z" fill="${color}"/>
+    <circle cx="13" cy="13" r="4.5" fill="white" opacity=".9"/>
+  </svg>`;
+  return L.divIcon({ html: svg, iconSize: [26, 32], iconAnchor: [13, 32], popupAnchor: [0, -34], className: "" });
+}
+
+function mkPieIcon(counts: Record<string, number>, total: number) {
+  const sz = total < 5 ? 38 : total < 10 ? 44 : 50;
+  const r = sz / 2;
+  const ir = r * 0.55;
+  const segments = [
+    { key: "asg", count: counts.asg || 0, color: CLR.asg },
+    { key: "asd", count: counts.asd || 0, color: CLR.asd },
+    { key: "rem", count: counts.rem || 0, color: CLR.rem },
+    { key: "oth", count: counts.oth || 0, color: CLR.oth },
+  ].filter((s) => s.count > 0);
+
+  let paths = "";
+  if (segments.length === 1) {
+    paths = `<circle cx="${r}" cy="${r}" r="${r}" fill="${segments[0].color}"/>`;
+  } else {
+    let startAngle = -Math.PI / 2;
+    for (const seg of segments) {
+      const angle = (seg.count / total) * 2 * Math.PI;
+      const endAngle = startAngle + angle;
+      const x1 = r + r * Math.cos(startAngle);
+      const y1 = r + r * Math.sin(startAngle);
+      const x2 = r + r * Math.cos(endAngle);
+      const y2 = r + r * Math.sin(endAngle);
+      const large = angle > Math.PI ? 1 : 0;
+      paths += `<path d="M${r},${r} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large},1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${seg.color}"/>`;
+      startAngle = endAngle;
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}">
+    <circle cx="${r}" cy="${r}" r="${r}" fill="white"/>
+    ${paths}
+    <circle cx="${r}" cy="${r}" r="${ir}" fill="white"/>
+    <text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="central"
+      font-family="monospace" font-size="${total > 9 ? 11 : 13}" font-weight="700" fill="#1a2a3a">${total}</text>
+  </svg>`;
+  return L.divIcon({ html: svg, className: "", iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] });
 }
 
 export function FleetMap({
@@ -61,24 +111,20 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Load type maps from vessels table (case-insensitive)
+  // Load type maps from vessels table
   useEffect(() => {
     supabase.from("vessels").select("name").then(({ data }) => {
       if (data) {
         const t = new Map<string, string>();
         data.forEach((v: any) => {
-          const originalName = v.name;
-          const upperName = originalName.toUpperCase().trim();
-          const typeMatch = upperName.match(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/);
-          const typeStr = typeMatch ? typeMatch[1] : "";
+          const full = v.name.toUpperCase().trim();
+          const typeStr = getType(v.name, typeOrder);
           if (typeStr) {
-            t.set(originalName, typeStr);
-            t.set(upperName, typeStr);
-            const withoutPrefix = upperName.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-            if (withoutPrefix !== upperName) {
-              t.set(withoutPrefix, typeStr);
+            t.set(full, typeStr);
+            const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+            if (short !== full) {
+              t.set(short, typeStr);
             }
-            t.set(originalName.toLowerCase(), typeStr);
           }
         });
         setTypeMap(t);
@@ -211,6 +257,7 @@ export function FleetMap({
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
   }, [filtered, search]);
 
+  // Обновляем карту при изменении фильтров
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
@@ -303,6 +350,35 @@ export function FleetMap({
   const cRem = filtered.filter((v) => cls(v.status) === "rem").length;
   const noPos = filtered.filter((v) => v.lat == null).length;
 
+  const fmtDateRu = (d: string) => { const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
+
+  const filterRow = (label: string, value: string, options: string[], onChange: (v: string) => void) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 11, color: T.text3 }}>{label}</span>
+      <select 
+        value={value} 
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          padding: "6px 8px",
+          borderRadius: 6,
+          border: `1px solid ${T.border}`,
+          fontSize: 12,
+          fontWeight: 500,
+          background: T.bg2,
+          color: T.text,
+          cursor: "pointer",
+          width: "100%",
+        }}
+      >
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const showSidebar = isMobile ? sidebarOpen : true;
+
   return (
     <div style={{ display: "flex", height: "calc(100vh - 90px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
       {dragging && isAdmin && (
@@ -321,42 +397,102 @@ export function FleetMap({
         <div onClick={() => setSidebarOpen(false)} style={{ position: "absolute", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.3)" }} />
       )}
 
-      <Sidebar
-        dates={dates}
-        selDate={selDate}
-        onDateChange={setSelDate}
-        filterType={filterType}
-        filterBranch={filterBranch}
-        filterStatus={filterStatus}
-        allTypes={allTypes}
-        allBranches={allBranches}
-        allStatuses={allStatuses}
-        onFilterTypeChange={setFilterType}
-        onFilterBranchChange={setFilterBranch}
-        onFilterStatusChange={setFilterStatus}
-        cAsg={cAsg}
-        cAsd={cAsd}
-        cRem={cRem}
-        total={filtered.length}
-        noPos={noPos}
-        uploadMsg={uploadMsg}
-        uploading={uploading}
-        search={search}
-        onSearchChange={setSearch}
-        filteredVessels={searchFiltered}
-        typeMap={typeMap}
-        selectedVessel={selVessel}
-        onSelectVessel={(v) => {
-          setSelVessel(v);
-          if (isMobile) setSidebarOpen(false);
-          if (v.lat != null && v.lng != null && mapObj.current) {
-            mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
-          }
-        }}
-        isMobile={isMobile}
-        onCloseSidebar={() => setSidebarOpen(false)}
-        sidebarOpen={sidebarOpen}
-      />
+      {showSidebar && (
+        <div style={{ width: 360, minWidth: 360, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
+          {isMobile && (
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 8px", borderBottom: `1px solid ${T.border}` }}>
+              <button onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.text2 }}>✕</button>
+            </div>
+          )}
+
+          <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+              <select value={selDate} onChange={(e) => setSelDate(e.target.value)} style={{ flex: 1, padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12, fontFamily: "monospace", background: "#f8fafc" }}>
+                {dates.length === 0 && <option value="">— нет данных —</option>}
+                {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+              {filterRow("Тип", filterType, allTypes, setFilterType)}
+              {filterRow("Филиал", filterBranch, allBranches, setFilterBranch)}
+              {filterRow("Статус", filterStatus, allStatuses, setFilterStatus)}
+            </div>
+
+            <div style={{ display: "flex", gap: 12, fontSize: 12, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 12 }}>
+                <span><b style={{ color: CLR.asg }}>{cAsg}</b> <span style={{ color: T.text2 }}>АСГ</span></span>
+                <span><b style={{ color: CLR.asd }}>{cAsd}</b> <span style={{ color: T.text2 }}>АСД</span></span>
+                <span><b style={{ color: CLR.rem }}>{cRem}</b> <span style={{ color: T.text2 }}>РЕМ</span></span>
+              </div>
+              <span style={{ color: T.text2 }}><b>{filtered.length}</b> всего</span>
+            </div>
+            {noPos > 0 && <div style={{ fontSize: 10, color: "#c07800", marginTop: 8 }}>⚠ без позиции: {noPos}</div>}
+            {uploadMsg && <div style={{ fontSize: 11, color: uploading ? T.text2 : T.accent, marginTop: 6 }}>{uploadMsg}</div>}
+          </div>
+
+          <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+            <input placeholder="Поиск судна..." value={search} onChange={(e) => setSearch(e.target.value)}
+              style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12 }} />
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {searchFiltered.map((v) => {
+              const c = cls(v.status);
+              const vType = getVesselType(v.vessel_name);
+              const isSel = selVessel?.vessel_name === v.vessel_name;
+              const bgColor = STATUS_BG[c];
+              
+              return (
+                <div 
+                  key={v.vessel_name} 
+                  onClick={() => {
+                    setSelVessel(v);
+                    if (isMobile) setSidebarOpen(false);
+                    if (v.lat != null && v.lng != null && mapObj.current) {
+                      mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+                    }
+                  }}
+                  style={{ 
+                    padding: "8px 10px", 
+                    borderBottom: `1px solid ${T.border}`, 
+                    cursor: "pointer", 
+                    borderLeft: `3px solid ${isSel ? T.accent : "transparent"}`, 
+                    background: isSel ? "rgba(30,144,255,0.06)" : bgColor,
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
+                    {vType && (
+                      <span style={{ 
+                        fontSize: 11, 
+                        color: T.text, 
+                        fontFamily: "monospace", 
+                        fontWeight: 500, 
+                        padding: "0px", 
+                        flexShrink: 0,
+                      }}>
+                        {vType}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel_name}</span>
+                    {v.branch && v.branch !== "0" && (
+                      <span style={{ fontSize: 11, color: T.text, padding: "0px", flexShrink: 0 }}>{v.branch}</span>
+                    )}
+                    {v.lat == null && <span style={{ fontSize: 10, color: "#c07800", flexShrink: 0 }}>📍?</span>}
+                  </div>
+                </div>
+              );
+            })}
+            {searchFiltered.length === 0 && !loading && (
+              <div style={{ padding: 20, textAlign: "center", color: T.text2, fontSize: 13 }}>
+                {dates.length === 0 ? "Нет загруженных данных" : "Нет судов по фильтру"}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ flex: 1, position: "relative" }}>
         <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
@@ -368,14 +504,89 @@ export function FleetMap({
           </div>
         )}
 
-        {selVessel && (
-          <VesselPopup
-            vessel={selVessel}
-            vesselType={getVesselType(selVessel.vessel_name)}
-            canView={canView}
-            onClose={() => setSelVessel(null)}
-          />
-        )}
+        {selVessel && (() => {
+          const vesselType = getVesselType(selVessel.vessel_name);
+          const powerMatch = /(БЭП|СЭП)/i.exec(selVessel.coord_raw || "");
+          const power = powerMatch ? powerMatch[1].toUpperCase() : null;
+          const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
+          const coordDisplay = (selVessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
+          const c = cls(selVessel.status);
+
+          return (
+            <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style={{ 
+                padding: "10px 14px", 
+                borderBottom: `1px solid ${T.border}`, 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "space-between",
+                flexWrap: "nowrap",
+                gap: 8,
+                background: STATUS_HEADER_BG[c],
+                flexShrink: 0
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flex: 1, minWidth: 0, overflow: "hidden" }}>
+                  {vesselType && (
+                    <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, padding: "0px", flexShrink: 0 }}>
+                      {vesselType}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selVessel.vessel_name}</span>
+                  {selVessel.branch && (
+                    <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, padding: "0px", flexShrink: 0 }}>
+                      {selVessel.branch}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
+              </div>
+
+              <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                  <span style={{ color: T.text2 }}>Местоположение</span>
+                  <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 250 }}>{coordDisplay || "—"}</span>
+                </div>
+                {canView && (
+                  <>
+                    {selVessel.note && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                        <span style={{ color: T.text2 }}>Примечание</span>
+                        <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 250 }}>{selVessel.note}</span>
+                      </div>
+                    )}
+                    {(selVessel.supplies && selVessel.supplies.length > 0) && (
+                      <>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
+                          <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
+                          {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
+                        </div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                          <thead>
+                            <tr>
+                              {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
+                                <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
+                              ))}
+                            </thead>
+                          <tbody>
+                            {(selVessel.supplies as any[]).map((s, i) => (
+                              <tr key={i}>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
+                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <style>{`
