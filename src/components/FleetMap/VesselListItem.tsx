@@ -1,5 +1,6 @@
 import { T } from "../../lib/types";
 import { STATUS_BG } from "./mapIcons";
+import { formatVesselName, formatVesselType } from "../../lib/utils";
 import type { DprRow } from "../../lib/parseDpr";
 
 interface Props {
@@ -45,10 +46,12 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick }: Prop
             padding: "0px", 
             flexShrink: 0,
           }}>
-            {vesselType}
+            {formatVesselType(vesselType)}
           </span>
         )}
-        <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vessel.vessel_name}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {formatVesselName(vessel.vessel_name)}
+        </span>
         {vessel.branch && vessel.branch !== "0" && (
           <span style={{ fontSize: 11, color: T.text, padding: "0px", flexShrink: 0 }}>{vessel.branch}</span>
         )}
