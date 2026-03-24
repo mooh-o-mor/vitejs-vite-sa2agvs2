@@ -17,11 +17,8 @@ function priorityIdx(p: string): number {
 }
 
 export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract, onEditContract }: Props) {
-  // Only contracts for visible vessels
   const vesselIds = new Set(vessels.map(v => v.id));
   const visibleContracts = contracts.filter(c => vesselIds.has(c.vesselId));
-
-  // Legend: only counterparties in visible contracts
   const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
   const colorMap: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
@@ -48,14 +45,11 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
 
       {vessels.map((v,idx) => {
         const vc = contracts.filter(c => c.vesselId===v.id);
-
-        // Split into main row and alt row
         const altGroups = new Set(vc.filter(c => c.altGroup).map(c => c.altGroup!));
         const mainContracts: Contract[] = [];
         const altContracts: Contract[] = [];
 
         vc.filter(c => !c.altGroup).forEach(c => mainContracts.push(c));
-
         altGroups.forEach(g => {
           const group = vc.filter(c => c.altGroup === g).sort((a,b) => priorityIdx(a.priority) - priorityIdx(b.priority));
           if (group.length > 0) mainContracts.push(group[0]);
@@ -118,13 +112,48 @@ function renderBar(
   const isAlt = position === "bottom";
   const isKpOrPlan = c.priority === "kp" || c.priority === "plan";
 
-  const firmEnd = c.firmDays>0 ? addDays(c.start, c.firmDays) : c.end;
-  const firmLeft = (dayOffset(c.start)/totalDays)*100;
-  const firmWidth = (contractDaysGantt(c.start, firmEnd)/totalDays)*100;
-  const hasOption = c.optionDays>0;
-  const optStart = c.firmDays>0 ? addDays(c.start, c.firmDays+1) : null;
-  const optLeft = optStart ? (dayOffset(optStart)/totalDays)*100 : 0;
-  const optWidth = hasOption && optStart ? (contractDaysGantt(optStart, c.end)/totalDays)*100 : 0;
+  const yearStart = new Date(YEAR, 0, 1);
+  const yearEnd = new Date(YEAR, 11, 31);
+  
+  const contractStart = new Date(c.start);
+  const firmEndDate = c.firmDays > 0 ? new Date(addDays(c.start, c.firmDays)) : new Date(c.end);
+  const optionStartDate = c.firmDays > 0 ? new Date(addDays(c.start, c.firmDays + 1)) : null;
+  const contractEnd = new Date(c.end);
+  
+  const displayStart = contractStart < yearStart ? yearStart : contractStart;
+  const displayFirmEnd = firmEndDate > yearEnd ? yearEnd : firmEndDate;
+  
+  // Для опциона
+  let displayOptStart: Date | null = null;
+  let displayOptEnd: Date | null = null;
+  
+  const hasOption = c.optionDays > 0;
+  let showOption = false;
+  
+  if (hasOption && optionStartDate) {
+    displayOptStart = optionStartDate < yearStart ? yearStart : optionStartDate;
+    displayOptEnd = contractEnd > yearEnd ? yearEnd : contractEnd;
+    if (displayOptEnd >= yearStart && displayOptStart <= yearEnd) {
+      showOption = true;
+    }
+  }
+  
+  // Если твёрдая часть не попадает в год, показываем только опцион
+  const showFirm = displayFirmEnd >= yearStart && displayStart <= yearEnd;
+  
+  const firmLeft = showFirm ? (dayOffset(displayStart.toISOString().slice(0,10)) / totalDays) * 100 : 0;
+  const firmWidth = showFirm ? (contractDaysGantt(displayStart.toISOString().slice(0,10), displayFirmEnd.toISOString().slice(0,10)) / totalDays) * 100 : 0;
+  
+  let optLeft = 0;
+  let optWidth = 0;
+  
+  if (showOption && displayOptStart && displayOptEnd) {
+    optLeft = (dayOffset(displayOptStart.toISOString().slice(0,10)) / totalDays) * 100;
+    optWidth = (contractDaysGantt(displayOptStart.toISOString().slice(0,10), displayOptEnd.toISOString().slice(0,10)) / totalDays) * 100;
+  }
+
+  // Если ничего не показываем
+  if (!showFirm && !showOption) return null;
 
   const bgStyle = isAsg
     ? "repeating-linear-gradient(45deg, #dc2626, #dc2626 4px, #ef4444 4px, #ef4444 8px)"
@@ -140,41 +169,43 @@ function renderBar(
 
   return (
     <div key={c.id} style={{ position:"absolute", left:0, right:0, top:0, bottom:0, pointerEvents:"none" }}>
-      <div
-        title={canView ? `${c.counterparty}${priorityBadge}\n${fdate(c.start)} → ${fdate(firmEnd)}` : `${fdate(c.start)} → ${fdate(firmEnd)}`}
-        onClick={e => { e.stopPropagation(); if (canView) onEditContract(c); }}
-        style={{
-          position:"absolute",
-          left:`${firmLeft}%`,
-          width:`${Math.max(firmWidth,0.4)}%`,
-          top: topPx,
-          bottom: bottomPx,
-          background:bgStyle,
-          borderRadius:3,
-          cursor:canView?"pointer":"default",
-          display:"flex", alignItems:"center", justifyContent:"center",
-          overflow:"hidden", fontSize: position === "full" ? 10 : 9,
-          fontWeight:600, color:"#fff",
-          boxShadow:"0 1px 3px rgba(0,0,0,0.2)",
-          pointerEvents:"all",
-          opacity,
-        }}
-      >
-        {canView && (
-          <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>
-            {c.counterparty}
-            {isKpOrPlan && <span style={{ opacity:0.7, fontSize:8 }}> {PRIORITY_LABELS[c.priority]}</span>}
-          </span>
-        )}
-      </div>
-      {hasOption && optStart && (
+      {showFirm && firmWidth > 0 && (
         <div
-          title={canView ? `${c.counterparty} (опцион)${priorityBadge}\n${fdate(optStart)} → ${fdate(c.end)}` : `${fdate(optStart)} → ${fdate(c.end)}`}
+          title={canView ? `${c.counterparty}${priorityBadge}\n${fdate(displayStart.toISOString().slice(0,10))} → ${fdate(displayFirmEnd.toISOString().slice(0,10))}` : `${fdate(displayStart.toISOString().slice(0,10))} → ${fdate(displayFirmEnd.toISOString().slice(0,10))}`}
           onClick={e => { e.stopPropagation(); if (canView) onEditContract(c); }}
           style={{
             position:"absolute",
-            left:`${optLeft}%`,
-            width:`${Math.max(optWidth,0.4)}%`,
+            left:`${Math.max(0, firmLeft)}%`,
+            width:`${Math.max(firmWidth, 0.4)}%`,
+            top: topPx,
+            bottom: bottomPx,
+            background:bgStyle,
+            borderRadius:3,
+            cursor:canView?"pointer":"default",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            overflow:"hidden", fontSize: position === "full" ? 10 : 9,
+            fontWeight:600, color:"#fff",
+            boxShadow:"0 1px 3px rgba(0,0,0,0.2)",
+            pointerEvents:"all",
+            opacity,
+          }}
+        >
+          {canView && firmWidth > 5 && (
+            <span style={{ whiteSpace:"normal", wordBreak:"break-word", lineHeight:"1.2", padding:"0 3px", textAlign:"center" }}>
+              {c.counterparty}
+              {isKpOrPlan && <span style={{ opacity:0.7, fontSize:8 }}> {PRIORITY_LABELS[c.priority]}</span>}
+            </span>
+          )}
+        </div>
+      )}
+      {showOption && displayOptStart && displayOptEnd && optWidth > 0 && (
+        <div
+          title={canView ? `${c.counterparty} (опцион)${priorityBadge}\n${fdate(displayOptStart.toISOString().slice(0,10))} → ${fdate(displayOptEnd.toISOString().slice(0,10))}` : `${fdate(displayOptStart.toISOString().slice(0,10))} → ${fdate(displayOptEnd.toISOString().slice(0,10))}`}
+          onClick={e => { e.stopPropagation(); if (canView) onEditContract(c); }}
+          style={{
+            position:"absolute",
+            left:`${Math.max(0, optLeft)}%`,
+            width:`${Math.max(optWidth, 0.4)}%`,
             top: topPx,
             bottom: bottomPx,
             background:color,
