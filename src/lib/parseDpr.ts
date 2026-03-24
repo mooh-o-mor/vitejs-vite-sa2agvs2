@@ -1,6 +1,7 @@
 import XLSX from "xlsx-js-style";
 import { PORTS } from "./ports";
 
+/* ── Types ── */
 export interface DprSupply {
   type: string;
   amt: string;
@@ -20,33 +21,21 @@ export interface DprVessel {
   note: string;
   supplies: DprSupply[];
   reportDate: Date | null;
-  contract_info?: string;
-  work_period?: string;
 }
 
-export interface DprRow {
-  id: number;
-  vessel_name: string;
-  branch: string;
-  report_date: string;
-  status: string;
-  coord_raw: string;
-  lat: number | null;
-  lng: number | null;
-  note: string;
-  supplies: DprSupply[];
-  contract_info?: string;
-  work_period?: string;
-}
-
+/* ── Status normalizer ── */
 function normalizeStatus(raw: string): { status: string; extra: string } {
   const s = raw.trim();
+
+  // Split on first / or ,
   const sep = s.search(/[\/,]/);
   const firstPart = (sep >= 0 ? s.slice(0, sep) : s).trim();
   const afterSep = sep >= 0 ? s.slice(sep + 1).trim() : "";
+
   const fu = firstPart.toUpperCase();
   let status: string;
   let extraFromFirst = "";
+
   if (fu.startsWith("АСГ")) {
     status = "АСГ";
     extraFromFirst = firstPart.slice(3).trim();
@@ -58,32 +47,57 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
   } else {
     status = firstPart;
   }
+
   const extra = [extraFromFirst, afterSep].filter(Boolean).join(" / ");
   return { status, extra };
 }
 
+/* ── Coordinate parser ── */
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
-  const m1 = s.match(/^(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NС]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВ]/i);
+
+  // DD-MM,M [NSСЮ] DDD-MM,M [EWВЗ]
+  const m1 = s.match(
+    /(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+  );
   if (m1) {
     const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
     const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-  const m2 = s.match(/(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NС]\s*\/?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВ]/i);
+
+  // DD°MM[,M]N / DDD°MM[,M]E  (например: 45°04N/036°32E)
+  const m2 = s.match(
+    /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+  );
   if (m2) {
     const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
     const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-  const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
+
+  // DD MM,M [N] DDD MM,M [E]  (пробел вместо дефиса: 55 31,4N 020 08,5E)
+const m3 = s.match(
+  /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+);
+if (m3) {
+  const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
+  const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
+  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+}
+  // Port lookup
+  const low = s
+    .toLowerCase()
+    .replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "")
+    .trim();
   for (const [k, c] of Object.entries(PORTS)) {
     if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
   }
   return null;
 }
 
+/* ── Excel date helpers ── */
 function xlSerialToDate(n: number): Date {
   return new Date(Math.round((n - 25569) * 86400 * 1000));
 }
@@ -102,10 +116,12 @@ function fmtDate(v: any): string {
   return s;
 }
 
+/* ── MSG → XLSX extraction ── */
 export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
   const u8 = new Uint8Array(buf);
   let best: any[][] | null = null;
   let bestN = 0;
+
   const tryParse = (start: number) => {
     try {
       const end = Math.min(start + 800000, buf.byteLength);
@@ -113,23 +129,32 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
       const txt = JSON.stringify(rows.slice(0, 12));
-      if (/[\u0400-\u04ff]/.test(txt) && rows.some((r: any) => r && r.some((v: any) => v && String(v).includes("Название судна"))) && rows.length > bestN) {
+      if (
+        /[\u0400-\u04ff]/.test(txt) &&
+        rows.some((r) => r && r.some((v: any) => v && String(v).includes("Название судна"))) &&
+        rows.length > bestN
+      ) {
         bestN = rows.length;
         best = rows;
       }
     } catch (_) {}
   };
+
   for (let i = 0; i < u8.length - 4; i++) {
-    if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 0x03 && u8[i + 3] === 0x04) tryParse(i);
+    if (u8[i] === 0x50 && u8[i + 1] === 0x4b && u8[i + 2] === 0x03 && u8[i + 3] === 0x04)
+      tryParse(i);
   }
   if (best) return best;
+
   for (let i = 0; i < u8.length - 4; i++) {
-    if (u8[i] === 0xd0 && u8[i + 1] === 0xcf && u8[i + 2] === 0x11 && u8[i + 3] === 0xe0) tryParse(i);
+    if (u8[i] === 0xd0 && u8[i + 1] === 0xcf && u8[i + 2] === 0x11 && u8[i + 3] === 0xe0)
+      tryParse(i);
   }
   return best;
 }
 
-export function parseFilial(rows: any[][], branchMap?: Map<string, string>): DprVessel[] {
+/* ── Filial data parser ── */
+export function parseFilial(rows: any[][]): DprVessel[] {
   let hRow = -1;
   for (let i = 0; i < Math.min(15, rows.length); i++) {
     if (rows[i] && rows[i].some((v: any) => v && String(v).includes("Название судна"))) {
@@ -138,8 +163,11 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     }
   }
   if (hRow < 0) return [];
+
   const H = rows[hRow];
-  const ci = (...kw: string[]) => H.findIndex((v: any) => v && kw.some((k) => String(v).includes(k)));
+  const ci = (...kw: string[]) =>
+    H.findIndex((v: any) => v && kw.some((k) => String(v).includes(k)));
+
   const C = {
     name: ci("Название судна"),
     fil: ci("Филиал"),
@@ -153,7 +181,11 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     del: ci("поставки"),
     note: ci("Примечание"),
   };
-  if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) C.pos = C.stat + 1;
+
+  if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
+    C.pos = C.stat + 1;
+  }
+
   let date: Date | null = null;
   for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
     for (const v of rows[i] || []) {
@@ -176,24 +208,34 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
     }
   }
+
   const vessels: DprVessel[] = [];
   let i = hRow + 1;
+
   while (i < rows.length) {
     const row = rows[i];
     if (!row) { i++; continue; }
+
     const name = C.name >= 0 ? row[C.name] : null;
     const stat = C.stat >= 0 ? row[C.stat] : null;
-    if (!name || !String(name).trim() || String(name).includes("Исполни") || String(name).includes("беспеч")) { i++; continue; }
+
+    if (!name || !String(name).trim() ||
+      String(name).includes("Исполни") ||
+      String(name).includes("беспеч")) { i++; continue; }
+
     const statStr = stat ? String(stat).trim() : "";
     if (!statStr || statStr === "0") { i += 5; continue; }
+
     const limVal = C.lim >= 0 ? row[C.lim] : null;
     if (typeof limVal === "number" && limVal > 0 && limVal < 43831) { i += 5; continue; }
     if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
+
     let staleRow = false;
     for (const cell of row) {
       if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
     }
     if (staleRow) { i += 5; continue; }
+
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
@@ -215,25 +257,18 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
         });
       }
     }
+
     const coordRaw = coordParts.join(" ").trim();
     const coords = parseCoord(coordRaw);
+
+    // Normalize status — split contract/extra info out of status field
     const { status: cleanStatus, extra: statusExtra } = normalizeStatus(statStr);
     const rawNote = C.note >= 0 && row[C.note] ? String(row[C.note]).trim() : "";
     const combinedNote = [statusExtra, rawNote].filter(Boolean).join(" / ");
-    let branch = C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "";
-    if (!branch && branchMap) {
-      const vesselNameClean = String(name).trim().toUpperCase();
-      const fromMap = branchMap.get(vesselNameClean);
-      if (fromMap) branch = fromMap;
-      else {
-        for (const [key, val] of branchMap.entries()) {
-          if (vesselNameClean.includes(key) || key.includes(vesselNameClean)) { branch = val; break; }
-        }
-      }
-    }
+
     vessels.push({
-      name: String(name).trim(),
-      branch,
+  name: String(name).trim().replace(/\s+/g, " "),
+      branch: C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "",
       status: cleanStatus,
       coordRaw,
       lat: coords ? coords[0] : null,
@@ -241,19 +276,20 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       note: combinedNote,
       supplies,
       reportDate: date,
-      contract_info: "",
-      work_period: "",
     });
+
     i += 5;
   }
   return vessels;
 }
 
+/* ── EML → XLSX extraction ── */
 async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
   const parts = text.split(/\r?\n\r?\n/);
   for (let i = 0; i < parts.length; i++) {
     const prev = i > 0 ? parts[i - 1] : "";
-    if (/content-transfer-encoding:\s*base64/i.test(prev) || (/attachment/i.test(prev) && /base64/i.test(prev))) {
+    if (/content-transfer-encoding:\s*base64/i.test(prev) ||
+        (/attachment/i.test(prev) && /base64/i.test(prev))) {
       const b64 = parts[i].replace(/[\r\n\s]/g, "");
       try {
         const binary = atob(b64);
@@ -262,7 +298,9 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
         const wb = XLSX.read(bytes, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-        if (rows.some(r => r && r.some((v: any) => v && String(v).includes("Название судна")))) return rows;
+        if (rows.some(r => r && r.some((v: any) => v && String(v).includes("Название судна")))) {
+          return rows;
+        }
       } catch (_) {}
     }
   }
@@ -281,9 +319,11 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
   return null;
 }
 
-export async function parseMsgFiles(files: File[], branchMap?: Map<string, string>): Promise<{ vessels: DprVessel[]; date: Date | null }> {
+/* ── Full pipeline: File[] → DprVessel[] ── */
+export async function parseMsgFiles(files: File[]): Promise<{ vessels: DprVessel[]; date: Date | null }> {
   let reportDate: Date | null = null;
   const all: DprVessel[] = [];
+
   for (const f of files) {
     try {
       let rows: any[][] | null = null;
@@ -295,7 +335,7 @@ export async function parseMsgFiles(files: File[], branchMap?: Map<string, strin
         rows = await extractXlsx(buf);
       }
       if (!rows) continue;
-      const vs = parseFilial(rows, branchMap);
+      const vs = parseFilial(rows);
       if (vs.length) {
         if (!reportDate && vs[0].reportDate) reportDate = vs[0].reportDate;
         all.push(...vs);
@@ -304,11 +344,14 @@ export async function parseMsgFiles(files: File[], branchMap?: Map<string, strin
       console.error("Parse error:", f.name, e);
     }
   }
+
   const map = new Map<string, DprVessel>();
   all.forEach((v) => {
     const key = v.name.toUpperCase().trim();
     const existing = map.get(key);
-    if (!existing || (!existing.branch && v.branch) || (!existing.lat && v.lat)) map.set(key, v);
+    if (!existing || (!existing.branch && v.branch) || (!existing.lat && v.lat)) {
+      map.set(key, v);
+    }
   });
   return { vessels: Array.from(map.values()), date: reportDate };
 }
