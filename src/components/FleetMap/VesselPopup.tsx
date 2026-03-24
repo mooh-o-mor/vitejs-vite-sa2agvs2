@@ -1,6 +1,7 @@
 import { T } from "../../lib/types";
 import type { DprSupply, DprRow } from "../../lib/parseDpr";
 import { STATUS_HEADER_BG } from "./mapIcons";
+import { formatVesselName, formatVesselType } from "../../lib/utils";
 
 interface Props {
   vessel: DprRow;
@@ -48,10 +49,12 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
               padding: "0px",
               flexShrink: 0,
             }}>
-              {vesselType}
+              {formatVesselType(vesselType)}
             </span>
           )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{vessel.vessel_name}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+            {formatVesselName(vessel.vessel_name)}
+          </span>
           {vessel.branch && (
             <span style={{ 
               fontSize: 11, 
@@ -93,20 +96,19 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                       {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
                         <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
                       ))}
-                    </tr>
-                  </thead>
+                    </thead>
                   <tbody>
                     {(vessel.supplies as DprSupply[]).map((s, i) => (
                       <tr key={i}>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
-                      </tr>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}<\/td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}<\/td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}<\/td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}<\/td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}<\/td>
+                      \);
                     ))}
                   </tbody>
-                </table>
+                \(
               </>
             )}
           </>
