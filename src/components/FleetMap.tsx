@@ -493,75 +493,76 @@ export function FleetMap({
           </div>
         )}
 
-        {selVessel && (() => {
-          const key = selVessel.vessel_name.toLowerCase().trim();
-          const imo = imoMap.get(key) || "";
-          const vesselType = getVesselType(selVessel.vessel_name);
-          const c = cls(selVessel.status);
-          const powerMatch = /(БЭП|СЭП)/i.exec(selVessel.coord_raw || "");
-          const power = powerMatch ? powerMatch[1].toUpperCase() : null;
-          const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
-          const coordDisplay = (selVessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
-          return (
-            <div style={{ position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36, width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, background: STATUS_HEADER_BG[c] }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    {vesselType && <span style={{ fontSize: 10, color: T.text2, fontFamily: "monospace", fontWeight: 700, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{formatVesselType(vesselType)}</span>}
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>{formatVesselName(selVessel.vessel_name)}</span>
-                    <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: STATUS_BG[c], color: CLR[c], flexShrink: 0 }}>{shortStatus(selVessel.status)}</span>
-                    {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
-                  </div>
-                  {selVessel.branch && <div style={{ fontSize: 11, color: T.amber, marginTop: 2 }}>{selVessel.branch}</div>}
-                </div>
-                <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
+{selVessel && (() => {
+  const key = selVessel.vessel_name.toLowerCase().trim();
+  const imo = imoMap.get(key) || "";
+  const vesselType = getVesselType(selVessel.vessel_name);
+  const c = cls(selVessel.status);
+  const powerMatch = /(БЭП|СЭП)/i.exec(selVessel.coord_raw || "");
+  const power = powerMatch ? powerMatch[1].toUpperCase() : null;
+  const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
+  const coordDisplay = (selVessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
+  return (
+    <div style={{ position: "absolute", right: isMobile ? 6 : 14, bottom: isMobile ? 6 : 36, width: isMobile ? "calc(100% - 12px)" : 320, maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0, background: STATUS_HEADER_BG[c] }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {vesselType && <span style={{ fontSize: 10, color: T.text2, fontFamily: "monospace", fontWeight: 700, background: "#f0f0f0", padding: "2px 6px", borderRadius: 3 }}>{formatVesselType(vesselType)}</span>}
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{formatVesselName(selVessel.vessel_name)}</span>
+            <span style={{ padding: "1px 6px", borderRadius: 3, fontFamily: "monospace", fontSize: 10, fontWeight: 700, background: STATUS_BG[c], color: CLR[c], flexShrink: 0 }}>{shortStatus(selVessel.status)}</span>
+            {imo && <span style={{ fontSize: 10, color: T.text3, fontFamily: "monospace", flexShrink: 0 }}>IMO {imo}</span>}
+          </div>
+          {selVessel.branch && <div style={{ fontSize: 11, color: T.amber, marginTop: 2 }}>{selVessel.branch}</div>}
+        </div>
+        <button onClick={() => setSelVessel(null)} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
+      </div>
+      <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+          <span style={{ color: T.text2 }}>Местоположение</span>
+          <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 180 }}>{coordDisplay || "—"}</span>
+        </div>
+        {canView && (
+          <>
+            {selVessel.note && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                <span style={{ color: T.text2 }}>Примечание</span>
+                <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 180 }}>{selVessel.note}</span>
               </div>
-              <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
-                  <span style={{ color: T.text2 }}>Местоположение</span>
-                  <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 180 }}>{coordDisplay || "—"}</span>
+            )}
+            {(selVessel.supplies && selVessel.supplies.length > 0) && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
+                  <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
+                  {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
                 </div>
-                {canView && (
-                  <>
-                    {selVessel.note && (
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
-                        <span style={{ color: T.text2 }}>Примечание</span>
-                        <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 180 }}>{selVessel.note}</span>
-                      </div>
-                    )}
-                    {(selVessel.supplies && selVessel.supplies.length > 0) && (
-                      <>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
-                          <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
-                          {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
-                        </div>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                          <thead>
-                            <tr>
-                              {["Вид", "Остаток", "%", "Расход", "До"].map(h => 
-                                <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
-                              )}
-                            </thead>
-                          <tbody>
-                            {(selVessel.supplies as DprSupply[]).map((s, i) => (
-                              <tr key={i}>
-                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
-                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
-                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
-                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
-                                <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })()}
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      {["Вид", "Остаток", "%", "Расход", "До"].map(h => 
+                        <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selVessel.supplies as DprSupply[]).map((s, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+})()}
       </div>
 
       <style>{`
