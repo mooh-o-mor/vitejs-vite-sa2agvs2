@@ -231,8 +231,12 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
         }
       }
     }
+    
+    // Нормализация названия: нижний регистр, убираем лишние пробелы
+    const normalizedName = String(name).trim().toLowerCase().replace(/\s+/g, ' ');
+    
     vessels.push({
-      name: String(name).trim(),
+      name: normalizedName,
       branch,
       status: cleanStatus,
       coordRaw,
