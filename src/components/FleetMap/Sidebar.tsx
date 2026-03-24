@@ -74,6 +74,21 @@ export function Sidebar({
 
   if (!showSidebar) return null;
 
+  const getVesselType = (vesselName: string): string => {
+    const normalized = vesselName.toUpperCase().trim();
+    let type = typeMap.get(normalized);
+    if (type) return type;
+    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+    type = typeMap.get(withoutPrefix);
+    if (type) return type;
+    for (const [key, val] of typeMap.entries()) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        return val;
+      }
+    }
+    return "";
+  };
+
   return (
     <div style={{ width: 360, minWidth: 360, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
       {isMobile && (
@@ -121,7 +136,7 @@ export function Sidebar({
 
       <div style={{ flex: 1, overflowY: "auto" }}>
         {filteredVessels.map((v) => {
-          const vesselType = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+          const vesselType = getVesselType(v.vessel_name);
           const isSel = selectedVessel?.vessel_name === v.vessel_name;
           return (
             <VesselListItem

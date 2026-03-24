@@ -5,27 +5,12 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
-import { parseMsgFiles, type DprSupply } from "../../lib/parseDpr";
+import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
 import { T, typeOrder } from "../../lib/types";
 import { getType } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
-
-interface DprRow {
-  id: number;
-  vessel_name: string;
-  branch: string;
-  report_date: string;
-  status: string;
-  coord_raw: string;
-  lat: number | null;
-  lng: number | null;
-  note: string;
-  supplies: DprSupply[];
-  contract_info?: string;
-  work_period?: string;
-}
 
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
@@ -54,7 +39,6 @@ export function FleetMap({
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
-  const [imoMap, setImoMap] = useState<Map<string, string>>(new Map());
   const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -77,26 +61,22 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Load IMO + type maps from vessels table
+  // Загрузка типов судов из таблицы vessels
   useEffect(() => {
-    supabase.from("vessels").select("name, imo").then(({ data }) => {
+    supabase.from("vessels").select("name").then(({ data }) => {
       if (data) {
-        const m = new Map<string, string>();
         const t = new Map<string, string>();
         data.forEach((v: any) => {
           const full = v.name.toUpperCase().trim();
           const typeStr = getType(v.name, typeOrder);
-          const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-          if (v.imo) { 
-            m.set(full, v.imo); 
-            m.set(short, v.imo);
-          }
-          if (typeStr) { 
-            t.set(full, typeStr); 
-            t.set(short, typeStr);
+          if (typeStr) {
+            t.set(full, typeStr);
+            const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+            if (short !== full) {
+              t.set(short, typeStr);
+            }
           }
         });
-        setImoMap(m);
         setTypeMap(t);
       }
     });
@@ -180,14 +160,29 @@ export function FleetMap({
     setLoading(false);
   }
 
+  const getVesselType = (vesselName: string): string => {
+    const normalized = vesselName.toUpperCase().trim();
+    let type = typeMap.get(normalized);
+    if (type) return type;
+    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+    type = typeMap.get(withoutPrefix);
+    if (type) return type;
+    for (const [key, val] of typeMap.entries()) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        return val;
+      }
+    }
+    return "";
+  };
+
   const allTypes = useMemo(() => {
     const types = new Set<string>();
     vessels.forEach(v => {
-      const t = typeMap.get(v.vessel_name.toUpperCase().trim()) || "";
+      const t = getVesselType(v.vessel_name);
       if (t) types.add(t);
     });
     return ["Все", ...Array.from(types).sort()];
-  }, [vessels, typeMap]);
+  }, [vessels, getVesselType]);
 
   const allBranches = useMemo(() => {
     const branches = new Set<string>();
@@ -201,18 +196,17 @@ export function FleetMap({
 
   const filtered = useMemo(() => {
     return vessels.filter(v => {
-      const typeOk = filterType === "Все" || typeMap.get(v.vessel_name.toUpperCase().trim()) === filterType;
+      const typeOk = filterType === "Все" || getVesselType(v.vessel_name) === filterType;
       const branchOk = filterBranch === "Все" || v.branch === filterBranch;
       const statusOk = filterStatus === "Все" || cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem");
       return typeOk && branchOk && statusOk;
     });
-  }, [vessels, filterType, filterBranch, filterStatus, typeMap]);
+  }, [vessels, filterType, filterBranch, filterStatus, getVesselType]);
 
   const searchFiltered = useMemo(() => {
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
   }, [filtered, search]);
 
-  // Обновляем карту при изменении фильтров
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
@@ -373,8 +367,7 @@ export function FleetMap({
         {selVessel && (
           <VesselPopup
             vessel={selVessel}
-            vesselType={typeMap.get(selVessel.vessel_name.toUpperCase().trim()) || ""}
-            imo={imoMap.get(selVessel.vessel_name.toUpperCase().trim()) || ""}
+            vesselType={getVesselType(selVessel.vessel_name)}
             canView={canView}
             onClose={() => setSelVessel(null)}
           />
