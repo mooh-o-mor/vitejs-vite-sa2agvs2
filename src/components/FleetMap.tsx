@@ -174,14 +174,27 @@ export function FleetMap({
   }, []);
 
   const getVesselType = (vesselName: string): string => {
-    const normalized = vesselName.toLowerCase().trim().replace(/\s+/g, ' ');
-    let type = typeMap.get(normalized);
-    if (type) return type;
-    const withoutPrefix = normalized.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/, '');
-    type = typeMap.get(withoutPrefix);
-    if (type) return type;
-    return "";
-  };
+  const normalized = vesselName.toLowerCase().trim().replace(/\s+/g, ' ');
+  console.log('🔍 Поиск типа для:', normalized);
+  console.log('📋 typeMap keys:', Array.from(typeMap.keys()).filter(k => k.includes('капитан')));
+  
+  let type = typeMap.get(normalized);
+  if (type) {
+    console.log('✅ Найден тип:', type);
+    return type;
+  }
+  
+  const withoutPrefix = normalized.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/, '');
+  console.log('🔸 Без префикса:', withoutPrefix);
+  type = typeMap.get(withoutPrefix);
+  if (type) {
+    console.log('✅ Найден тип по короткому ключу:', type);
+    return type;
+  }
+  
+  console.log('❌ Тип не найден');
+  return "";
+};
 
   useEffect(() => {
     if (externalFiles && externalFiles.length > 0 && isAdmin) {
