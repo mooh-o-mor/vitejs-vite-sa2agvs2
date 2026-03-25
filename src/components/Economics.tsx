@@ -6,7 +6,7 @@ interface Props {
   vessels: Vessel[];
   contracts: Contract[];
 }
-
+//куцый вариант
 export function Economics({ vessels, contracts }: Props) {
   const cpKeys = [...new Set(contracts.map(c => cpShortKey(c.counterparty)))];
   const colorMap: Record<string, string> = Object.fromEntries(
