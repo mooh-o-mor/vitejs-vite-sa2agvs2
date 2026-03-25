@@ -21,6 +21,7 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
+
 export function FleetMap({
   isAdmin,
   canView,
