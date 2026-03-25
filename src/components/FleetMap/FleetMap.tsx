@@ -205,6 +205,7 @@ export function FleetMap({
   }, [filtered, search]);
 
   useEffect(() => {
+     console.log('Redrawing markers, filtered length:', filtered.length);
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
     const bounds: L.LatLng[] = [];
