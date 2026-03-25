@@ -7,6 +7,7 @@ import { FilterBar } from "./FilterBar";
 import { ReportTable } from "./ReportTable";
 import { exportToExcel } from "./exportExcel";
 
+
 export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
