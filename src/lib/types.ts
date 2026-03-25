@@ -1,6 +1,7 @@
 import type { DprSupply } from "../../lib/parseDpr";
 import { getPower as getPowerUtil } from "../../lib/utils";
 
+//экспорт
 export interface DprRow {
   id?: number;
   vessel_name: string;
