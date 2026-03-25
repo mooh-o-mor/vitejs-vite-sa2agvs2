@@ -43,6 +43,10 @@ const tdBase: React.CSSProperties = {
 };
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
+  console.log('ReportTable render, formatVesselName:', typeof formatVesselName);
+  console.log('First vessel name:', vessels[0]?.vessel_name);
+  console.log('Formatted:', vessels[0] ? formatVesselName(vessels[0].vessel_name) : 'none');
+
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -60,8 +64,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
-          </tr>
-        </thead>
+           </thead>
         <tbody>
           {vessels.map((v, i) => {
             const sc = statusCls(v.status);
@@ -87,7 +90,10 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
               <tr key={v.vessel_name} style={{ background: rowBg }}>
                 <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
-                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)}</td>
+                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
+                  {formatVesselName(v.vessel_name)}
+                  <span style={{ fontSize: 9, color: "red", marginLeft: 5 }}>(было: {v.vessel_name})</span>
+                </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
                 <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
                 {canView && (
