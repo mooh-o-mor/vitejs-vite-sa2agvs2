@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { MONTHS, COLORS, SPECIAL_COLORS, YEAR, totalDays, T, PRIORITY_LABELS, PRIORITY_ORDER } from "../lib/types";
-import { cpKey, dayOffset, contractDaysGantt, fdate, addDays, formatVesselName } from "../lib/utils";
+import { cpKey, dayOffset, contractDaysGantt, fdate, addDays, formatVesselName, formatVesselType, getType } from "../lib/utils";
 
 interface Props {
   vessels: Vessel[];
@@ -58,11 +58,13 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
 
         const hasAlt = altContracts.length > 0;
         const rowHeight = hasAlt ? 52 : 28;
+        
+        const vesselType = getType(v.name, ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС","АСС","БП"]);
 
         return (
           <div key={v.id} style={{ display:"flex", alignItems:"center", marginBottom:3 }}>
-            <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, paddingLeft:4, textAlign:"left", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${formatVesselName(v.name)}${v.branch ? ` (${v.branch})` : ""}`}>
-              {formatVesselName(v.name)}
+            <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, paddingLeft:4, textAlign:"left", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${formatVesselType(vesselType)} ${formatVesselName(v.name)}${v.branch ? ` (${v.branch})` : ""}`}>
+              {vesselType && <span style={{ fontFamily:"monospace", fontWeight:500 }}>{formatVesselType(vesselType)}</span>} {formatVesselName(v.name)}
               {v.branch && <span style={{ color:T.amber, marginLeft:4, fontSize:10 }}>{v.branch}</span>}
             </div>
             <div
