@@ -9,7 +9,6 @@ export function getType(name: string, order: string[]): string {
   if (upper.includes("БП")) return "БП";
   return "";
 }
-
 // Форматирует название судна: первая буква каждого слова заглавная
 export function formatVesselName(name: string): string {
   if (!name) return "";
