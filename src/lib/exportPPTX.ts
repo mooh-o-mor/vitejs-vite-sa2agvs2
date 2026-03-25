@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { YEAR, MONTHS, COLORS, SPECIAL_COLORS, totalDays, yearStart, yearEnd } from "../lib/types";
-import { cpKey, contractDays, addDays, fmoney } from "../lib/utils";
+import { cpKey, cpShortKey, contractDays, addDays, fmoney } from "../lib/utils";
 
 export async function exportToPPTX(
   vesselsToExport: Vessel[],
@@ -19,12 +19,12 @@ export async function exportToPPTX(
 
   const filteredContracts = filterCp === "Все"
     ? contractsToExport
-    : contractsToExport.filter(c => cpKey(c.counterparty) === filterCp);
+    : contractsToExport.filter(c => cpShortKey(c.counterparty) === filterCp);
 
   const vesselIds = new Set(vesselsToExport.map(v => v.id));
   const visibleContracts = filteredContracts.filter(c => vesselIds.has(c.vesselId));
 
-  // Dynamic title
+  // Динамический заголовок
   const parts: string[] = [];
   if (filterBranches && filterBranches.length > 0) parts.push(filterBranches.join(", "));
   if (filterTypes && filterTypes.length > 0) parts.push(filterTypes.join(", "));
@@ -37,7 +37,8 @@ export async function exportToPPTX(
 
   const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
 
-  const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
+  // Используем cpShortKey для группировки и цвета
+  const cpKeys = [...new Set(visibleContracts.map(c => cpShortKey(c.counterparty)))];
   const colorMapPptx: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, (SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]).replace("#","")])
   );
@@ -59,7 +60,7 @@ export async function exportToPPTX(
     if (v.branch) slide.addText(v.branch, { x:0.12, y:y+0.01, w:LEFT-0.15, h:ROW_H-0.02, fontSize:5.5, color:"d97706", fontFace:"Arial", valign:"middle", align:"right" });
 
     vc.forEach(c => {
-      const key = cpKey(c.counterparty);
+      const key = cpShortKey(c.counterparty);
       const color = colorMapPptx[key]||"1D4ED8";
       const firmEnd = c.firmDays>0 ? addDays(c.start, c.firmDays) : c.end;
       const firmS = new Date(Math.max(new Date(c.start).getTime(), yearStart.getTime()));
