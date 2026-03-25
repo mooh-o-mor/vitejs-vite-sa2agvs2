@@ -23,7 +23,8 @@ export function Economics({ vessels, contracts }: Props) {
       {vessels.map(v => {
         // Определяем тип судна
         const vesselType = getType(v.name, ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС","АСС","БП"]);
-        const formattedName = formatVesselName(v.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim());
+        const nameWithoutPrefix = v.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+        const formattedName = formatVesselName(nameWithoutPrefix);
         const formattedType = formatVesselType(vesselType);
         
         const ec = contracts.filter(c => c.vesselId===v.id).map(c => {
@@ -49,16 +50,17 @@ export function Economics({ vessels, contracts }: Props) {
                       {["Контрагент","Начало","Конец","Тв.дней","Опц.дней","Всего","Ставка/сут","Моб","Демоб","Выручка"].map(h => (
                         <th key={h} style={{ textAlign:"left", padding:"4px 6px" }}>{h}</th>
                       ))}
-                    </thead>
+                    </tr>
+                  </thead>
                   <tbody>
                     {ec.map((c,i) => {
                       const shortKey = cpShortKey(c.counterparty);
                       return (
                         <tr key={c.id} style={{ borderBottom:`1px solid ${T.border2}`, background:i%2===0?T.bg2:T.bg3 }}>
                           <td style={{ padding:"4px 6px" }}>
-                            <span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:colorMap[shortKey]||"#888", marginRight:4 }}/>
+                            <span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:colorMap[shortKey]||"#888", marginRight:4 }} />
                             {c.counterparty}
-                           </td>
+                          </td>
                           <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.start)}</td>
                           <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.end)}</td>
                           <td style={{ padding:"4px 6px" }}>{c.firmDays||"—"}</td>
@@ -72,7 +74,7 @@ export function Economics({ vessels, contracts }: Props) {
                       );
                     })}
                   </tbody>
-                 </table>
+                </table>
                 <div style={{ textAlign:"right", marginTop:5, fontSize:12, fontWeight:700, color:T.green }}>Итого: {fmoney(tot)}</div>
               </>
             )}
