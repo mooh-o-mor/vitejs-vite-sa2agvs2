@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
+  //
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
     "leaflet": "^1.9.4",
