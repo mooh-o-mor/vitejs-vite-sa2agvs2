@@ -42,12 +42,6 @@ const tdBase: React.CSSProperties = {
   verticalAlign: "top",
 };
 
-{vessels.map((v, i) => {
-  console.log('raw name:', v.vessel_name);
-  console.log('formatted name:', formatVesselName(v.vessel_name));
-  // ... остальной код
-})}
-
 export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
