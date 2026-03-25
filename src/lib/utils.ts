@@ -13,9 +13,13 @@ export function getType(name: string, order: string[]): string {
 // Форматирует название судна: первая буква каждого слова заглавная
 export function formatVesselName(name: string): string {
   if (!name) return "";
-  return name.split(" ").map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  ).join(" ");
+  return name
+    .trim()
+    .split(/\s+/)
+    .map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    )
+    .join(" ");
 }
 
 // Форматирует тип судна: все буквы заглавные
