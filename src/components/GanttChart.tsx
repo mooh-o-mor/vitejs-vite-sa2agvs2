@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { MONTHS, COLORS, SPECIAL_COLORS, YEAR, totalDays, T, PRIORITY_LABELS, PRIORITY_ORDER } from "../lib/types";
-import { cpKey, dayOffset, contractDaysGantt, fdate, addDays, formatVesselName, formatVesselType, getType } from "../lib/utils";
+import { cpKey, cpShortKey, dayOffset, contractDaysGantt, fdate, addDays, formatVesselName, formatVesselType, getType } from "../lib/utils";
 
 interface Props {
   vessels: Vessel[];
@@ -19,7 +19,9 @@ function priorityIdx(p: string): number {
 export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract, onEditContract }: Props) {
   const vesselIds = new Set(vessels.map(v => v.id));
   const visibleContracts = contracts.filter(c => vesselIds.has(c.vesselId));
-  const cpKeys = [...new Set(visibleContracts.map(c => cpKey(c.counterparty)))];
+  
+  // Для легенды — короткое название (без скобок)
+  const cpKeys = [...new Set(visibleContracts.map(c => cpShortKey(c.counterparty)))];
   const colorMap: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
   );
@@ -113,9 +115,10 @@ function renderBar(
   onEditContract: (c: Contract) => void,
   position: "full" | "top" | "bottom"
 ) {
-  const key = cpKey(c.counterparty);
-  const color = colorMap[key]||COLORS[0];
-  const isAsg = key === "АСГ";
+  // Для цвета используем короткое название (cpShortKey)
+  const shortKey = cpShortKey(c.counterparty);
+  const color = colorMap[shortKey] || COLORS[0];
+  const isAsg = shortKey === "АСГ";
   const isAlt = position === "bottom";
   const isKpOrPlan = c.priority === "kp" || c.priority === "plan";
 
