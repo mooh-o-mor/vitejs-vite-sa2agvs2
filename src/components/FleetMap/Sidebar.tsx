@@ -90,7 +90,6 @@ export function Sidebar({
   };
 
   const padding = isMobile ? 8 : 10;
-  const fontSize = isMobile ? 11 : 12;
 
   return (
     <div style={{ width: isMobile ? '85vw' : 360, minWidth: isMobile ? '85vw' : 360, maxWidth: isMobile ? '85vw' : 360, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
