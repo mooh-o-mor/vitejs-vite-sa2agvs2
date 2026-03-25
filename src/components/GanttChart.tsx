@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { MONTHS, COLORS, SPECIAL_COLORS, YEAR, totalDays, T, PRIORITY_LABELS, PRIORITY_ORDER } from "../lib/types";
-import { cpKey, cpShortKey, dayOffset, contractDaysGantt, fdate, addDays, formatVesselName, formatVesselType, getType } from "../lib/utils";
+import { cpShortKey, dayOffset, contractDaysGantt, fdate, addDays, formatVesselName, formatVesselType, getType } from "../lib/utils";
 
 interface Props {
   vessels: Vessel[];
@@ -20,7 +20,6 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
   const vesselIds = new Set(vessels.map(v => v.id));
   const visibleContracts = contracts.filter(c => vesselIds.has(c.vesselId));
   
-  // Для легенды — короткое название (без скобок)
   const cpKeys = [...new Set(visibleContracts.map(c => cpShortKey(c.counterparty)))];
   const colorMap: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
@@ -61,9 +60,7 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
         const hasAlt = altContracts.length > 0;
         const rowHeight = hasAlt ? 52 : 28;
         
-        // Определяем тип судна
         const vesselType = getType(v.name, ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС","АСС","БП"]);
-        // Убираем префикс из названия
         const nameWithoutPrefix = v.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
         const formattedName = formatVesselName(nameWithoutPrefix);
         const formattedType = formatVesselType(vesselType);
@@ -115,7 +112,6 @@ function renderBar(
   onEditContract: (c: Contract) => void,
   position: "full" | "top" | "bottom"
 ) {
-  // Для цвета используем короткое название (cpShortKey)
   const shortKey = cpShortKey(c.counterparty);
   const color = colorMap[shortKey] || COLORS[0];
   const isAsg = shortKey === "АСГ";

@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { COLORS, SPECIAL_COLORS, T } from "../lib/types";
-import { cpKey, cpShortKey, contractDays, fmoney, fdate, formatVesselName, formatVesselType, getType } from "../lib/utils";
+import { cpShortKey, contractDays, fmoney, fdate, formatVesselName, formatVesselType, getType } from "../lib/utils";
 
 interface Props {
   vessels: Vessel[];
@@ -8,7 +8,6 @@ interface Props {
 }
 
 export function Economics({ vessels, contracts }: Props) {
-  // Для цвета и группировки используем короткое название (до скобки)
   const cpKeys = [...new Set(contracts.map(c => cpShortKey(c.counterparty)))];
   const colorMap: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
@@ -21,7 +20,6 @@ export function Economics({ vessels, contracts }: Props) {
   return (
     <div>
       {vessels.map(v => {
-        // Определяем тип судна
         const vesselType = getType(v.name, ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС","АСС","БП"]);
         const nameWithoutPrefix = v.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
         const formattedName = formatVesselName(nameWithoutPrefix);
@@ -50,8 +48,7 @@ export function Economics({ vessels, contracts }: Props) {
                       {["Контрагент","Начало","Конец","Тв.дней","Опц.дней","Всего","Ставка/сут","Моб","Демоб","Выручка"].map(h => (
                         <th key={h} style={{ textAlign:"left", padding:"4px 6px" }}>{h}</th>
                       ))}
-                    </tr>
-                  </thead>
+                    </thead>
                   <tbody>
                     {ec.map((c,i) => {
                       const shortKey = cpShortKey(c.counterparty);
@@ -60,7 +57,7 @@ export function Economics({ vessels, contracts }: Props) {
                           <td style={{ padding:"4px 6px" }}>
                             <span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:colorMap[shortKey]||"#888", marginRight:4 }} />
                             {c.counterparty}
-                          </td>
+                           </td>
                           <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.start)}</td>
                           <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.end)}</td>
                           <td style={{ padding:"4px 6px" }}>{c.firmDays||"—"}</td>
