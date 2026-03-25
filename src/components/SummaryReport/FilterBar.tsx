@@ -44,12 +44,25 @@ export function FilterBar({
   onSortBy,
 }: Props) {
   const statusItems = ["АСГ", "АСД", "РЕМ"];
+  const statusKeys = ["asg", "asd", "rem"];
 
   return (
     <div style={{ background: T.bg3, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
       {allTypes.length > 0 && filterRow("Тип судна", allTypes, filterTypes, onToggleType)}
       {allBranches.length > 0 && filterRow("Филиал", allBranches, filterBranches, onToggleBranch)}
-      {filterRow("Статус", statusItems, filterStatuses, onToggleStatus)}
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>Статус:</span>
+        <button onClick={() => onToggleStatus("Все")} style={btnStyle(filterStatuses.length === 0, true)}>Все</button>
+        {statusItems.map((label, idx) => (
+          <button
+            key={label}
+            onClick={() => onToggleStatus(label)}
+            style={btnStyle(filterStatuses.includes(statusKeys[idx]))}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>Сортировка:</span>
         {[

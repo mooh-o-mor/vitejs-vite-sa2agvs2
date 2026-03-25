@@ -7,7 +7,6 @@ import { FilterBar } from "./FilterBar";
 import { ReportTable } from "./ReportTable";
 import { exportToExcel } from "./exportExcel";
 
-
 export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
@@ -44,7 +43,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
       supabase.from("vessels").select("name"),
     ]);
     
-    // Строим карту типов (case-insensitive)
     const t = new Map<string, string>();
     (vData || []).forEach((v: any) => {
       const originalName = v.name;
