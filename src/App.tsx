@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase";
 import type { Vessel, Contract, FormState } from "./lib/types";
 import { T, YEAR, typeOrder } from "./lib/types";
-import { getType, cpKey, contractDays } from "./lib/utils";
+import { getType, cpKey, cpShortKey, contractDays } from "./lib/utils";
 import { exportToPPTX } from "./lib/exportPPTX";
 import { GanttChart } from "./components/GanttChart";
 import { Economics } from "./components/Economics";
@@ -153,8 +153,8 @@ export default function App() {
     setSyncing(false); await loadData();
   }, [loadData]);
 
-  // Мемоизированные вычисления
-  const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpKey(c.counterparty)))], [contracts]);
+  // Мемоизированные вычисления — используем cpShortKey для фильтра
+  const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpShortKey(c.counterparty)))], [contracts]);
   const allTypes = useMemo(() => ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))], [vessels]);
   const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
   const allCps = useMemo(() => ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))], [cpKeys]);
@@ -177,7 +177,7 @@ export default function App() {
   }, [vessels, filterTypes, filterBranches, sortBy]);
 
   const visibleContracts = useMemo(() => {
-    return filterCp==="Все" ? contracts : contracts.filter(c => cpKey(c.counterparty)===filterCp);
+    return filterCp==="Все" ? contracts : contracts.filter(c => cpShortKey(c.counterparty)===filterCp);
   }, [contracts, filterCp]);
 
   const totalRev = useMemo(() => {
@@ -203,7 +203,13 @@ export default function App() {
     return null;
   }, [access]);
 
-  // Определяем вкладки
+  if (loading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
+      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
+      <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
+    </div>
+  );
+
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
     ...(isAdmin ? [["economics", "💰 Экономика"]] as [string, string][] : []),
@@ -212,17 +218,9 @@ export default function App() {
     ...(isAdmin ? [["vessels", "🚢 Суда"]] as [string, string][] : []),
   ];
 
-  if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
-      <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
-    </div>
-  );
-
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
-      {/* Верхняя строка с логотипом, вкладками и кнопками */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.header, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
@@ -230,7 +228,6 @@ export default function App() {
             Флот МСС
           </span>
           
-          {/* Вкладки в той же строке */}
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {tabs.map(([k, l]) => (
               <button 
@@ -285,7 +282,7 @@ export default function App() {
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowExportMenu(v => !v)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>⬇ Экспорт PPTX ▾</button>
               {showExportMenu && (
-                <div style={{ position: "absolute", right: 0, top: "110%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 16, zIndex: 50, width: 300, boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
+                <div style={{ position: "absolute", right: 0, top: "110%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 16, zIndex: 50, width: 300, boxShadow: "0 8px 32px rgba(0,0,0,.15)" }}>
                   <div style={{ fontSize: 12, color: T.text2, marginBottom: 10 }}>Выберите что экспортировать:</div>
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Тип судна</div>
@@ -312,7 +309,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Основной контент */}
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
         {(activeTab === "gantt" || activeTab === "economics") && (
           <FilterBar
