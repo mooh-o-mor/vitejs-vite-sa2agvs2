@@ -37,6 +37,16 @@ export function cpKey(s: string) {
   return clean;
 }
 
+// Для легенды — только то, что до скобки
+export function cpShortKey(s: string): string {
+  if (!s) return "";
+  const bracketIndex = s.indexOf('(');
+  if (bracketIndex > 0) {
+    return s.slice(0, bracketIndex).trim();
+  }
+  return s;
+}
+
 export function dayOffset(d: string) {
   const start = new Date(new Date().getFullYear(), 0, 1);
   const date = new Date(d);
