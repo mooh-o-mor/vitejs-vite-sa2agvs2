@@ -10,16 +10,14 @@ export function getType(name: string, order: string[]): string {
   return "";
 }
 
-// Форматирует название судна: первая буква каждого словазаглавная
+// Форматирует название судна: первая буква каждого слова заглавная
 export function formatVesselName(name: string): string {
   if (!name) return "";
   return name
     .trim()
     .toLowerCase()
     .split(/\s+/)
-    .map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    )
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 
@@ -37,7 +35,7 @@ export function cpKey(s: string) {
   return clean;
 }
 
-// Для легенды — только то, что до скобки
+// Для легенды и фильтра — только то, что до скобки
 export function cpShortKey(s: string): string {
   if (!s) return "";
   const bracketIndex = s.indexOf('(');
@@ -45,6 +43,17 @@ export function cpShortKey(s: string): string {
     return s.slice(0, bracketIndex).trim();
   }
   return s;
+}
+
+// Определение типа электропитания (устойчив к опечаткам)
+export function getPower(coordRaw: string): string {
+  if (!coordRaw) return "";
+  // Ищем БЭП, СЭП или CЭП (латинская C) в любом месте строки
+  const m = /[БСC]ЭП/i.exec(coordRaw);
+  if (!m) return "";
+  const power = m[0].toUpperCase();
+  if (power === "БЭП" || power === "CЭП") return "БЭП";
+  return "СЭП";
 }
 
 export function dayOffset(d: string) {
