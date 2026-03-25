@@ -60,8 +60,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
-          </tr>
-        </thead>
+           </thead>
         <tbody>
           {vessels.map((v, i) => {
             const sc = statusCls(v.status);
