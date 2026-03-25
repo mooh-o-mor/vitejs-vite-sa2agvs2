@@ -20,6 +20,7 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
 }
+
 export function FleetMap({
   isAdmin,
   canView,
@@ -34,6 +35,7 @@ export function FleetMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObj = useRef<L.Map | null>(null);
   const markersRef = useRef<any>(null);
+
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
@@ -52,6 +54,9 @@ export function FleetMap({
   const dragCounter = useRef(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Сохраняем последний вид карты
+  const lastViewRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -204,32 +209,47 @@ export function FleetMap({
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
   }, [filtered, search]);
 
+  // Обновляем карту при изменении фильтров
   useEffect(() => {
-     console.log('Redrawing markers, filtered length:', filtered.length);
     if (!mapObj.current || !markersRef.current) return;
+    
+    // Сохраняем текущий вид перед перерисовкой
+    const currentCenter = mapObj.current.getCenter();
+    const currentZoom = mapObj.current.getZoom();
+    
     markersRef.current.clearLayers();
     const bounds: L.LatLng[] = [];
     filtered.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      // Форматируем название для тултипа
       marker.bindTooltip(formatVesselName(v.vessel_name), { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
-  console.log('Click on marker, current zoom:', mapObj.current?.getZoom());
-  setSelVessel(v);
-  if (isMobile) setSidebarOpen(false);
-  const currentZoom = mapObj.current?.getZoom() || 5;
-  const newZoom = currentZoom < 7 ? 7 : currentZoom;
-  console.log('Setting new zoom:', newZoom);
-  mapObj.current?.setView([v.lat!, v.lng!], newZoom, { animate: true });
-});
+        // Сохраняем текущий вид карты
+        if (mapObj.current) {
+          lastViewRef.current = {
+            center: mapObj.current.getCenter(),
+            zoom: mapObj.current.getZoom()
+          };
+        }
+        setSelVessel(v);
+        if (isMobile) setSidebarOpen(false);
+        const currentZoom = mapObj.current?.getZoom() || 5;
+        const newZoom = currentZoom < 7 ? 7 : currentZoom;
+        mapObj.current?.setView([v.lat!, v.lng!], newZoom, { animate: true });
+      });
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
     });
-    if (bounds.length > 1) {
+    
+    // Восстанавливаем предыдущий вид, если он был сохранён
+    if (lastViewRef.current) {
+      mapObj.current.setView(lastViewRef.current.center, lastViewRef.current.zoom);
+      lastViewRef.current = null;
+    } else if (bounds.length > 1 && filtered.length > 0) {
       mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
     }
+    
     const updateLabels = () => {
       markersRef.current!.getLayers().forEach((m: any) => {
         if (!m.getTooltip) return;
@@ -279,7 +299,7 @@ export function FleetMap({
           coord_raw: v.coordRaw,
           lat: v.lat,
           lng: v.lng,
-          note: v.note,
+          note: v.note || null,
           supplies: v.supplies,
           contract_info: v.contract_info || null,
           work_period: v.work_period || null,
