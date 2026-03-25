@@ -215,14 +215,14 @@ export function FleetMap({
       // Форматируем название для тултипа
       marker.bindTooltip(formatVesselName(v.vessel_name), { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
-        setSelVessel(v);
-        if (isMobile) setSidebarOpen(false);
-        // Сохраняем текущий масштаб, не сбрасываем
-        const currentZoom = mapObj.current?.getZoom() || 5;
-        // Если зум слишком маленький, увеличиваем до 7, иначе оставляем текущий
-        const newZoom = currentZoom < 7 ? 7 : currentZoom;
-        mapObj.current?.setView([v.lat!, v.lng!], newZoom, { animate: true });
-      });
+  console.log('Click on marker, current zoom:', mapObj.current?.getZoom());
+  setSelVessel(v);
+  if (isMobile) setSidebarOpen(false);
+  const currentZoom = mapObj.current?.getZoom() || 5;
+  const newZoom = currentZoom < 7 ? 7 : currentZoom;
+  console.log('Setting new zoom:', newZoom);
+  mapObj.current?.setView([v.lat!, v.lng!], newZoom, { animate: true });
+});
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
     });
