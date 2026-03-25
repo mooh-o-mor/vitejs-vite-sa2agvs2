@@ -21,7 +21,6 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
-
 export function FleetMap({
   isAdmin,
   canView,
@@ -220,7 +219,11 @@ export function FleetMap({
       marker.on("click", () => {
         setSelVessel(v);
         if (isMobile) setSidebarOpen(false);
-        mapObj.current?.setView([v.lat!, v.lng!], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+        // Сохраняем текущий масштаб, не сбрасываем
+        const currentZoom = mapObj.current?.getZoom() || 5;
+        // Если зум слишком маленький, увеличиваем до 7, иначе оставляем текущий
+        const newZoom = currentZoom < 7 ? 7 : currentZoom;
+        mapObj.current?.setView([v.lat!, v.lng!], newZoom, { animate: true });
       });
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
@@ -347,7 +350,9 @@ export function FleetMap({
           setSelVessel(v);
           if (isMobile) setSidebarOpen(false);
           if (v.lat != null && v.lng != null && mapObj.current) {
-            mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+            const currentZoom = mapObj.current.getZoom();
+            const newZoom = currentZoom < 7 ? 7 : currentZoom;
+            mapObj.current.setView([v.lat, v.lng], newZoom, { animate: true });
           }
         }}
         isMobile={isMobile}
