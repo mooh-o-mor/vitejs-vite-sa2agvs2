@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { MONTHS, COLORS, SPECIAL_COLORS, YEAR, totalDays, T, PRIORITY_LABELS, PRIORITY_ORDER } from "../lib/types";
-import { cpKey, dayOffset, contractDaysGantt, fdate, addDays } from "../lib/utils";
+import { cpKey, dayOffset, contractDaysGantt, fdate, addDays, formatVesselName } from "../lib/utils";
 
 interface Props {
   vessels: Vessel[];
@@ -61,8 +61,8 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
 
         return (
           <div key={v.id} style={{ display:"flex", alignItems:"center", marginBottom:3 }}>
-            <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, paddingLeft:4, textAlign:"left", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${v.name}${v.branch ? ` (${v.branch})` : ""}`}>
-              {v.name}
+            <div style={{ width:190, flexShrink:0, fontSize:11, color:T.text, paddingRight:8, paddingLeft:4, textAlign:"left", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={`${formatVesselName(v.name)}${v.branch ? ` (${v.branch})` : ""}`}>
+              {formatVesselName(v.name)}
               {v.branch && <span style={{ color:T.amber, marginLeft:4, fontSize:10 }}>{v.branch}</span>}
             </div>
             <div
@@ -123,7 +123,6 @@ function renderBar(
   const displayStart = contractStart < yearStart ? yearStart : contractStart;
   const displayFirmEnd = firmEndDate > yearEnd ? yearEnd : firmEndDate;
   
-  // Для опциона
   let displayOptStart: Date | null = null;
   let displayOptEnd: Date | null = null;
   
@@ -138,7 +137,6 @@ function renderBar(
     }
   }
   
-  // Если твёрдая часть не попадает в год, показываем только опцион
   const showFirm = displayFirmEnd >= yearStart && displayStart <= yearEnd;
   
   const firmLeft = showFirm ? (dayOffset(displayStart.toISOString().slice(0,10)) / totalDays) * 100 : 0;
@@ -152,7 +150,6 @@ function renderBar(
     optWidth = (contractDaysGantt(displayOptStart.toISOString().slice(0,10), displayOptEnd.toISOString().slice(0,10)) / totalDays) * 100;
   }
 
-  // Если ничего не показываем
   if (!showFirm && !showOption) return null;
 
   const bgStyle = isAsg
