@@ -1,58 +1,71 @@
-import { T } from "../lib/types";
+import { T } from "../../lib/types";
+
 interface Props {
   allTypes: string[];
   allBranches: string[];
-  allCps: string[];
   filterTypes: string[];
   filterBranches: string[];
-  filterCp: string;
-  sortBy: "type" | "name" | "branch";
-  canView: boolean;
+  filterStatuses: string[];
+  sortBy: "name" | "branch" | "status";
   onToggleType: (v: string) => void;
   onToggleBranch: (v: string) => void;
-  onFilterCp: (v: string) => void;
-  onSortBy: (v: "type" | "name" | "branch") => void;
+  onToggleStatus: (v: string) => void;
+  onSortBy: (v: "name" | "branch" | "status") => void;
 }
+
+const btnStyle = (active: boolean, isAll?: boolean): React.CSSProperties => ({
+  padding: "4px 12px", borderRadius: 20, border: "1px solid",
+  cursor: "pointer", fontSize: 11, fontWeight: 600,
+  borderColor: active ? (isAll ? "#37474F" : T.accent) : T.border,
+  background: active ? (isAll ? "#37474F" : T.accent) : T.bg2,
+  color: active ? "#fff" : T.text2,
+});
+
+const filterRow = (label: string, items: string[], active: string[], onToggle: (v: string) => void, showAll: boolean = true) => (
+  <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+    <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>{label}:</span>
+    {showAll && <button onClick={() => onToggle("Все")} style={btnStyle(active.length === 0, true)}>Все</button>}
+    {items.map(v => (
+      <button key={v} onClick={() => onToggle(v)} style={btnStyle(active.includes(v))}>{v}</button>
+    ))}
+  </div>
+);
+
 export function FilterBar({
-  allTypes, allBranches, allCps,
-  filterTypes, filterBranches, filterCp, sortBy,
-  canView,
-  onToggleType, onToggleBranch, onFilterCp, onSortBy
+  allTypes,
+  allBranches,
+  filterTypes,
+  filterBranches,
+  filterStatuses,
+  sortBy,
+  onToggleType,
+  onToggleBranch,
+  onToggleStatus,
+  onSortBy,
 }: Props) {
-  const btn = (active: boolean, amber?: boolean) => ({
-    padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
-    borderColor: active ? (amber ? T.amber : T.accent) : T.border,
-    background: active ? (amber ? T.amber : T.accent) : T.bg2,
-    color: active ? "#ffffff" : T.text2
-  } as React.CSSProperties);
+  const statusItems = ["АСГ", "АСД", "РЕМ"];
+
   return (
-    <div style={{ marginBottom:12 }}>
-      <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Тип судна:</span>
-        {allTypes.map(t => {
-          const active = t === "Все" ? filterTypes.length === 0 : filterTypes.includes(t);
-          return <button key={t} onClick={() => onToggleType(t)} style={btn(active)}>{t}</button>;
-        })}
+    <div style={{ background: T.bg3, padding: "8px 12px", borderRadius: 8, marginBottom: 12 }}>
+      {allTypes.length > 0 && filterRow("Тип судна", allTypes, filterTypes, onToggleType)}
+      {allBranches.length > 0 && filterRow("Филиал", allBranches, filterBranches, onToggleBranch)}
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>Статус:</span>
+        <button onClick={() => onToggleStatus("Все")} style={btnStyle(filterStatuses.length === 0, true)}>Все</button>
+        {statusItems.map(label => (
+          <button key={label} onClick={() => onToggleStatus(label)} style={btnStyle(filterStatuses.includes(label === "АСГ" ? "asg" : label === "АСД" ? "asd" : "rem"))}>
+            {label}
+          </button>
+        ))}
       </div>
-      {allBranches.length>1 && (
-        <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap", alignItems:"center" }}>
-          <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Филиал:</span>
-          {allBranches.map(b => {
-            const active = b === "Все" ? filterBranches.length === 0 : filterBranches.includes(b);
-            return <button key={b} onClick={() => onToggleBranch(b)} style={btn(active, true)}>{b||"Без филиала"}</button>;
-          })}
-        </div>
-      )}
-      {canView && allCps.length>1 && (
-        <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap", alignItems:"center" }}>
-          <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Контрагент:</span>
-          {allCps.map(cp => <button key={cp} onClick={() => onFilterCp(cp)} style={btn(filterCp===cp)}>{cp}</button>)}
-        </div>
-      )}
-      <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:11, color:T.text3, minWidth:80 }}>Сортировка:</span>
-        {([ ["type","По типу"], ["name","По названию"], ["branch","По филиалу"] ] as const).map(([k,l]) => (
-          <button key={k} onClick={() => onSortBy(k)} style={btn(sortBy===k)}>{l}</button>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 11, color: T.text3, minWidth: 60 }}>Сортировка:</span>
+        {[
+          ["name", "По названию"],
+          ["branch", "По филиалу"],
+          ["status", "По статусу"]
+        ].map(([key, label]) => (
+          <button key={key} onClick={() => onSortBy(key as any)} style={btnStyle(sortBy === key)}>{label}</button>
         ))}
       </div>
     </div>
