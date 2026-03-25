@@ -10,7 +10,7 @@ export function getType(name: string, order: string[]): string {
   return "";
 }
 
-// Форматирует название судна: первая буква каждого слова заглавная
+// Форматирует название судна: первая буква каждого словазаглавная
 export function formatVesselName(name: string): string {
   if (!name) return "";
   return name
