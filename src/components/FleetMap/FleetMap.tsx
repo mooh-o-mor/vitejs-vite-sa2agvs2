@@ -20,7 +20,6 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
 }
-
 export function FleetMap({
   isAdmin,
   canView,
