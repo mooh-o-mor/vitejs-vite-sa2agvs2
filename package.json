@@ -9,8 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
-  //
-  "dependencies": {
+    "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
     "leaflet": "^1.9.4",
     "pptxgenjs": "^3.12.0",
