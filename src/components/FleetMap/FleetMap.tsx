@@ -35,7 +35,6 @@ export function FleetMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapObj = useRef<L.Map | null>(null);
   const markersRef = useRef<any>(null);
-
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
