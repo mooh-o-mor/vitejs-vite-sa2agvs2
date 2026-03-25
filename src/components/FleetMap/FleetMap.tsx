@@ -213,10 +213,6 @@ export function FleetMap({
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
     
-    // Сохраняем текущий вид перед перерисовкой
-    const currentCenter = mapObj.current.getCenter();
-    const currentZoom = mapObj.current.getZoom();
-    
     markersRef.current.clearLayers();
     const bounds: L.LatLng[] = [];
     filtered.forEach((v) => {
