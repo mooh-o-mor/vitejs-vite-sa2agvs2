@@ -19,6 +19,7 @@ const EMPTY_FORM: FormState = {
   rate:"", mob:"", demob:"", firmDays:"", optionDays:"",
   priority:"contract", altGroup:""
 };
+
 export default function App() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
