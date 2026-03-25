@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { COLORS, SPECIAL_COLORS, T } from "../lib/types";
-import { cpKey, contractDays, fmoney, fdate } from "../lib/utils";
+import { cpKey, cpShortKey, contractDays, fmoney, fdate, formatVesselName, formatVesselType, getType } from "../lib/utils";
 
 interface Props {
   vessels: Vessel[];
@@ -8,7 +8,8 @@ interface Props {
 }
 
 export function Economics({ vessels, contracts }: Props) {
-  const cpKeys = [...new Set(contracts.map(c => cpKey(c.counterparty)))];
+  // Для цвета и группировки используем короткое название (до скобки)
+  const cpKeys = [...new Set(contracts.map(c => cpShortKey(c.counterparty)))];
   const colorMap: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]])
   );
@@ -20,15 +21,22 @@ export function Economics({ vessels, contracts }: Props) {
   return (
     <div>
       {vessels.map(v => {
+        // Определяем тип судна
+        const vesselType = getType(v.name, ["МФАСС","ТБС","ССН","МБС","МВС","МБ","НИС","АСС","БП"]);
+        const formattedName = formatVesselName(v.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim());
+        const formattedType = formatVesselType(vesselType);
+        
         const ec = contracts.filter(c => c.vesselId===v.id).map(c => {
           const days = contractDays(c.start, c.end);
           return { ...c, days, revenue: days*c.rate+c.mob+c.demob };
         });
         const tot = ec.reduce((s,c) => s+c.revenue, 0);
+        
         return (
           <div key={v.id} style={{ background:T.bg2, borderRadius:8, padding:12, marginBottom:10, border:`1px solid ${T.border}` }}>
             <div style={{ fontSize:13, fontWeight:700, color:T.accent, marginBottom:6 }}>
-              {v.name}
+              {vesselType && <span style={{ fontFamily:"monospace", fontWeight:500, marginRight:6 }}>{formattedType}</span>}
+              {formattedName}
               {v.branch && <span style={{ color:T.amber, fontWeight:400, fontSize:11, marginLeft:8 }}>{v.branch}</span>}
             </div>
             {ec.length===0 ? (
@@ -41,28 +49,30 @@ export function Economics({ vessels, contracts }: Props) {
                       {["Контрагент","Начало","Конец","Тв.дней","Опц.дней","Всего","Ставка/сут","Моб","Демоб","Выручка"].map(h => (
                         <th key={h} style={{ textAlign:"left", padding:"4px 6px" }}>{h}</th>
                       ))}
-                    </tr>
-                  </thead>
+                    </thead>
                   <tbody>
-                    {ec.map((c,i) => (
-                      <tr key={c.id} style={{ borderBottom:`1px solid ${T.border2}`, background:i%2===0?T.bg2:T.bg3 }}>
-                        <td style={{ padding:"4px 6px" }}>
-                          <span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:colorMap[cpKey(c.counterparty)]||"#888", marginRight:4 }}/>
-                          {c.counterparty}
-                        </td>
-                        <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.start)}</td>
-                        <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.end)}</td>
-                        <td style={{ padding:"4px 6px" }}>{c.firmDays||"—"}</td>
-                        <td style={{ padding:"4px 6px" }}>{c.optionDays||"—"}</td>
-                        <td style={{ padding:"4px 6px" }}>{c.days}</td>
-                        <td style={{ padding:"4px 6px" }}>{fmoney(c.rate)}</td>
-                        <td style={{ padding:"4px 6px" }}>{fmoney(c.mob)}</td>
-                        <td style={{ padding:"4px 6px" }}>{fmoney(c.demob)}</td>
-                        <td style={{ padding:"4px 6px", color:T.green, fontWeight:700 }}>{fmoney(c.revenue)}</td>
-                      </tr>
-                    ))}
+                    {ec.map((c,i) => {
+                      const shortKey = cpShortKey(c.counterparty);
+                      return (
+                        <tr key={c.id} style={{ borderBottom:`1px solid ${T.border2}`, background:i%2===0?T.bg2:T.bg3 }}>
+                          <td style={{ padding:"4px 6px" }}>
+                            <span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:colorMap[shortKey]||"#888", marginRight:4 }}/>
+                            {c.counterparty}
+                           </td>
+                          <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.start)}</td>
+                          <td style={{ padding:"4px 6px", color:T.text2 }}>{fdate(c.end)}</td>
+                          <td style={{ padding:"4px 6px" }}>{c.firmDays||"—"}</td>
+                          <td style={{ padding:"4px 6px" }}>{c.optionDays||"—"}</td>
+                          <td style={{ padding:"4px 6px" }}>{c.days}</td>
+                          <td style={{ padding:"4px 6px" }}>{fmoney(c.rate)}</td>
+                          <td style={{ padding:"4px 6px" }}>{fmoney(c.mob)}</td>
+                          <td style={{ padding:"4px 6px" }}>{fmoney(c.demob)}</td>
+                          <td style={{ padding:"4px 6px", color:T.green, fontWeight:700 }}>{fmoney(c.revenue)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
-                </table>
+                 </table>
                 <div style={{ textAlign:"right", marginTop:5, fontSize:12, fontWeight:700, color:T.green }}>Итого: {fmoney(tot)}</div>
               </>
             )}
