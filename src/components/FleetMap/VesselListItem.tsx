@@ -25,6 +25,9 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
   const bgColor = STATUS_BG[c];
   const fontSize = isMobile ? 10 : 11;
   const nameFontSize = isMobile ? 12 : 13;
+  
+  const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
+  const formattedName = formatVesselName(nameWithoutPrefix);
 
   return (
     <div 
@@ -53,7 +56,7 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
           </span>
         )}
         <span style={{ fontSize: nameFontSize, fontWeight: 500, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {formatVesselName(vessel.vessel_name)}
+          {formattedName}
         </span>
         {vessel.branch && vessel.branch !== "0" && (
           <span style={{ fontSize: fontSize, color: T.text, padding: "0px", flexShrink: 0 }}>{vessel.branch}</span>
