@@ -8,6 +8,7 @@ interface Props {
   vesselType: string;
   isSelected: boolean;
   onClick: () => void;
+  isMobile?: boolean;
 }
 
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
@@ -19,15 +20,17 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
-export function VesselListItem({ vessel, vesselType, isSelected, onClick }: Props) {
+export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobile = false }: Props) {
   const c = cls(vessel.status);
   const bgColor = STATUS_BG[c];
+  const fontSize = isMobile ? 10 : 11;
+  const nameFontSize = isMobile ? 12 : 13;
 
   return (
     <div 
       onClick={onClick}
       style={{ 
-        padding: "8px 10px", 
+        padding: isMobile ? "6px 8px" : "8px 10px", 
         borderBottom: `1px solid ${T.border}`, 
         cursor: "pointer", 
         borderLeft: `3px solid ${isSelected ? T.accent : "transparent"}`, 
@@ -36,10 +39,10 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick }: Prop
         whiteSpace: "nowrap",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
         {vesselType && (
           <span style={{ 
-            fontSize: 11, 
+            fontSize: fontSize, 
             color: T.text, 
             fontFamily: "monospace", 
             fontWeight: 500, 
@@ -49,13 +52,13 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick }: Prop
             {formatVesselType(vesselType)}
           </span>
         )}
-        <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: nameFontSize, fontWeight: 500, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {formatVesselName(vessel.vessel_name)}
         </span>
         {vessel.branch && vessel.branch !== "0" && (
-          <span style={{ fontSize: 11, color: T.text, padding: "0px", flexShrink: 0 }}>{vessel.branch}</span>
+          <span style={{ fontSize: fontSize, color: T.text, padding: "0px", flexShrink: 0 }}>{vessel.branch}</span>
         )}
-        {vessel.lat == null && <span style={{ fontSize: 10, color: "#c07800", flexShrink: 0 }}>📍?</span>}
+        {vessel.lat == null && <span style={{ fontSize: 9, color: "#c07800", flexShrink: 0 }}>📍?</span>}
       </div>
     </div>
   );

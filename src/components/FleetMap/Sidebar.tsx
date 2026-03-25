@@ -89,17 +89,20 @@ export function Sidebar({
     return "";
   };
 
+  const padding = isMobile ? 8 : 10;
+  const fontSize = isMobile ? 11 : 12;
+
   return (
-    <div style={{ width: 360, minWidth: 360, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
+    <div style={{ width: isMobile ? '85vw' : 360, minWidth: isMobile ? '85vw' : 360, maxWidth: isMobile ? '85vw' : 360, background: "#fff", borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", ...(isMobile ? { position: "absolute", top: 0, left: 0, bottom: 0, zIndex: 700, boxShadow: "4px 0 20px rgba(0,0,0,.2)" } : {}) }}>
       {isMobile && (
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 8px", borderBottom: `1px solid ${T.border}` }}>
           <button onClick={onCloseSidebar} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.text2 }}>✕</button>
         </div>
       )}
 
-      <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ padding, borderBottom: `1px solid ${T.border}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-          <select value={selDate} onChange={(e) => onDateChange(e.target.value)} style={{ flex: 1, padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12, fontFamily: "monospace", background: "#f8fafc" }}>
+          <select value={selDate} onChange={(e) => onDateChange(e.target.value)} style={{ flex: 1, padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: isMobile ? 11 : 12, fontFamily: "monospace", background: "#f8fafc" }}>
             {dates.length === 0 && <option value="">— нет данных —</option>}
             {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
           </select>
@@ -117,21 +120,21 @@ export function Sidebar({
           onFilterStatusChange={onFilterStatusChange}
         />
 
-        <div style={{ display: "flex", gap: 12, fontSize: 12, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 10, fontSize: isMobile ? 10 : 12, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10 }}>
             <span><b style={{ color: CLR.asg }}>{cAsg}</b> <span style={{ color: T.text2 }}>АСГ</span></span>
             <span><b style={{ color: CLR.asd }}>{cAsd}</b> <span style={{ color: T.text2 }}>АСД</span></span>
             <span><b style={{ color: CLR.rem }}>{cRem}</b> <span style={{ color: T.text2 }}>РЕМ</span></span>
           </div>
           <span style={{ color: T.text2 }}><b>{total}</b> всего</span>
         </div>
-        {noPos > 0 && <div style={{ fontSize: 10, color: "#c07800", marginTop: 8 }}>⚠ без позиции: {noPos}</div>}
-        {uploadMsg && <div style={{ fontSize: 11, color: uploading ? T.text2 : T.accent, marginTop: 6 }}>{uploadMsg}</div>}
+        {noPos > 0 && <div style={{ fontSize: 9, color: "#c07800", marginTop: 6 }}>⚠ без позиции: {noPos}</div>}
+        {uploadMsg && <div style={{ fontSize: isMobile ? 10 : 11, color: uploading ? T.text2 : T.accent, marginTop: 6 }}>{uploadMsg}</div>}
       </div>
 
-      <div style={{ padding: 10, borderBottom: `1px solid ${T.border}` }}>
+      <div style={{ padding, borderBottom: `1px solid ${T.border}` }}>
         <input placeholder="Поиск судна..." value={search} onChange={(e) => onSearchChange(e.target.value)}
-          style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 12 }} />
+          style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: isMobile ? 11 : 12 }} />
       </div>
 
       <div style={{ flex: 1, overflowY: "auto" }}>
@@ -145,11 +148,12 @@ export function Sidebar({
               vesselType={vesselType}
               isSelected={isSel}
               onClick={() => onSelectVessel(v)}
+              isMobile={isMobile}
             />
           );
         })}
         {filteredVessels.length === 0 && (
-          <div style={{ padding: 20, textAlign: "center", color: T.text2, fontSize: 13 }}>
+          <div style={{ padding: 20, textAlign: "center", color: T.text2, fontSize: isMobile ? 11 : 13 }}>
             {dates.length === 0 ? "Нет загруженных данных" : "Нет судов по фильтру"}
           </div>
         )}
