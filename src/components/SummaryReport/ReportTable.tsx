@@ -43,10 +43,6 @@ const tdBase: React.CSSProperties = {
 };
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
-  // Проверяем, работает ли функция
-  if (vessels.length > 0) {
-    console.log('Test formatVesselName:', formatVesselName(vessels[0].vessel_name));
-  }
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
