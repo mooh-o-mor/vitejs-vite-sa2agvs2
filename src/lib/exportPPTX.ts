@@ -1,6 +1,6 @@
 import type { Vessel, Contract } from "../lib/types";
 import { YEAR, MONTHS, COLORS, SPECIAL_COLORS, totalDays, yearStart, yearEnd } from "../lib/types";
-import { cpKey, cpShortKey, contractDays, addDays, fmoney } from "../lib/utils";
+import { cpShortKey, contractDays, addDays, fmoney } from "../lib/utils";
 
 export async function exportToPPTX(
   vesselsToExport: Vessel[],
@@ -24,7 +24,6 @@ export async function exportToPPTX(
   const vesselIds = new Set(vesselsToExport.map(v => v.id));
   const visibleContracts = filteredContracts.filter(c => vesselIds.has(c.vesselId));
 
-  // Динамический заголовок
   const parts: string[] = [];
   if (filterBranches && filterBranches.length > 0) parts.push(filterBranches.join(", "));
   if (filterTypes && filterTypes.length > 0) parts.push(filterTypes.join(", "));
@@ -37,7 +36,6 @@ export async function exportToPPTX(
 
   const LEFT=2.2, TOP=0.7, ROW_H=0.22, ROW_GAP=0.02, CHART_W=13.8, TOTAL=totalDays;
 
-  // Используем cpShortKey для группировки и цвета
   const cpKeys = [...new Set(visibleContracts.map(c => cpShortKey(c.counterparty)))];
   const colorMapPptx: Record<string,string> = Object.fromEntries(
     cpKeys.map((cp,i) => [cp, (SPECIAL_COLORS[cp]||COLORS[i%COLORS.length]).replace("#","")])
