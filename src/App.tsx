@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase";
 import type { Vessel, Contract, FormState } from "./lib/types";
 import { T, YEAR, typeOrder } from "./lib/types";
-// import { getType, cpKey, cpShortKey, contractDays } from "./lib/utils";
 import { getType, cpShortKey, contractDays } from "./lib/utils";
 import { exportToPPTX } from "./lib/exportPPTX";
 import { GanttChart } from "./components/GanttChart";
@@ -21,7 +20,6 @@ const EMPTY_FORM: FormState = {
   priority:"contract", altGroup:""
 };
 
-
 export default function App() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -37,7 +35,7 @@ export default function App() {
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterCp, setFilterCp] = useState("Все");
-  const [sortBy, setSortBy] = useState<"type"|"name"|"branch">("type");
+  const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("name");
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
@@ -50,7 +48,6 @@ export default function App() {
   const [showVesselForm, setShowVesselForm] = useState(false);
   const [editingVessel, setEditingVessel] = useState<Vessel|null>(null);
 
-  // Мемоизированная функция загрузки данных
   const loadData = useCallback(async () => {
     setLoading(true);
     const [, { data: vData }, { data: cData }] = await Promise.all([
@@ -155,7 +152,6 @@ export default function App() {
     setSyncing(false); await loadData();
   }, [loadData]);
 
-  // Мемоизированные вычисления — используем cpShortKey для фильтра
   const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpShortKey(c.counterparty)))], [contracts]);
   const allTypes = useMemo(() => ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))], [vessels]);
   const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
@@ -167,7 +163,6 @@ export default function App() {
       const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
       return typeOk && branchOk;
     }).sort((a, b) => {
-      if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
       if (sortBy==="name") {
         const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
         const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
