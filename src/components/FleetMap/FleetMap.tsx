@@ -7,7 +7,7 @@ import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
 import { T, typeOrder } from "../../lib/types";
-import { getType } from "../../lib/utils";
+import { getType, formatVesselName } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
@@ -61,7 +61,6 @@ export function FleetMap({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Загрузка типов судов из таблицы vessels
   useEffect(() => {
     supabase.from("vessels").select("name").then(({ data }) => {
       if (data) {
@@ -215,7 +214,8 @@ export function FleetMap({
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      marker.bindTooltip(v.vessel_name, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
+      // Форматируем название для тултипа
+      marker.bindTooltip(formatVesselName(v.vessel_name), { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
         setSelVessel(v);
         if (isMobile) setSidebarOpen(false);
