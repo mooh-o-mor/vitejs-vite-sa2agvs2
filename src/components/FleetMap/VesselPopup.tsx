@@ -1,120 +1,84 @@
-import { T } from "../../lib/types";
-import type { DprSupply, DprRow } from "../../lib/parseDpr";
-import { STATUS_HEADER_BG } from "./mapIcons";
-import { formatVesselName, formatVesselType } from "../../lib/utils";
+import type { DprSupply } from "../../lib/parseDpr";
+import { getPower as getPowerUtil } from "../../lib/utils";
 
-interface Props {
-  vessel: DprRow;
-  vesselType: string;
-  canView: boolean;
-  onClose: () => void;
+export interface DprRow {
+  id?: number;
+  vessel_name: string;
+  branch: string;
+  report_date: string;
+  status: string;
+  coord_raw: string;
+  lat: number | null;
+  lng: number | null;
+  note: string;
+  supplies: DprSupply[];
+  contract_info?: string;
+  work_period?: string;
 }
 
-function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
-  if (!stat) return "oth";
+export const STATUS_BG: Record<string, string> = { asg: "#FFCDD2", asd: "#C8E6C9", rem: "#F5F5F5", oth: "#F5F5F5" };
+export const STATUS_COLOR: Record<string, string> = { asg: "#C62828", asd: "#1B5E20", rem: "#424242", oth: "#616161" };
+export const STATUS_XL_BG: Record<string, string> = { asg: "FFCDD2", asd: "C8E6C9", rem: "F5F5F5", oth: "F5F5F5" };
+export const STATUS_XL_FG: Record<string, string> = { asg: "C62828", asd: "1B5E20", rem: "424242", oth: "616161" };
+
+export const BRANCH_COLORS: Record<string, string> = {
+  "АЧФ":  "#FFF3E0", "АЗЧФ": "#FFF3E0",
+  "БЛТФ": "#E3F2FD", "БФ":   "#E3F2FD",
+  "КСПФ": "#F3E5F5",
+  "СВРФ": "#E8F5E9", "СевФ": "#E8F5E9",
+  "ПРМФ": "#FFF9C4", "ПримФ":"#FFF9C4",
+  "СХЛФ": "#FCE4EC", "СахФ": "#FCE4EC",
+  "КМЧФ": "#E0F7FA",
+  "АРХФ": "#F1F8E9",
+};
+
+export const BRANCH_XL: Record<string, string> = {
+  "АЧФ":  "FFF3E0", "АЗЧФ": "FFF3E0",
+  "БЛТФ": "E3F2FD", "БФ":   "E3F2FD",
+  "КСПФ": "F3E5F5",
+  "СВРФ": "E8F5E9", "СевФ": "E8F5E9",
+  "ПРМФ": "FFF9C4", "ПримФ":"FFF9C4",
+  "СХЛФ": "FCE4EC", "СахФ": "FCE4EC",
+  "КМЧФ": "E0F7FA",
+  "АРХФ": "F1F8E9",
+};
+
+export const BRANCHES_ORDER = ["АЧФ", "АЗЧФ", "БЛТФ", "БФ", "КСПФ", "СВРФ", "СевФ", "ПРМФ", "ПримФ", "СХЛФ", "СахФ", "КМЧФ", "АРХФ"];
+
+export function branchOrder(b: string): number {
+  const idx = BRANCHES_ORDER.findIndex((x) => b.toUpperCase().includes(x.toUpperCase()));
+  return idx >= 0 ? idx : 99;
+}
+
+export function branchBg(b: string): string {
+  return BRANCH_COLORS[b] || "#FFFFFF";
+}
+
+export function getSupply(supplies: DprSupply[], keyword: string): string {
+  if (!supplies || !Array.isArray(supplies)) return "";
+  const s = supplies.find(
+    (x) => x.type && x.type.toLowerCase().includes(keyword.toLowerCase())
+  );
+  return s ? s.amt : "";
+}
+
+export function shortStatus(stat: string): string {
+  const s = stat.toUpperCase();
+  if (s.startsWith("АСГ")) return "АСГ";
+  if (s.startsWith("АСД")) return "АСД";
+  if (s.includes("РЕМОНТ") || s.startsWith("РЕМ") || s.includes("ОСВИДЕТ") || s.includes("НЕТ В ГРАФИКЕ")) return "РЕМ";
+  if (s.includes("ВОССТАНОВЛЕН")) return "РЕМ";
+  if (s.includes("ОФОРМЛЕН")) return "РЕМ";
+  return stat;
+}
+
+export function statusCls(stat: string): "asg" | "asd" | "rem" | "oth" {
   const s = stat.toUpperCase();
   if (s.startsWith("АСГ")) return "asg";
   if (s.startsWith("АСД")) return "asd";
-  if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
+  if (s.includes("РЕМОНТ") || s.startsWith("РЕМ") || s.includes("ОСВИДЕТ") || s.includes("НЕТ В ГРАФИКЕ") || s.includes("ВОССТАНОВЛЕН") || s.includes("ОФОРМЛЕН")) return "rem";
   return "oth";
 }
 
-export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
-  const c = cls(vessel.status);
-  const powerMatch = /(БЭП|СЭП)/i.exec(vessel.coord_raw || "");
-  const power = powerMatch ? powerMatch[1].toUpperCase() : null;
-  const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
-  const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
-
-  return (
-    <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ 
-        padding: "10px 14px", 
-        borderBottom: `1px solid ${T.border}`, 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "space-between",
-        flexWrap: "nowrap",
-        gap: 8,
-        background: STATUS_HEADER_BG[c],
-        flexShrink: 0
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flex: 1, minWidth: 0, overflow: "hidden" }}>
-          {vesselType && (
-            <span style={{ 
-              fontSize: 11, 
-              color: T.text, 
-              fontFamily: "monospace", 
-              fontWeight: 500, 
-              padding: "0px",
-              flexShrink: 0,
-            }}>
-              {formatVesselType(vesselType)}
-            </span>
-          )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-            {formatVesselName(vessel.vessel_name)}
-          </span>
-          {vessel.branch && (
-            <span style={{ 
-              fontSize: 11, 
-              color: T.text, 
-              fontFamily: "monospace", 
-              fontWeight: 500,
-              padding: "0px",
-              flexShrink: 0,
-            }}>
-              {vessel.branch}
-            </span>
-          )}
-        </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
-      </div>
-
-      <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
-          <span style={{ color: T.text2 }}>Местоположение</span>
-          <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 250 }}>{coordDisplay || "—"}</span>
-        </div>
-        {canView && (
-          <>
-            {vessel.note && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
-                <span style={{ color: T.text2 }}>Примечание</span>
-                <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 250 }}>{vessel.note}</span>
-              </div>
-            )}
-            {(vessel.supplies && vessel.supplies.length > 0) && (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
-                  <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
-                  {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
-                </div>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                  <thead>
-                    <tr>
-                      {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
-                        <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(vessel.supplies as DprSupply[]).map((s, i) => (
-                      <tr key={i}>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+// Используем универсальную функцию из utils
+export const getPower = getPowerUtil;
