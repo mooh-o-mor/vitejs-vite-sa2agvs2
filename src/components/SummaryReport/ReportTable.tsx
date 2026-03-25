@@ -19,7 +19,6 @@ interface Props {
   onUpdateField: (vesselName: string, field: string, newValue: string) => void;
 }
 
-
 const thStyle: React.CSSProperties = {
   padding: "8px 8px",
   textAlign: "center",
@@ -61,8 +60,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
-          </tr>
-        </thead>
+          </thead>
         <tbody>
           {vessels.map((v, i) => {
             const sc = statusCls(v.status);
@@ -86,11 +84,11 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
 
             return (
               <tr key={v.vessel_name} style={{ background: rowBg }}>
-                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
-                <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
-                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)}</td>
-                <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
+                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1} <
+                <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)} <
+                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)} <
+                <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch} <
+                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay} <
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell
@@ -102,7 +100,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                       editable={isAsd}
                       placeholder="✎ добавить"
                     />
-                  </td>
+                   <
                 )}
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
@@ -115,10 +113,10 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                       editable={true}
                       placeholder="✎ добавить период"
                     />
-                  </td>
+                   <
                 )}
-                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"}</td>
-                <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"}</td>
+                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"} <
+                <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"} <
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell
@@ -130,11 +128,11 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                       editable={true}
                       placeholder="✎ добавить примечание"
                     />
-                  </td>
+                   <
                 )}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
-              </tr>
+                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""} <}
+                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""} <}
+               </tr>
             );
           })}
         </tbody>
