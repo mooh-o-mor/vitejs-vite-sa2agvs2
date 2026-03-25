@@ -48,7 +48,7 @@ export function Economics({ vessels, contracts }: Props) {
                       {["Контрагент","Начало","Конец","Тв.дней","Опц.дней","Всего","Ставка/сут","Моб","Демоб","Выручка"].map(h => (
                         <th key={h} style={{ textAlign:"left", padding:"4px 6px" }}>{h}</th>
                       ))}
-                    </thead>
+                     </thead>
                   <tbody>
                     {ec.map((c,i) => {
                       const shortKey = cpShortKey(c.counterparty);
@@ -67,11 +67,11 @@ export function Economics({ vessels, contracts }: Props) {
                           <td style={{ padding:"4px 6px" }}>{fmoney(c.mob)}</td>
                           <td style={{ padding:"4px 6px" }}>{fmoney(c.demob)}</td>
                           <td style={{ padding:"4px 6px", color:T.green, fontWeight:700 }}>{fmoney(c.revenue)}</td>
-                        </tr>
+                         </tr>
                       );
                     })}
                   </tbody>
-                </table>
+                 </table>
                 <div style={{ textAlign:"right", marginTop:5, fontSize:12, fontWeight:700, color:T.green }}>Итого: {fmoney(tot)}</div>
               </>
             )}
