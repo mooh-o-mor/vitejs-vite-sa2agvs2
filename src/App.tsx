@@ -212,24 +212,25 @@ const getVesselStatus = useCallback((vesselId: number): string[] => {
   return statuses;
 }, [visibleContracts]);
 
-  const filtered = useMemo(() => {
-    return vessels.filter(v => {
-      const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
-      const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
-      const ganttOk = v.show_on_gantt !== false;
-      const statusOk = filterStatuses.length === 0 || filterStatuses.includes(getVesselStatus(v.id));
-      return typeOk && branchOk && ganttOk && statusOk;
-    }).sort((a, b) => {
-      if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
-      if (sortBy==="name") {
-        const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-        const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-        return nameA.localeCompare(nameB, "ru");
-      }
-      if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
-      return 0;
-    });
-  }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselStatus]);
+ const filtered = useMemo(() => {
+  return vessels.filter(v => {
+    const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
+    const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
+    const ganttOk = v.show_on_gantt !== false;
+    const vesselStatuses = getVesselStatus(v.id);
+    const statusOk = filterStatuses.length === 0 || vesselStatuses.some(s => filterStatuses.includes(s));
+    return typeOk && branchOk && ganttOk && statusOk;
+  }).sort((a, b) => {
+    if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
+    if (sortBy==="name") {
+      const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+      const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+      return nameA.localeCompare(nameB, "ru");
+    }
+    if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
+    return 0;
+  });
+}, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselStatus]);
 
   const totalRev = useMemo(() => {
     return visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
