@@ -180,21 +180,37 @@ export default function App() {
   }, [contracts, filterCp]);
 
   // Определяем статус судна для фильтрации
-  const getVesselStatus = useCallback((vesselId: number): string => {
-    const vesselContracts = visibleContracts.filter(c => c.vesselId === vesselId);
-    if (vesselContracts.length === 0) return "";
-    
-    // Проверяем на АСГ
-    const hasAsg = vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ");
-    if (hasAsg) return "asg";
-    
-    // Проверяем на ремонт
-    const hasRem = vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт");
-    if (hasRem) return "rem";
-    
-    // Всё остальное — АСД
-    return "asd";
-  }, [visibleContracts]);
+// Определяем статус судна для фильтрации
+const getVesselStatus = useCallback((vesselId: number): string[] => {
+  const vesselContracts = visibleContracts.filter(c => c.vesselId === vesselId);
+  if (vesselContracts.length === 0) return [];
+  
+  const hasAsg = vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ");
+  const hasRem = vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт");
+  const hasAsd = vesselContracts.some(c => {
+    const key = cpShortKey(c.counterparty);
+    return key !== "АСГ" && key !== "Ремонт";
+  });
+  
+  const statuses: string[] = [];
+  
+  // АСГ: только АСГ, нет РЕМ и нет АСД
+  if (hasAsg && !hasRem && !hasAsd) {
+    statuses.push("asg");
+  }
+  
+  // РЕМ: только РЕМ, нет АСГ и нет АСД
+  if (hasRem && !hasAsg && !hasAsd) {
+    statuses.push("rem");
+  }
+  
+  // АСД: есть хотя бы один контракт АСД (даже если есть АСГ или РЕМ)
+  if (hasAsd) {
+    statuses.push("asd");
+  }
+  
+  return statuses;
+}, [visibleContracts]);
 
   const filtered = useMemo(() => {
     return vessels.filter(v => {
