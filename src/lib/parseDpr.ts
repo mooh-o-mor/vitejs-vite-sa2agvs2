@@ -105,7 +105,7 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
 
   // 4. DD MM,Mсев.DDD MM,Mв.  (55 31,4сев.020 08,5в. — формат ряда судов)
   const m4 = s.match(
-    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)\b/i
+    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)[.\s]/i
   );
   if (m4) {
     const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
