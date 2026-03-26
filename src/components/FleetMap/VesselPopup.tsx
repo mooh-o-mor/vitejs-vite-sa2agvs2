@@ -23,7 +23,14 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const c = cls(vessel.status);
   const power = getPower(vessel.coord_raw);
   const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
-  const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim();
+  // БЫЛО:
+//const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim();
+
+// СТАЛО:
+const coordDisplay = (vessel.coord_raw || "")
+  .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
+  .replace(/\s+(Да|Нет)\s*$/i, "")
+  .trim();
   
   const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
   const formattedName = formatVesselName(nameWithoutPrefix);
