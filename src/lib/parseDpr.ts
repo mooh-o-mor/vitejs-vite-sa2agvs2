@@ -72,6 +72,10 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
+  console.log('parseCoord input:', s);  // <-- добавить
+  
+  // ... остальной код
+}
 
   // Формат: 55 31,4 сев. 020 08,5 в. (с пробелами и точками)
   const matchWithSpaces = s.match(
