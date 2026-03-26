@@ -50,29 +50,28 @@ export default function App() {
   const [editingVessel, setEditingVessel] = useState<Vessel|null>(null);
 
   // Мемоизированная функция загрузки данных
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    const [, { data: vData }, { data: cData }] = await Promise.all([
-      new Promise(r => setTimeout(r, 1500)),
-      supabase.from("vessels").select("id,name,branch,imo,show_on_gantt").order("id"),
-      supabase.from("contracts").select("*").order("id"),
-    ]);
-    setVessels((vData||[]).map((v: any) => ({ 
-      id:v.id, 
-      name:v.name, 
-      branch:v.branch||"", 
-      imo:v.imo||"",
-      show_on_gantt: v.show_on_gantt !== false
-    })));
-    setContracts((cData||[]).map((c: any) => ({
-      id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
-      start:c.start_date, end:c.end_date,
-      rate:c.rate, mob:c.mob, demob:c.demob,
-      firmDays:c.firm_days||0, optionDays:c.option_days||0,
-      priority:c.priority||"contract", altGroup:c.alt_group||null,
-    })));
-    setLoading(false);
-  }, []);
+const loadData = useCallback(async () => {
+  setLoading(true);
+  const [{ data: vData }, { data: cData }] = await Promise.all([
+    supabase.from("vessels").select("id,name,branch,imo,show_on_gantt").order("id"),
+    supabase.from("contracts").select("*").order("id"),
+  ]);
+  setVessels((vData||[]).map((v: any) => ({ 
+    id:v.id, 
+    name:v.name, 
+    branch:v.branch||"", 
+    imo:v.imo||"",
+    show_on_gantt: v.show_on_gantt !== false
+  })));
+  setContracts((cData||[]).map((c: any) => ({
+    id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
+    start:c.start_date, end:c.end_date,
+    rate:c.rate, mob:c.mob, demob:c.demob,
+    firmDays:c.firm_days||0, optionDays:c.option_days||0,
+    priority:c.priority||"contract", altGroup:c.alt_group||null,
+  })));
+  setLoading(false);
+}, []);
 
   useEffect(() => {
     loadData();
