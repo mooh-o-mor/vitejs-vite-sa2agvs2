@@ -72,27 +72,48 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
-  
-  // Универсальный парсер: ищем любые четыре числа (градусы и минуты)
-  const coordPattern = /(\d{1,3})[^\d]*(\d{1,2}[,.]?\d*)[^\d]*(\d{1,3})[^\d]*(\d{1,2}[,.]?\d*)/;
-  const match = s.match(coordPattern);
-  
-  if (match) {
-    const latDeg = +match[1];
-    const latMin = +match[2].replace(",", ".");
-    const lngDeg = +match[3];
-    const lngMin = +match[4].replace(",", ".");
-    
-    const lat = latDeg + latMin / 60;
-    const lng = lngDeg + lngMin / 60;
-    
-    // Проверяем разумные пределы
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) {
-      return [lat, lng];
-    }
+
+  // 1. DD-MM,M N DDD-MM,M E  (55-31,4N 020-08,5E)
+  const m1 = s.match(
+    /(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+  );
+  if (m1) {
+    const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
+    const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-  
-  // Поиск по портам
+
+  // 2. DD°MM N/DDD°MM E  (45°04N/036°32E)
+  const m2 = s.match(
+    /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+  );
+  if (m2) {
+    const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
+    const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
+  // 3. DD MM,M N DDD MM,M E  (55 31,4N 020 08,5E — пробел вместо дефиса)
+  const m3 = s.match(
+    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
+  );
+  if (m3) {
+    const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
+    const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
+  // 4. DD MM,Mсев.DDD MM,Mв.  (55 31,4сев.020 08,5в. — формат ряда судов)
+  const m4 = s.match(
+    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)\b/i
+  );
+  if (m4) {
+    const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
+    const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
+  // Port lookup
   const low = s
     .toLowerCase()
     .replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "")
@@ -100,7 +121,7 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   for (const [k, c] of Object.entries(PORTS)) {
     if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
   }
-  
+
   return null;
 }
 
@@ -289,10 +310,9 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
     }
 
-    // Нормализуем имя судна: убираем лишние пробелы, приводим к нижнему регистру
+    // Нормализуем имя судна: убираем лишние пробелы
     let vesselName = name ? String(name).trim() : "";
     vesselName = vesselName.replace(/\s+/g, " ");
-    vesselName = vesselName.toLowerCase();
 
     vessels.push({
       name: vesselName,
