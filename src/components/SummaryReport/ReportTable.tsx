@@ -69,13 +69,13 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             const vType = getVesselType(v.vessel_name);
             const power = getPower(v.coord_raw);
            // БЫЛО:
-//const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim();
+const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim();
 
 // СТАЛО:
-const coordDisplay = (vessel.coord_raw || "")
-  .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
-  .replace(/\s+(Да|Нет)\s*$/i, "")
-  .trim();
+//const coordDisplay = (vessel.coord_raw || "")
+ // .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
+//  .replace(/\s+(Да|Нет)\s*$/i, "")
+//  .trim();
 
             let statusDisplay = v.status;
             if (canView && sc === "asd") {
