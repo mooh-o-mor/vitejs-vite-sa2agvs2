@@ -1,11 +1,17 @@
 import XLSX from "xlsx-js-style";
 import { BRANCH_XL, STATUS_XL_BG, STATUS_XL_FG, getSupply, getPower, statusCls } from "./types";
 import type { DprRow } from "./types";
+import { formatVesselName, formatVesselType } from "../../lib/utils";
 
-export function exportToExcel(vessels: DprRow[], selDate: string, fmtDateRu: (d: string) => string) {
+export function exportToExcel(
+  vessels: DprRow[], 
+  selDate: string, 
+  fmtDateRu: (d: string) => string,
+  getVesselType: (name: string) => string
+) {
   const wb = XLSX.utils.book_new();
   const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус", "Контракт", "Период работ", "Местоположение судна", "Эл-е", "Примечание", "Топливо ДТ", "Топливо Мазут/ТТ"];
-  const colWidths = [6, 8, 30, 10, 12, 32, 28, 28, 6, 35, 12, 12];
+  const colWidths = [6, 10, 32, 12, 14, 35, 35, 35, 8, 35, 15, 15];
 
   const aoa: any[][] = [];
 
@@ -22,7 +28,7 @@ export function exportToExcel(vessels: DprRow[], selDate: string, fmtDateRu: (d:
   const headerRow = headers.map((h) => ({
     v: h, t: "s",
     s: {
-      font: { bold: true, sz: 10, color: { rgb: "FFFFFF" } },
+      font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
       fill: { fgColor: { rgb: "37474F" } },
       alignment: { horizontal: "center", vertical: "center", wrapText: true },
       border: {
@@ -39,6 +45,9 @@ export function exportToExcel(vessels: DprRow[], selDate: string, fmtDateRu: (d:
     const sc = statusCls(v.status);
     const brXl = BRANCH_XL[v.branch] || "FFFFFF";
     const power = getPower(v.coord_raw);
+    const vesselType = getVesselType(v.vessel_name);
+    const formattedType = formatVesselType(vesselType);
+    const formattedName = formatVesselName(v.vessel_name);
 
     const baseBorder = {
       top: { style: "thin" as const, color: { rgb: "CFD8DC" } },
@@ -54,14 +63,14 @@ export function exportToExcel(vessels: DprRow[], selDate: string, fmtDateRu: (d:
 
     aoa.push([
       { v: i + 1, t: "n", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
-      { v: "", t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 9, color: { rgb: "546E7A" } } } },
-      { v: v.vessel_name, t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "1A2A3A" } } } },
+      { v: formattedType, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "#1a2a3a" }, bold: true } } },
+      { v: formattedName, t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { bold: true, sz: 11, color: { rgb: "1A2A3A" } } } },
       { v: v.branch, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { bold: true, sz: 10, color: { rgb: "37474F" } } } },
       { v: v.status, t: "s", s: { fill: statusFill, alignment: { ...wrap }, border: baseBorder, font: statusFont } },
       { v: v.contract_info || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
       { v: v.work_period || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
-      { v: (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim(), t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
-      { v: power, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: power === "БЭП" ? "1565C0" : "2E7D32" } } } },
+      { v: (v.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim(), t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
+      { v: power, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: power === "БЭП" ? "1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }, bold: true } } },
       { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
       { v: getSupply(v.supplies, "ДТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
       { v: getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },

@@ -187,7 +187,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
           
           {canView && (
             <button 
-              onClick={() => exportToExcel(filtered, selDate, fmtDateRu)}
+              onClick={() => exportToExcel(filtered, selDate, fmtDateRu, getVesselType)}
               style={{ 
                 padding: "6px 16px", 
                 borderRadius: 6, 
