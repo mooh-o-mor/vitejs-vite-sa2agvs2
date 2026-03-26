@@ -10,7 +10,7 @@ interface Props {
   onAdd: (name: string, branch: string, imo: string) => void;
   onEdit: (vessel: Vessel) => void;
   onDelete: (id: number) => void;
-  onVesselUpdate?: () => void;  // добавим для обновления списка
+  onVesselUpdate?: () => void;
 }
 
 export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete, onVesselUpdate }: Props) {
@@ -25,13 +25,13 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete, onVess
       .from("vessels")
       .update({ show_on_gantt: newValue })
       .eq("id", vessel.id);
-    if (error) {
-      console.error("Ошибка обновления:", error);
-    } else {
+    if (!error) {
       // Обновляем локальное состояние
       vessel.show_on_gantt = newValue;
-      // Если есть callback для обновления родительского компонента
+      // Обновляем список судов в родителе
       if (onVesselUpdate) onVesselUpdate();
+    } else {
+      console.error("Ошибка обновления:", error);
     }
   }
 
@@ -43,7 +43,6 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete, onVess
     setNewImo("");
   }
 
-  // Форматируем название судна для отображения
   const formatDisplayName = (name: string): string => {
     const type = getType(name, typeOrder);
     const nameWithoutPrefix = name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
