@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase";
 import type { Vessel, Contract, FormState } from "./lib/types";
 import { T, YEAR, typeOrder } from "./lib/types";
-import { getType, cpShortKey, contractDays } from "./lib/utils";
+import { getType, cpKey, cpShortKey, contractDays } from "./lib/utils";
 import { exportToPPTX } from "./lib/exportPPTX";
 import { GanttChart } from "./components/GanttChart";
 import { Economics } from "./components/Economics";
@@ -34,8 +34,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("gantt");
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [filterCp, setFilterCp] = useState("Все");
-  const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("name");
+  const [sortBy, setSortBy] = useState<"type" | "name" | "branch">("type");
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
@@ -48,14 +49,21 @@ export default function App() {
   const [showVesselForm, setShowVesselForm] = useState(false);
   const [editingVessel, setEditingVessel] = useState<Vessel|null>(null);
 
+  // Мемоизированная функция загрузки данных
   const loadData = useCallback(async () => {
     setLoading(true);
     const [, { data: vData }, { data: cData }] = await Promise.all([
       new Promise(r => setTimeout(r, 1500)),
-      supabase.from("vessels").select("id,name,branch,imo").order("id"),
+      supabase.from("vessels").select("id,name,branch,imo,show_on_gantt").order("id"),
       supabase.from("contracts").select("*").order("id"),
     ]);
-    setVessels((vData||[]).map((v: any) => ({ id:v.id, name:v.name, branch:v.branch||"", imo:v.imo||"" })));
+    setVessels((vData||[]).map((v: any) => ({ 
+      id:v.id, 
+      name:v.name, 
+      branch:v.branch||"", 
+      imo:v.imo||"",
+      show_on_gantt: v.show_on_gantt !== false
+    })));
     setContracts((cData||[]).map((c: any) => ({
       id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
       start:c.start_date, end:c.end_date,
@@ -81,6 +89,15 @@ export default function App() {
   const toggleBranch = useCallback((v: string) => {
     if (v === "Все") { setFilterBranches([]); return; }
     setFilterBranches(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  }, []);
+
+  const toggleStatus = useCallback((value: string) => {
+    if (value === "Все") {
+      setFilterStatuses([]);
+      return;
+    }
+    const statusKey = value === "АСГ" ? "asg" : value === "АСД" ? "asd" : "rem";
+    setFilterStatuses(prev => prev.includes(statusKey) ? prev.filter(v => v !== statusKey) : [...prev, statusKey]);
   }, []);
 
   const openAddContract = useCallback((vesselId: number) => {
@@ -133,7 +150,7 @@ export default function App() {
   const addVessel = useCallback(async (name: string, branch: string, imo: string) => {
     setSyncing(true);
     const maxId = vessels.reduce((m, v) => Math.max(m, v.id), 0);
-    const { error } = await supabase.from("vessels").insert({ id:maxId+1, name, branch, imo });
+    const { error } = await supabase.from("vessels").insert({ id:maxId+1, name, branch, imo, show_on_gantt: true });
     if (error) alert("Ошибка: " + error.message);
     setSyncing(false); await loadData();
   }, [vessels, loadData]);
@@ -152,17 +169,42 @@ export default function App() {
     setSyncing(false); await loadData();
   }, [loadData]);
 
+  // Мемоизированные вычисления
   const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpShortKey(c.counterparty)))], [contracts]);
   const allTypes = useMemo(() => ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))], [vessels]);
   const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
   const allCps = useMemo(() => ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))], [cpKeys]);
 
+  const visibleContracts = useMemo(() => {
+    return filterCp==="Все" ? contracts : contracts.filter(c => cpShortKey(c.counterparty)===filterCp);
+  }, [contracts, filterCp]);
+
+  // Определяем статус судна для фильтрации
+  const getVesselStatus = useCallback((vesselId: number): string => {
+    const vesselContracts = visibleContracts.filter(c => c.vesselId === vesselId);
+    if (vesselContracts.length === 0) return "";
+    
+    // Проверяем на АСГ
+    const hasAsg = vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ");
+    if (hasAsg) return "asg";
+    
+    // Проверяем на ремонт
+    const hasRem = vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт");
+    if (hasRem) return "rem";
+    
+    // Всё остальное — АСД
+    return "asd";
+  }, [visibleContracts]);
+
   const filtered = useMemo(() => {
     return vessels.filter(v => {
       const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
       const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
-      return typeOk && branchOk;
+      const ganttOk = v.show_on_gantt !== false;
+      const statusOk = filterStatuses.length === 0 || filterStatuses.includes(getVesselStatus(v.id));
+      return typeOk && branchOk && ganttOk && statusOk;
     }).sort((a, b) => {
+      if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
       if (sortBy==="name") {
         const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
         const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
@@ -171,11 +213,7 @@ export default function App() {
       if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
       return 0;
     });
-  }, [vessels, filterTypes, filterBranches, sortBy]);
-
-  const visibleContracts = useMemo(() => {
-    return filterCp==="Все" ? contracts : contracts.filter(c => cpShortKey(c.counterparty)===filterCp);
-  }, [contracts, filterCp]);
+  }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselStatus]);
 
   const totalRev = useMemo(() => {
     return visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
@@ -202,7 +240,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="" />
+      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
@@ -221,7 +259,7 @@ export default function App() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.header, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
-            <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="" />
+            <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="МСС" />
             Флот МСС
           </span>
           
@@ -315,11 +353,13 @@ export default function App() {
             filterTypes={filterTypes}
             filterBranches={filterBranches}
             filterCp={filterCp}
+            filterStatuses={filterStatuses}
             sortBy={sortBy}
             canView={canView}
             onToggleType={toggleType}
             onToggleBranch={toggleBranch}
             onFilterCp={setFilterCp}
+            onToggleStatus={toggleStatus}
             onSortBy={setSortBy}
           />
         )}
