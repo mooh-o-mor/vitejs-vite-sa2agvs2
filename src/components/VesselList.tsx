@@ -10,9 +10,10 @@ interface Props {
   onAdd: (name: string, branch: string, imo: string) => void;
   onEdit: (vessel: Vessel) => void;
   onDelete: (id: number) => void;
+  onVesselUpdate?: () => void;  // добавим для обновления списка
 }
 
-export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Props) {
+export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete, onVesselUpdate }: Props) {
   const [newType, setNewType] = useState(typeOrder[0]);
   const [newShortName, setNewShortName] = useState("");
   const [newBranch, setNewBranch] = useState("");
@@ -27,9 +28,10 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
     if (error) {
       console.error("Ошибка обновления:", error);
     } else {
+      // Обновляем локальное состояние
       vessel.show_on_gantt = newValue;
-      // Принудительно обновляем состояние
-      window.location.reload();
+      // Если есть callback для обновления родительского компонента
+      if (onVesselUpdate) onVesselUpdate();
     }
   }
 
