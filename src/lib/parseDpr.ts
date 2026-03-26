@@ -112,7 +112,15 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-
+// Формат: 55 31,4сев.020 08,5в. (любые варианты)
+const m4 = s.match(
+  /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[сc][еe][вв]\.?\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[вв][оo]\.?/i
+);
+if (m4) {
+  const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
+  const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
+  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+}
   // Формат: 55 31,4 N 020 08,5 E
   const m3 = s.match(
     /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
