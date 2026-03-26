@@ -212,7 +212,7 @@ const getVesselStatus = useCallback((vesselId: number): string[] => {
   return statuses;
 }, [visibleContracts]);
 
- const filtered = useMemo(() => {
+const filtered = useMemo(() => {
   return vessels.filter(v => {
     const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
     const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
@@ -221,13 +221,18 @@ const getVesselStatus = useCallback((vesselId: number): string[] => {
     const statusOk = filterStatuses.length === 0 || vesselStatuses.some(s => filterStatuses.includes(s));
     return typeOk && branchOk && ganttOk && statusOk;
   }).sort((a, b) => {
-    if (sortBy==="type") return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
-    if (sortBy==="name") {
-      const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
-      const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/, "");
+    if (sortBy === "type") {
+      return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
+    }
+    if (sortBy === "name") {
+      // Убираем тип из названия для сортировки
+      const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+      const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
       return nameA.localeCompare(nameB, "ru");
     }
-    if (sortBy==="branch") return (a.branch||"").localeCompare(b.branch||"", "ru");
+    if (sortBy === "branch") {
+      return (a.branch || "").localeCompare(b.branch || "", "ru");
+    }
     return 0;
   });
 }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselStatus]);
