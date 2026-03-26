@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Vessel, Contract } from "../lib/types";
 import { T, typeOrder } from "../lib/types";
-import { getType } from "../lib/utils";
+import { getType, formatVesselName, formatVesselType } from "../lib/utils";
 import { supabase } from "../lib/supabase";
 
 interface Props {
@@ -27,8 +27,9 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
     if (error) {
       console.error("Ошибка обновления:", error);
     } else {
-      // Обновляем локальное состояние
       vessel.show_on_gantt = newValue;
+      // Принудительно обновляем состояние
+      window.location.reload();
     }
   }
 
@@ -40,12 +41,21 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
     setNewImo("");
   }
 
+  // Форматируем название судна для отображения
+  const formatDisplayName = (name: string): string => {
+    const type = getType(name, typeOrder);
+    const nameWithoutPrefix = name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
+    const formattedType = formatVesselType(type);
+    const formattedName = formatVesselName(nameWithoutPrefix);
+    return formattedType ? `${formattedType} ${formattedName}` : formattedName;
+  };
+
   return (
     <div>
       <div style={{ background: T.bg2, borderRadius: 8, padding: 16, marginBottom: 16, border: `1px solid ${T.border}` }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 12 }}>Добавить судно</div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <div style={{ width: 100 }}>
             <div style={{ fontSize: 11, color: T.text2, marginBottom: 3 }}>Тип</div>
             <select value={newType} onChange={e => setNewType(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontSize: 13 }}>
               {typeOrder.map(t => <option key={t} value={t}>{t}</option>)}
@@ -56,20 +66,20 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
             <input value={newShortName} onChange={e => setNewShortName(e.target.value)} placeholder="Например: Балтика"
               style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontSize: 13, boxSizing: "border-box" }} />
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ width: 120 }}>
             <div style={{ fontSize: 11, color: T.text2, marginBottom: 3 }}>Филиал</div>
-            <input value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="БЛТФ..."
+            <input value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="БЛТФ"
               style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontSize: 13, boxSizing: "border-box" }} />
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: T.text2, marginBottom: 3 }}>IMO</div>
+          <div style={{ width: 120 }}>
+            <div style={{ fontSize: 11, color: T.text2, marginBottom: 3 }}>IMO (опц.)</div>
             <input value={newImo} onChange={e => setNewImo(e.target.value)} placeholder="9663219"
               style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.bg2, color: T.text, fontSize: 13, boxSizing: "border-box" }} />
           </div>
         </div>
         {newShortName && (
           <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>
-            Будет добавлено: <b style={{ color: T.text }}>{newType} {newShortName}</b>
+            Будет добавлено: <b style={{ color: T.text }}>{newType} {formatVesselName(newShortName)}</b>
           </div>
         )}
         <button onClick={handleAdd} style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: T.accent, color: "#fff", fontWeight: 700, cursor: "pointer" }}>
@@ -83,26 +93,31 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete }: Prop
         return (
           <div key={type} style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T.text3, marginBottom: 5, letterSpacing: 1 }}>{type}</div>
-            {grp.map(v => (
-              <div key={v.id} style={{ display: "flex", alignItems: "center", background: T.bg2, borderRadius: 6, padding: "9px 12px", marginBottom: 4, border: `1px solid ${T.border}` }}>
-                <span style={{ marginRight: 8 }}>🚢</span>
-                <span style={{ flex: 1, fontSize: 12, color: T.text }}>{v.name}</span>
-                {v.imo && <span style={{ color: T.text3, fontSize: 11, marginRight: 10, fontFamily: "monospace" }}>IMO {v.imo}</span>}
-                {v.branch && <span style={{ color: T.amber, fontSize: 11, marginRight: 10 }}>{v.branch}</span>}
-                <span style={{ color: T.text3, fontSize: 11, marginRight: 8 }}>{contracts.filter(c => c.vesselId === v.id).length} контр.</span>
-                <label style={{ display: "flex", alignItems: "center", gap: 4, marginRight: 8, fontSize: 11, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={v.show_on_gantt !== false}
-                    onChange={() => toggleShowOnGantt(v)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span style={{ color: T.text2 }}>Показывать в расстановке</span>
-                </label>
-                <button onClick={() => onEdit(v)} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${T.border}`, background: "transparent", color: T.text2, cursor: "pointer", fontSize: 11, marginRight: 4 }}>✎</button>
-                <button onClick={() => onDelete(v.id)} style={{ padding: "2px 8px", borderRadius: 4, border: `1px solid ${T.red}`, background: "transparent", color: T.red, cursor: "pointer", fontSize: 11 }}>✕</button>
-              </div>
-            ))}
+            {grp.map(v => {
+              const displayName = formatDisplayName(v.name);
+              return (
+                <div key={v.id} style={{ display: "flex", alignItems: "center", background: T.bg2, borderRadius: 6, padding: "9px 12px", marginBottom: 4, border: `1px solid ${T.border}`, gap: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: T.text, flex: 1 }}>{displayName}</span>
+                  {v.branch && (
+                    <span style={{ color: T.amber, fontSize: 12, background: T.bg3, padding: "2px 8px", borderRadius: 4 }}>{v.branch}</span>
+                  )}
+                  <span style={{ color: T.text3, fontSize: 11, background: T.bg3, padding: "2px 8px", borderRadius: 4 }}>
+                    {contracts.filter(c => c.vesselId === v.id).length} контр.
+                  </span>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={v.show_on_gantt !== false}
+                      onChange={() => toggleShowOnGantt(v)}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
+                    <span style={{ color: T.text2 }}>Показывать в расстановке</span>
+                  </label>
+                  <button onClick={() => onEdit(v)} style={{ padding: "4px 10px", borderRadius: 4, border: `1px solid ${T.border}`, background: "transparent", color: T.text2, cursor: "pointer", fontSize: 12 }}>✎</button>
+                  <button onClick={() => onDelete(v.id)} style={{ padding: "4px 10px", borderRadius: 4, border: `1px solid ${T.red}`, background: "transparent", color: T.red, cursor: "pointer", fontSize: 12 }}>✕</button>
+                </div>
+              );
+            })}
           </div>
         );
       })}
