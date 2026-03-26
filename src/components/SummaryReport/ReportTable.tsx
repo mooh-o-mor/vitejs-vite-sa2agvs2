@@ -68,7 +68,14 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             const rowBg = branchBg(v.branch);
             const vType = getVesselType(v.vessel_name);
             const power = getPower(v.coord_raw);
-            const coordDisplay = (v.coord_raw || "").replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
+           // БЫЛО:
+//const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim();
+
+// СТАЛО:
+const coordDisplay = (vessel.coord_raw || "")
+  .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
+  .replace(/\s+(Да|Нет)\s*$/i, "")
+  .trim();
 
             let statusDisplay = v.status;
             if (canView && sc === "asd") {
