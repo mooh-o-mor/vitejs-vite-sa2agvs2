@@ -411,13 +411,14 @@ const filtered = useMemo(() => {
           <Economics vessels={filtered} contracts={visibleContracts} />
         )}
         {activeTab === "vessels" && isAdmin && (
-          <VesselList
-            vessels={vessels}
-            contracts={contracts}
-            onAdd={addVessel}
-            onEdit={v => { setEditingVessel(v); setShowVesselForm(true); }}
-            onDelete={deleteVessel}
-          />
+         <VesselList
+  vessels={vessels}
+  contracts={contracts}
+  onAdd={addVessel}
+  onEdit={v => { setEditingVessel(v); setShowVesselForm(true); }}
+  onDelete={deleteVessel}
+  onVesselUpdate={loadData}
+/>
         )}
       </div>
 
