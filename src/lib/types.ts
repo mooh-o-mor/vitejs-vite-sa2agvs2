@@ -3,6 +3,7 @@ export interface Vessel {
   name: string;
   branch: string;
   imo: string;
+  show_on_gantt?: boolean;
 }
 
 export interface Contract {
