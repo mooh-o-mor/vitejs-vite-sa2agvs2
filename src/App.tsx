@@ -202,7 +202,7 @@ export default function App() {
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
+      <img src="/logo-big.png" style={{ height:240, width:240, objectFit:"contain" }} alt="" />
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
@@ -221,7 +221,7 @@ export default function App() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.header, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
-            <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="МСС" />
+            <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="" />
             Флот МСС
           </span>
           
