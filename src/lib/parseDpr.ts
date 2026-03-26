@@ -73,63 +73,67 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
 
-  // Формат: 55 31,4 сев. 020 08,5 в. (с пробелами)
-  const m4 = s.match(
+  // Формат: 55 31,4 сев. 020 08,5 в. (с пробелами и точками)
+  const matchWithSpaces = s.match(
     /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[сc][еe][вв]\.?\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[вв][оo]\.?/i
   );
-  if (m4) {
-    const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
-    const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
+  if (matchWithSpaces) {
+    const lat = +matchWithSpaces[1] + +matchWithSpaces[2].replace(",", ".") / 60;
+    const lng = +matchWithSpaces[3] + +matchWithSpaces[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // Формат: 55 31,4сев.020 08,5в. (без пробела после числа)
-  const m5 = s.match(
-    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)([сc][еe][вв]\.?)\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)([вв][оo]\.?)/i
+  // Формат: 55 31,4сев.020 08,5в. (без пробелов после числа)
+  const matchNoSpaces = s.match(
+    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)[сc][еe][вв]\.?\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)[вв][оo]\.?/i
   );
-  if (m5) {
-    const lat = +m5[1] + +m5[2].replace(",", ".") / 60;
-    const lng = +m5[4] + +m5[5].replace(",", ".") / 60;
+  if (matchNoSpaces) {
+    const lat = +matchNoSpaces[1] + +matchNoSpaces[2].replace(",", ".") / 60;
+    const lng = +matchNoSpaces[3] + +matchNoSpaces[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
   // Формат: 52-27,7 С 143-38,9 В
-  const m1 = s.match(
+  const matchDash = s.match(
     /(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
-  if (m1) {
-    const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
-    const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
+  if (matchDash) {
+    const lat = +matchDash[1] + +matchDash[2].replace(",", ".") / 60;
+    const lng = +matchDash[3] + +matchDash[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
   // Формат: 45°04N/036°32E
-  const m2 = s.match(
+  const matchDeg = s.match(
     /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
-  if (m2) {
-    const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
-    const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
+  if (matchDeg) {
+    const lat = +matchDeg[1] + +matchDeg[2].replace(",", ".") / 60;
+    const lng = +matchDeg[3] + +matchDeg[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-// Формат: 55 31,4сев.020 08,5в. (любые варианты)
-const m4 = s.match(
-  /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[сc][еe][вв]\.?\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[вв][оo]\.?/i
-);
-if (m4) {
-  const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
-  const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
-  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
-}
+
   // Формат: 55 31,4 N 020 08,5 E
-  const m3 = s.match(
+  const matchSpace = s.match(
     /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
-  if (m3) {
-    const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
-    const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
+  if (matchSpace) {
+    const lat = +matchSpace[1] + +matchSpace[2].replace(",", ".") / 60;
+    const lng = +matchSpace[3] + +matchSpace[4].replace(",", ".") / 60;
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
+
+  // Поиск по портам
+  const low = s
+    .toLowerCase()
+    .replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "")
+    .trim();
+  for (const [k, c] of Object.entries(PORTS)) {
+    if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
+  }
+  
+  return null;
+}
 
   // Поиск по портам
   const low = s
