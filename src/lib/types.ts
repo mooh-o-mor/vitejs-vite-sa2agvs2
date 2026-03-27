@@ -4,6 +4,7 @@ export interface Vessel {
   branch: string;
   imo: string;
   show_on_gantt?: boolean;
+  photo_url?: string;  // добавляем
 }
 
 export interface Contract {
