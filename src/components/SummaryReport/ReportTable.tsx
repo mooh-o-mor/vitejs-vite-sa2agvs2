@@ -11,6 +11,9 @@ import {
 } from "./types";
 import { formatVesselName, formatVesselType } from "../../lib/utils";
 
+import { useState, useEffect } from "react";
+import { supabase } from "../../lib/supabase";
+
 interface Props {
   vessels: DprRow[];
   selDate: string;
@@ -43,6 +46,28 @@ const tdBase: React.CSSProperties = {
 };
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
+  const [imoMap, setImoMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    const fetchImoMap = async () => {
+      const { data } = await supabase.from("vessels").select("name, imo");
+      if (data) {
+        const map = new Map<string, string>();
+        data.forEach((v: any) => {
+          const name = v.name.toLowerCase().trim();
+          map.set(name, v.imo);
+        });
+        setImoMap(map);
+      }
+    };
+    fetchImoMap();
+  }, []);
+
+  const getImo = (vesselName: string): string => {
+    const normalized = vesselName.toLowerCase().trim();
+    return imoMap.get(normalized) || "";
+  };
+
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -56,7 +81,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Контракт</th>}
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Период работ</th>}
             <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
-            <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
+           {canView && <th style={{ ...thStyle, width: 50 }}>Эл-е</th>}
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
@@ -94,7 +119,27 @@ const coordDisplay = (v.coord_raw || "")
               <tr key={v.vessel_name} style={{ background: rowBg }}>
                 <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1} </td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)} </td>
-                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)} </td>
+               <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
+  {(() => {
+    const imo = getImo(v.vessel_name);
+    const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
+    const displayName = formatVesselName(v.vessel_name);
+    if (rsClassUrl) {
+      return (
+        <a 
+          href={rsClassUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{ color: T.accent, textDecoration: "underline", cursor: "pointer" }}
+        >
+          {displayName}
+        </a>
+      );
+    }
+    return displayName;
+  })()}
+</td>
+
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch} </td>
                 <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay} </td>
                 {canView && (
@@ -124,7 +169,9 @@ const coordDisplay = (v.coord_raw || "")
                   </td>
                 )}
                 <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"} </td>
-                <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"} </td>
+              {canView && (
+  <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"} </td>
+)}
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell
