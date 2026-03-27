@@ -40,20 +40,24 @@ const coordDisplay = (vessel.coord_raw || "")
   const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
   const formattedName = formatVesselName(nameWithoutPrefix);
   
-  useEffect(() => {
-    const fetchVesselData = async () => {
-      const { data } = await supabase
-        .from("vessels")
-        .select("imo, photo_url")
-        .ilike("name", `%${nameWithoutPrefix}%`)
-        .maybeSingle();
-      if (data) {
-        setImo(data.imo || "");
-        setPhotoUrl(data.photo_url || null);
-      }
-    };
-    fetchVesselData();
-  }, [nameWithoutPrefix]);
+useEffect(() => {
+  // Сбрасываем предыдущие данные
+  setPhotoUrl(null);
+  setImo("");
+  
+  const fetchVesselData = async () => {
+    const { data } = await supabase
+      .from("vessels")
+      .select("imo, photo_url")
+      .ilike("name", `%${nameWithoutPrefix}%`)
+      .maybeSingle();
+    if (data) {
+      setImo(data.imo || "");
+      setPhotoUrl(data.photo_url || null);
+    }
+  };
+  fetchVesselData();
+}, [nameWithoutPrefix]);
   
   const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
   
