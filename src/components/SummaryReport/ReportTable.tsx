@@ -10,6 +10,7 @@ import {
   getPower,
 } from "./types";
 import { formatVesselName, formatVesselType } from "../../lib/utils";
+import { T } from "../../lib/types";
 
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
