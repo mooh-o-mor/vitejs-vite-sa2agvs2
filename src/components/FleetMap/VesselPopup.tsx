@@ -49,7 +49,7 @@ useEffect(() => {
     const { data } = await supabase
       .from("vessels")
       .select("imo, photo_url")
-      .ilike("name", `%${nameWithoutPrefix}%`)
+      .ilike("name", `%${nameWithoutPrefix}`)
       .maybeSingle();
     if (data) {
       setImo(data.imo || "");
