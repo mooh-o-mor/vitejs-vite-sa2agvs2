@@ -154,12 +154,12 @@ const loadData = useCallback(async () => {
     setSyncing(false); await loadData();
   }, [vessels, loadData]);
 
-  const saveVessel = useCallback(async (name: string, branch: string, imo: string) => {
-    if (!editingVessel) return;
-    setSyncing(true);
-    await supabase.from("vessels").update({ name, branch, imo }).eq("id", editingVessel.id);
-    setSyncing(false); setShowVesselForm(false); await loadData();
-  }, [editingVessel, loadData]);
+const saveVessel = useCallback(async (name: string, branch: string, imo: string, photoUrl: string) => {
+  if (!editingVessel) return;
+  setSyncing(true);
+  await supabase.from("vessels").update({ name, branch, imo, photo_url: photoUrl }).eq("id", editingVessel.id);
+  setSyncing(false); setShowVesselForm(false); await loadData();
+}, [editingVessel, loadData]);
 
   const deleteVessel = useCallback(async (id: number) => {
     setSyncing(true);
