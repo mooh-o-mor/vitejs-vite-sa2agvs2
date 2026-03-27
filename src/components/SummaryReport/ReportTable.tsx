@@ -49,10 +49,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
   const [imoMap, setImoMap] = useState<Map<string, string>>(new Map());
   const [specMap, setSpecMap] = useState<Map<string, string>>(new Map());
 
-  // Загружаем IMO и ссылки на спецификации
   useEffect(() => {
     const fetchData = async () => {
-      // Загружаем IMO из vessels
       const { data: vesselsData } = await supabase.from("vessels").select("name, imo");
       if (vesselsData) {
         const map = new Map<string, string>();
@@ -67,7 +65,6 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
         setImoMap(map);
       }
 
-      // Загружаем ссылки на спецификации из vessel_specs
       const { data: specsData } = await supabase.from("vessel_specs").select("vessel_name, spec_url, project");
       if (specsData) {
         const map = new Map<string, string>();
@@ -80,7 +77,6 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
           }
           if (url) {
             map.set(vesselName, url);
-            // Также добавляем ключ без префикса
             const nameWithoutPrefix = vesselName.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
             if (nameWithoutPrefix !== vesselName) {
               map.set(nameWithoutPrefix, url);
@@ -134,7 +130,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
             {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
-           </thead>
+          </tr>
+        </thead>
         <tbody>
           {vessels.map((v, i) => {
             const sc = statusCls(v.status);
@@ -156,15 +153,13 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
               statusDisplay = shortStatus(v.status);
             }
             const isAsd = sc === "asd";
-            
-            // Получаем ссылку на спецификацию (приоритет выше RS Class)
+
             const specUrl = getSpecUrl(v.vessel_name);
             const imo = getImo(v.vessel_name);
             const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
             const displayName = formatVesselName(v.vessel_name);
             const isException = noRsClassExceptions.some(ex => v.vessel_name.toLowerCase().includes(ex));
-            
-            // Используем спецификацию, если есть, иначе RS Class
+
             const linkUrl = specUrl || (rsClassUrl && !isException ? rsClassUrl : null);
             const linkTitle = specUrl ? "Открыть спецификацию (PDF)" : "Открыть страницу RS Class";
 
@@ -172,10 +167,10 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
               <tr key={v.vessel_name} style={{ background: rowBg }}>
                 <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>
                   {i + 1}
-                 </thead>
+                </td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>
                   {formatVesselType(vType)}
-                 </thead>
+                </td>
                 <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
                   {linkUrl ? (
                     <a
@@ -190,13 +185,13 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                   ) : (
                     displayName
                   )}
-                 </thead>
+                </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>
                   {v.branch}
-                 </thead>
+                </td>
                 <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>
                   {statusDisplay}
-                 </thead>
+                </td>
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell
@@ -208,7 +203,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                       editable={isAsd}
                       placeholder="✎ добавить"
                     />
-                   </thead>
+                  </td>
                 )}
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
@@ -221,15 +216,15 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                       editable={true}
                       placeholder="✎ добавить период"
                     />
-                   </thead>
+                  </td>
                 )}
                 <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>
                   {coordDisplay || "—"}
-                 </thead>
+                </td>
                 {canView && (
                   <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>
                     {power || "—"}
-                   </thead>
+                  </td>
                 )}
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
@@ -242,23 +237,23 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                       editable={true}
                       placeholder="✎ добавить примечание"
                     />
-                   </thead>
+                  </td>
                 )}
                 {canView && (
                   <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>
                     {getSupply(v.supplies, "ДТ") || ""}
-                   </thead>
+                  </td>
                 )}
                 {canView && (
                   <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>
                     {getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}
-                   </thead>
+                  </td>
                 )}
-               </thead>
+              </tr>
             );
           })}
         </tbody>
-       </thead>
+      </table>
     </div>
   );
 }
