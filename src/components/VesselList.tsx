@@ -114,7 +114,7 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete, onVess
                     />
                     <span style={{ color: T.text2 }}>Показывать в расстановке</span>
                   </label>
-                  <button onClick={() => onEdit(v)} style={{ padding: "4px 10px", borderRadius: 4, border: `1px solid ${T.border}`, background: "transparent", color: T.text2, cursor: "pointer", fontSize: 12 }}>✎</button>
+                 <button onClick={() => onEdit(v)} style={{ padding: "4px 10px", borderRadius: 4, border: `1px solid ${T.border}`, background: "transparent", color: T.text2, cursor: "pointer", fontSize: 12 }}>✎</button>
                   <button onClick={() => onDelete(v.id)} style={{ padding: "4px 10px", borderRadius: 4, border: `1px solid ${T.red}`, background: "transparent", color: T.red, cursor: "pointer", fontSize: 12 }}>✕</button>
                 </div>
               );
