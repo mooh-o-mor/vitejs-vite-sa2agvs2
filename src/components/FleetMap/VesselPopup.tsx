@@ -33,7 +33,6 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
   const formattedName = formatVesselName(nameWithoutPrefix);
   
-  // Загружаем фото и IMO из таблицы vessels
   useEffect(() => {
     const fetchVesselData = async () => {
       const { data } = await supabase
@@ -49,7 +48,6 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
     fetchVesselData();
   }, [nameWithoutPrefix]);
   
-  // Формируем ссылку на RS Class
   const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
 
   return (
@@ -118,7 +116,6 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
         <button onClick={onClose} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
       </div>
 
-      {/* Фото судна */}
       {photoUrl && (
         <div style={{ padding: "8px 14px", borderBottom: `1px solid ${T.border}`, background: "#f8f9fa", textAlign: "center" }}>
           <img 
@@ -159,19 +156,20 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                       {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
                         <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
                       ))}
-                    </thead>
+                    </tr>
+                  </thead>
                   <tbody>
                     {(vessel.supplies as DprSupply[]).map((s, i) => (
                       <tr key={i}>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}  <
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}  <
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}  <
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}  <
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}  <
-                       <
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
+                      </tr>
                     ))}
                   </tbody>
-                 <
+                </table>
               </>
             )}
           </>
