@@ -77,7 +77,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
     }
     return imo || "";
   };
-
+const noRsClassExceptions = ["артемис оффшор", "артемис"];
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -121,17 +121,18 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             const imo = getImo(v.vessel_name);
             const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
             const displayName = formatVesselName(v.vessel_name);
+            const isException = noRsClassExceptions.some(ex => v.vessel_name.toLowerCase().includes(ex));
 
             return (
               <tr key={v.vessel_name} style={{ background: rowBg }}>
                 <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>
                   {i + 1}
-                </td>
+                 </td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>
                   {formatVesselType(vType)}
-                </td>
+                 </td>
                 <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
-                  {rsClassUrl ? (
+                  {rsClassUrl && !isException ? (
                     <a
                       href={rsClassUrl}
                       target="_blank"
@@ -143,7 +144,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                   ) : (
                     displayName
                   )}
-                </td>
+                 </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>
                   {v.branch}
                 </td>
