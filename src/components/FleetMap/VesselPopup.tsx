@@ -49,6 +49,10 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   }, [nameWithoutPrefix]);
   
   const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
+  
+  // Исключения для ссылок (судна, у которых не должно быть ссылки)
+  const noRsClassExceptions = ["артемис оффшор", "артемис"];
+  const showRsLink = rsClassUrl && canView && !noRsClassExceptions.some(ex => vessel.vessel_name.toLowerCase().includes(ex));
 
   return (
     <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -76,7 +80,7 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
               {formatVesselType(vesselType)}
             </span>
           )}
-          {rsClassUrl && canView ? (
+          {showRsLink ? (
             <a 
               href={rsClassUrl} 
               target="_blank" 
@@ -144,34 +148,34 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                 <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 250 }}>{vessel.note}</span>
               </div>
             )}
-            {(vessel.supplies && vessel.supplies.length > 0) && (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
-                  <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
-                  {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
-                </div>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                  <thead>
-                    <tr>
-                      {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
-                        <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(vessel.supplies as DprSupply[]).map((s, i) => (
-                      <tr key={i}>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
+           {(vessel.supplies && vessel.supplies.length > 0) && (
+  <>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
+      <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
+      {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
+    </div>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+      <thead>
+        <tr>
+          {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
+            <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
+          ))}
+          </tr>
+        </thead>
+      <tbody>
+        {(vessel.supplies as DprSupply[]).map((s, i) => (
+          <tr key={i}>
+            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
+            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
+            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
+            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
+            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </>
+)}
           </>
         )}
       </div>
