@@ -2,6 +2,8 @@ import { T } from "../../lib/types";
 import type { DprSupply, DprRow } from "../../lib/parseDpr";
 import { STATUS_HEADER_BG } from "./mapIcons";
 import { formatVesselName, formatVesselType, getPower } from "../../lib/utils";
+import { supabase } from "../../lib/supabase";
+import { useState, useEffect } from "react";
 
 interface Props {
   vessel: DprRow;
@@ -23,17 +25,32 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const c = cls(vessel.status);
   const power = getPower(vessel.coord_raw);
   const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
-  // БЫЛО:
-//const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim();
-
-// СТАЛО:
-const coordDisplay = (vessel.coord_raw || "")
-  .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
-  .replace(/\s+(Да|Нет)\s*$/i, "")
-  .trim();
+  const coordDisplay = (vessel.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim();
+  
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [imo, setImo] = useState<string>("");
   
   const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
   const formattedName = formatVesselName(nameWithoutPrefix);
+  
+  // Загружаем фото и IMO из таблицы vessels
+  useEffect(() => {
+    const fetchVesselData = async () => {
+      const { data } = await supabase
+        .from("vessels")
+        .select("imo, photo_url")
+        .ilike("name", `%${nameWithoutPrefix}%`)
+        .maybeSingle();
+      if (data) {
+        setImo(data.imo || "");
+        setPhotoUrl(data.photo_url || null);
+      }
+    };
+    fetchVesselData();
+  }, [nameWithoutPrefix]);
+  
+  // Формируем ссылку на RS Class
+  const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
 
   return (
     <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -61,9 +78,30 @@ const coordDisplay = (vessel.coord_raw || "")
               {formatVesselType(vesselType)}
             </span>
           )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-            {formattedName}
-          </span>
+          {rsClassUrl && canView ? (
+            <a 
+              href={rsClassUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ 
+                fontSize: 16, 
+                fontWeight: 700, 
+                color: T.accent, 
+                textDecoration: "underline",
+                overflow: "hidden", 
+                textOverflow: "ellipsis", 
+                whiteSpace: "nowrap", 
+                flex: 1,
+                cursor: "pointer"
+              }}
+            >
+              {formattedName}
+            </a>
+          ) : (
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+              {formattedName}
+            </span>
+          )}
           {vessel.branch && (
             <span style={{ 
               fontSize: 11, 
@@ -79,6 +117,22 @@ const coordDisplay = (vessel.coord_raw || "")
         </div>
         <button onClick={onClose} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
       </div>
+
+      {/* Фото судна */}
+      {photoUrl && (
+        <div style={{ padding: "8px 14px", borderBottom: `1px solid ${T.border}`, background: "#f8f9fa", textAlign: "center" }}>
+          <img 
+            src={photoUrl} 
+            alt={formattedName}
+            style={{ 
+              maxWidth: "100%", 
+              maxHeight: "180px", 
+              objectFit: "contain",
+              borderRadius: 4
+            }}
+          />
+        </div>
+      )}
 
       <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
@@ -105,20 +159,19 @@ const coordDisplay = (vessel.coord_raw || "")
                       {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
                         <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
                       ))}
-                    </tr>
                     </thead>
                   <tbody>
                     {(vessel.supplies as DprSupply[]).map((s, i) => (
                       <tr key={i}>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}  </td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}  </td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}  </td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}  </td>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}  </td>
-                      </tr>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}  <
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}  <
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}  <
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}  <
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}  <
+                       <
                     ))}
                   </tbody>
-                </table>
+                 <
               </>
             )}
           </>
