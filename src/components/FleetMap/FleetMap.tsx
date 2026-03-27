@@ -386,13 +386,14 @@ export function FleetMap({
         )}
 
         {selVessel && (
-          <VesselPopup
-            vessel={selVessel}
-            vesselType={getVesselType(selVessel.vessel_name)}
-            canView={canView}
-            onClose={() => setSelVessel(null)}
-          />
-        )}
+  <VesselPopup
+    key={selVessel.vessel_name}
+    vessel={selVessel}
+    vesselType={getVesselType(selVessel.vessel_name)}
+    canView={canView}
+    onClose={() => setSelVessel(null)}
+  />
+)}
       </div>
 
       <style>{`
