@@ -54,8 +54,12 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
       if (data) {
         const map = new Map<string, string>();
         data.forEach((v: any) => {
-          const name = v.name.toLowerCase().trim();
-          map.set(name, v.imo);
+          const fullName = v.name.toLowerCase().trim();
+          map.set(fullName, v.imo);
+          const nameWithoutPrefix = fullName.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
+          if (nameWithoutPrefix !== fullName) {
+            map.set(nameWithoutPrefix, v.imo);
+          }
         });
         setImoMap(map);
       }
@@ -64,11 +68,15 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
   }, []);
 
   const getImo = (vesselName: string): string => {
-  const normalized = vesselName.toLowerCase().trim();
-  const imo = imoMap.get(normalized) || "";
-  console.log(`getImo: ${normalized} -> ${imo}`);  // добавить
-  return imo;
-};
+    const nameWithoutPrefix = vesselName.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
+    const normalized = nameWithoutPrefix.toLowerCase().trim();
+    let imo = imoMap.get(normalized);
+    if (!imo) {
+      const fullName = vesselName.toLowerCase().trim();
+      imo = imoMap.get(fullName);
+    }
+    return imo || "";
+  };
 
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
@@ -99,7 +107,6 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
               .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
               .replace(/\s+(Да|Нет)\s*$/i, "")
               .trim();
-
             let statusDisplay = v.status;
             if (canView && sc === "asd") {
               const parts = v.status.split(/[,/]/);
@@ -110,7 +117,6 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             if (!canView) {
               statusDisplay = shortStatus(v.status);
             }
-
             const isAsd = sc === "asd";
             const imo = getImo(v.vessel_name);
             const rsClassUrl = imo ? `https://rs-class.org/c/getves.php?imo=${imo}` : null;
@@ -118,13 +124,17 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
 
             return (
               <tr key={v.vessel_name} style={{ background: rowBg }}>
-                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
-                <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
+                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>
+                  {i + 1}
+                </td>
+                <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>
+                  {formatVesselType(vType)}
+                </td>
                 <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
                   {rsClassUrl ? (
-                    <a 
-                      href={rsClassUrl} 
-                      target="_blank" 
+                    <a
+                      href={rsClassUrl}
+                      target="_blank"
                       rel="noopener noreferrer"
                       style={{ color: T.accent, textDecoration: "underline", cursor: "pointer" }}
                     >
@@ -134,8 +144,12 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                     displayName
                   )}
                 </td>
-                <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
+                <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>
+                  {v.branch}
+                </td>
+                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>
+                  {statusDisplay}
+                </td>
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell
@@ -162,9 +176,13 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                     />
                   </td>
                 )}
-                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"}</td>
+                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>
+                  {coordDisplay || "—"}
+                </td>
                 {canView && (
-                  <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"}</td>
+                  <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>
+                    {power || "—"}
+                  </td>
                 )}
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
@@ -179,8 +197,16 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                     />
                   </td>
                 )}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
+                {canView && (
+                  <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>
+                    {getSupply(v.supplies, "ДТ") || ""}
+                  </td>
+                )}
+                {canView && (
+                  <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>
+                    {getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}
+                  </td>
+                )}
               </tr>
             );
           })}
