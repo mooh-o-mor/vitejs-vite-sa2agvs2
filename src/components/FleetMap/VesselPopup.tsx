@@ -59,7 +59,7 @@ const coordDisplay = (vessel.coord_raw || "")
   
   // Исключения для ссылок (судна, у которых не должно быть ссылки)
   const noRsClassExceptions = ["артемис оффшор", "артемис"];
-  const showRsLink = rsClassUrl && canView && !noRsClassExceptions.some(ex => vessel.vessel_name.toLowerCase().includes(ex));
+  const showRsLink = rsClassUrl && !noRsClassExceptions.some(ex => vessel.vessel_name.toLowerCase().includes(ex));
 
   return (
     <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
