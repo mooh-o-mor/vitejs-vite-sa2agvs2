@@ -64,9 +64,11 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
   }, []);
 
   const getImo = (vesselName: string): string => {
-    const normalized = vesselName.toLowerCase().trim();
-    return imoMap.get(normalized) || "";
-  };
+  const normalized = vesselName.toLowerCase().trim();
+  const imo = imoMap.get(normalized) || "";
+  console.log(`getImo: ${normalized} -> ${imo}`);  // добавить
+  return imo;
+};
 
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
