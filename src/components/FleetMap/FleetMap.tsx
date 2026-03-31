@@ -299,33 +299,6 @@ export function FleetMap({
   const cRem = filtered.filter((v) => cls(v.status) === "rem").length;
   const noPos = filtered.filter((v) => v.lat == null).length;
 
-  const fmtDateRu = (d: string) => { const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
-
-  const filterRow = (label: string, value: string, options: string[], onChange: (v: string) => void) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, color: T.text3 }}>{label}</span>
-      <select 
-        value={value} 
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          padding: "6px 8px",
-          borderRadius: 6,
-          border: `1px solid ${T.border}`,
-          fontSize: 12,
-          fontWeight: 500,
-          background: T.bg2,
-          color: T.text,
-          cursor: "pointer",
-          width: "100%",
-        }}
-      >
-        {options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-    </div>
-  );
-
   const showSidebar = isMobile ? sidebarOpen : true;
 
   return (
