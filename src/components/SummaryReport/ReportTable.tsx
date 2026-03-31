@@ -56,7 +56,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             const rowBg = branchBg(v.branch);
             const vType = getVesselType(v.vessel_name);
             const power = getPower(v.coord_raw);
-            const coordDisplay = extractLocation(v.coord_raw || "");
+            onst coordDisplay = extractLocation(vessel.coord_raw || "");
 
             let statusDisplay = v.status;
             if (canView && sc === "asd") {
