@@ -309,9 +309,13 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     }
 
     // Проверяем остальные ячейки на stale-даты (кроме lim и del)
+   // Находим индекс столбца "п/п"
+    const ppIndex = ci("п/п");
+    
+    // Проверяем остальные ячейки на stale-даты (кроме lim, del и п/п)
     let staleRow = false;
     for (let ci2 = 0; ci2 < row.length; ci2++) {
-      if (ci2 === C.lim || ci2 === C.del) continue;
+      if (ci2 === C.lim || ci2 === C.del || ci2 === ppIndex) continue;
       if (isStaleDate(row[ci2])) { 
         console.log(`Stale date found at column ${ci2}:`, row[ci2]);
         staleRow = true; 
