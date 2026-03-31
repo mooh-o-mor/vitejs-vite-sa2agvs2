@@ -1,10 +1,8 @@
-// Словарь замен (только уникальные ключи)
+// Словарь замен для местоположений (только порты и сокращения)
 const locationMap: Record<string, string> = {
   // Порты
   "спб": "Санкт-Петербург",
-  "санкт-петербург": "Санкт-Петербург",
   "клнг": "Калининград",
-  "калининград": "Калининград",
   "петр-камчатский": "Петропавловск-Камчатский",
   "петропавловск": "Петропавловск-Камчатский",
   "усть-луга": "Усть-Луга",
@@ -12,7 +10,6 @@ const locationMap: Record<string, string> = {
   "владивосток": "Владивосток",
   "мурманск": "Мурманск",
   "корсаков": "Корсаков",
-  "пригородное": "Пригородное",
   "кандалакша": "Кандалакша",
   "витино": "Витино",
   "архангельск": "Архангельск",
@@ -56,73 +53,78 @@ const locationMap: Record<string, string> = {
   "срз": "СРЗ",
   "бэп": "БЭП",
   "сэп": "СЭП",
-  "пр.": "пр.",
-  "пр": "пр.",
+  "кмрп": "КМРП",
+  "ссрз": "ССРЗ",
 };
 
-// Функция нормализации
-export function extractLocation(raw: string): string {
-  if (!raw) return "";
+// Функция форматирования одного элемента (порта, причала, бухты)
+function formatPart(part: string): string {
+  if (!part) return "";
   
-  let result = raw;
-  
-  // 1. Убираем "да" и "нет" в конце
-  result = result.replace(/\s+(да|нет)\s*$/i, "").trim();
-  
-  // 2. Убираем лишние точки в конце
-  result = result.replace(/\.+$/, "");
-  
-  // 3. Заменяем по словарю (от более длинных ключей к коротким)
-  const sortedKeys = Object.keys(locationMap).sort((a, b) => b.length - a.length);
-  for (const key of sortedKeys) {
+  // Заменяем по словарю
+  let result = part;
+  for (const [key, value] of Object.entries(locationMap)) {
     const regex = new RegExp(`\\b${key}\\b`, "gi");
-    result = result.replace(regex, locationMap[key]);
+    if (regex.test(result)) {
+      result = result.replace(regex, value);
+    }
   }
   
-  // 4. Убираем дублирование слов
-  result = result.replace(/\b(СРП)\s+\1\b/gi, "$1");
-  result = result.replace(/\b(мыс)\s+\1\b/gi, "$1");
-  result = result.replace(/\b(наб)\s+\1\b/gi, "$1");
-  result = result.replace(/\b(п\.п\.)\b/gi, "п.");
-  
-  // 5. Убираем двойной дефис в Петропавловске-Камчатском
-  result = result.replace(/Петропавловск-Камчатский-Камчатский/gi, "Петропавловск-Камчатский");
-  
-  // 6. Координаты — не трогаем
-  if (result.match(/[0-9°'-]/)) {
-    return result;
-  }
-  
-  // 7. Форматируем: первая буква заглавная, аббревиатуры в верхнем регистре
+  // Аббревиатуры оставляем заглавными
+  const upperWords = ["МСС", "КФ", "ФГУБ", "СРП", "КМН", "БЭП", "СЭП", "СРЗ", "КМРП", "ССРЗ"];
   result = result.split(" ").map(word => {
-    const upperWords = ["МСС", "КФ", "ФГУБ", "СРП", "КМН", "БЭП", "СЭП", "СРЗ", "РП", "КМРП", "ССРЗ"];
     if (upperWords.includes(word.toUpperCase())) {
       return word.toUpperCase();
-    }
-    // Сокращения типа "пр." оставляем с точкой
-    if (word.match(/^(пр|пл|б|м|наб)\.?$/i)) {
-      return word.toLowerCase().replace(/\.$/, "") + ".";
     }
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   }).join(" ");
   
-  // 8. Добавляем "п." перед названием порта, если нужно
+  return result;
+}
+
+// Основная функция
+export function extractLocation(raw: string): string {
+  if (!raw) return "";
+  
+  // Если это координаты (содержат цифры, градусы, минуты) — возвращаем как есть
+  if (raw.match(/[0-9°'-]/) && (raw.match(/[NSnsEWew]/) || raw.match(/[СсЮюВвЗз]/))) {
+    return raw;
+  }
+  
+  // Разбиваем на части (по пробелам или по запятым)
+  let parts = raw.split(/\s+/);
+  
+  // Убираем "да" и "нет" (опреснитель)
+  parts = parts.filter(p => !/^(да|нет)$/i.test(p));
+  
+  // Убираем "п." и "п." из начала, если есть (добавим позже)
+  const hasPortPrefix = parts[0]?.toLowerCase() === "п." || parts[0]?.toLowerCase() === "п";
+  if (hasPortPrefix) {
+    parts = parts.slice(1);
+  }
+  
+  // Форматируем каждую часть
+  parts = parts.map(p => formatPart(p));
+  
+  // Собираем обратно с запятыми
+  let result = parts.join(", ");
+  
+  // Добавляем "п." в начало, если это порт
   const portNames = ["Санкт-Петербург", "Калининград", "Владивосток", "Мурманск", "Астрахань", 
     "Корсаков", "Кандалакша", "Архангельск", "Новороссийск", "Севастополь", "Керчь", "Находка", 
     "Ванино", "Холмск", "Магадан", "Анадырь", "Певек", "Дудинка", "Тикси", "Онега", "Нарьян-Мар", 
     "Сабетта", "Хатанга", "Восточный", "Темрюк", "Беломорск", "Усть-Луга", "Светлый", "Янтарный", 
     "Усть-Камчатск", "Петропавловск-Камчатский", "Витино", "Пригородное", "Волна", "Чжоушань", "Шидао"];
   
-  const hasPortPrefix = result.match(/^п\.\s/);
   const startsWithPort = portNames.some(name => result.startsWith(name));
   
-  if (startsWithPort && !hasPortPrefix && !result.startsWith("п.")) {
+  if (startsWithPort && !result.startsWith("п.")) {
     result = `п. ${result}`;
   }
   
-  // 9. Чистим лишние запятые и пробелы
-  result = result.replace(/\s+/g, " ").trim();
+  // Чистим лишние запятые
   result = result.replace(/,\s*,/g, ",");
+  result = result.replace(/,\s*$/, "");
   
   return result;
 }
