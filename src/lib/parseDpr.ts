@@ -73,7 +73,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
 
-  // 1. DD-MM,M N DDD-MM,M E  (55-31,4N 020-08,5E)
   const m1 = s.match(
     /(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
@@ -83,7 +82,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // 2. DD°MM N/DDD°MM E  (45°04N/036°32E)
   const m2 = s.match(
     /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
@@ -93,7 +91,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // 3. DD MM,M N DDD MM,M E  (55 31,4N 020 08,5E — пробел вместо дефиса)
   const m3 = s.match(
     /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
   );
@@ -103,17 +100,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // 4. DD MM,Mсев.DDD MM,Mв.  (55 31,4сев.020 08,5в. — формат ряда судов)
-  const m4 = s.match(
-    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)[.\s]/i
-  );
-  if (m4) {
-    const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
-    const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
-  }
-
-  // Port lookup
   const low = s
     .toLowerCase()
     .replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "")
@@ -121,7 +107,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   for (const [k, c] of Object.entries(PORTS)) {
     if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
   }
-
   return null;
 }
 
@@ -132,6 +117,12 @@ function xlSerialToDate(n: number): Date {
 
 function fmtDate(v: any): string {
   if (!v) return "";
+  
+  // Обработка формул Excel (начинаются с =)
+  if (typeof v === "string" && v.startsWith("=")) {
+    return "";
+  }
+  
   if (typeof v === "number" && v > 43831) {
     const d = xlSerialToDate(v);
     const dd = String(d.getUTCDate()).padStart(2, "0");
@@ -181,7 +172,7 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
   return best;
 }
 
-/* ── Filial data parser (с поддержкой branchMap и нормализацией названий) ── */
+/* ── Filial data parser ── */
 export function parseFilial(rows: any[][], branchMap?: Map<string, string>): DprVessel[] {
   let hRow = -1;
   for (let i = 0; i < Math.min(15, rows.length); i++) {
@@ -202,13 +193,30 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     stat: ci("АСГ", "АСД", "РЕМ", "БУК"),
     pos: ci("Координат", "/Порт"),
     sup: ci("Запасы"),
-    amt: ci("Остаток"),
-    pct: ci("%"),
-    cons: ci("Расход"),
-    lim: ci("лимит"),
-    del: ci("поставки"),
+    amt: -1,
+    pct: -1,
+    cons: -1,
+    lim: -1,
+    del: -1,
     note: ci("Примечание"),
   };
+
+  // Ищем столбцы по названиям
+  C.amt = ci("Остаток", "Остаток на борту", "Остаток на борту, т");
+  C.pct = ci("%");
+  C.cons = ci("Расход", "Расход за сутки");
+  C.lim = ci("лимит", "Дата / лимит запасов");
+  C.del = ci("поставки", "Дата поставки запасов");
+
+  // Если не нашли остаток, определяем по позиции (после "Запасы")
+  if (C.amt === -1 && C.sup >= 0) {
+    C.amt = C.sup + 1;
+    // Если остаток найден по позиции, ищем остальные по позиции
+    if (C.pct === -1) C.pct = C.amt + 1;
+    if (C.cons === -1) C.cons = C.pct + 1;
+    if (C.lim === -1) C.lim = C.cons + 1;
+    if (C.del === -1) C.del = C.lim + 1;
+  }
 
   if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
     C.pos = C.stat + 1;
@@ -254,18 +262,27 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     const statStr = stat ? String(stat).trim() : "";
     if (!statStr || statStr === "0") { i += 5; continue; }
 
-    const limVal = C.lim >= 0 ? row[C.lim] : null;
-    if (typeof limVal === "number" && limVal > 0 && limVal < 43831) { i += 5; continue; }
-    if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
-
-    let staleRow = false;
-    for (const cell of row) {
-      if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
+    // Проверка на устаревшие данные (дата лимита < 2025)
+    let skipRow = false;
+    for (let j = 0; j < 5 && i + j < rows.length; j++) {
+      const sr = rows[i + j];
+      if (!sr) continue;
+      const limVal = C.lim >= 0 ? sr[C.lim] : null;
+      if (limVal) {
+        const limStr = String(limVal);
+        // Если это формула или старая дата — пропускаем всю группу
+        if (limStr.startsWith("=")) continue;
+        if (limStr.match(/201[0-9]|202[0-4]/)) {
+          skipRow = true;
+          break;
+        }
+      }
     }
-    if (staleRow) { i += 5; continue; }
+    if (skipRow) { i += 5; continue; }
 
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
+    
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
       const sr = rows[i + j];
       if (!sr) continue;
@@ -275,9 +292,20 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
       const ft = C.sup >= 0 ? sr[C.sup] : null;
       if (ft && String(ft).trim()) {
+        // Извлекаем тип запаса (иногда в одной ячейке с остатком, например "Топливо ДТ 123,2")
+        let typeStr = String(ft).trim();
+        let amtStr = "";
+        
+        // Если в ячейке есть число, отделяем его
+        const match = typeStr.match(/^(.+?)\s+(\d+[\d\s,.]*)$/);
+        if (match) {
+          typeStr = match[1].trim();
+          amtStr = match[2].trim();
+        }
+        
         supplies.push({
-          type: String(ft).trim(),
-          amt: C.amt >= 0 && sr[C.amt] != null ? String(sr[C.amt]) : "—",
+          type: typeStr,
+          amt: amtStr || (C.amt >= 0 && sr[C.amt] != null ? String(sr[C.amt]) : "—"),
           pct: C.pct >= 0 && sr[C.pct] != null ? String(sr[C.pct]) : "",
           cons: C.cons >= 0 && sr[C.cons] != null ? String(sr[C.cons]) : "—",
           lim: C.lim >= 0 && sr[C.lim] ? fmtDate(sr[C.lim]) : "",
@@ -310,9 +338,10 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
     }
 
-    // Нормализуем имя судна: убираем лишние пробелы
+    // Нормализуем имя судна
     let vesselName = name ? String(name).trim() : "";
     vesselName = vesselName.replace(/\s+/g, " ");
+    vesselName = vesselName.toLowerCase();
 
     vessels.push({
       name: vesselName,
@@ -369,7 +398,7 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
   return null;
 }
 
-/* ── Full pipeline: File[] → DprVessel[] (с поддержкой branchMap) ── */
+/* ── Full pipeline ── */
 export async function parseMsgFiles(
   files: File[],
   branchMap?: Map<string, string>
