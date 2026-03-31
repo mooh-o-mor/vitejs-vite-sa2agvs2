@@ -299,34 +299,25 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       continue; 
     }
 
-    // Проверяем lim на устаревшую дату (блокирует строку)
+    // ✅ НОВАЯ ЛОГИКА: проверяем только lim (дата лимита)
     const limVal = C.lim >= 0 ? row[C.lim] : null;
     console.log("limVal:", limVal, "isStaleDate:", isStaleDate(limVal));
-    if (isStaleDate(limVal)) { 
-      console.log("Skip: stale lim date");
-      i += 5; 
-      continue; 
-    }
-
-    // Проверяем остальные ячейки на stale-даты (кроме lim и del)
-   // Находим индекс столбца "п/п"
-    const ppIndex = ci("п/п");
     
-    // Проверяем остальные ячейки на stale-даты (кроме lim, del и п/п)
-    let staleRow = false;
-    for (let ci2 = 0; ci2 < row.length; ci2++) {
-      if (ci2 === C.lim || ci2 === C.del || ci2 === ppIndex) continue;
-      if (isStaleDate(row[ci2])) { 
-        console.log(`Stale date found at column ${ci2}:`, row[ci2]);
-        staleRow = true; 
-        break; 
-      }
-    }
-    if (staleRow) { 
-      console.log("Skip: stale date in row");
+    // Если лимит устаревший — пропускаем ВСЁ судно
+    if (isStaleDate(limVal)) { 
+      console.log("Skip vessel: stale lim date");
       i += 5; 
       continue; 
     }
+    
+    // Дата поставки может быть старой — не блокируем, просто логируем
+    const delVal = C.del >= 0 ? row[C.del] : null;
+    if (isStaleDate(delVal)) {
+      console.log(`Warning: stale delivery date for vessel: ${delVal}`);
+    }
+    
+    // ❌ УБРАНА проверка остальных ячеек на stale даты!
+    // Числа 1,2,3, порядковые номера больше не блокируют парсинг
 
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
@@ -341,6 +332,13 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
       const ft = C.sup >= 0 ? sr[C.sup] : null;
       if (ft && String(ft).trim()) {
+        // Для каждого запаса проверяем лимит индивидуально
+        const supplyLim = C.lim >= 0 ? sr[C.lim] : null;
+        if (isStaleDate(supplyLim)) {
+          console.log(`Skip supply ${String(ft).trim()} due to stale lim: ${supplyLim}`);
+          continue;
+        }
+        
         const supply = {
           type: String(ft).trim(),
           amt: C.amt >= 0 && sr[C.amt] != null ? String(sr[C.amt]) : "—",
