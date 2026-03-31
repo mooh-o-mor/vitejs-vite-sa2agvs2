@@ -7,10 +7,11 @@ import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
 import { T, typeOrder } from "../../lib/types";
-import { getType, formatVesselName } from "../../lib/utils";
-import { mkIcon, mkPieIcon } from "./mapIcons";
+import { getType } from "../../lib/utils";
+import { mkIcon, mkPieIcon, CLR, STATUS_BG, STATUS_HEADER_BG } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
+import { extractLocation } from "../../lib/locationNormalizer";
 
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
@@ -20,7 +21,7 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
 }
-//версия с масштабом 
+
 export function FleetMap({
   isAdmin,
   canView,
@@ -55,15 +56,13 @@ export function FleetMap({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  // Сохраняем последний вид карты
-  const lastViewRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
-
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Load type maps from vessels table
   useEffect(() => {
     supabase.from("vessels").select("name").then(({ data }) => {
       if (data) {
@@ -209,43 +208,26 @@ export function FleetMap({
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
   }, [filtered, search]);
 
-  // Обновляем карту при изменении фильтров
   useEffect(() => {
     if (!mapObj.current || !markersRef.current) return;
-    
     markersRef.current.clearLayers();
     const bounds: L.LatLng[] = [];
     filtered.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      marker.bindTooltip(formatVesselName(v.vessel_name), { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
+      marker.bindTooltip(v.vessel_name, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
-        // Сохраняем текущий вид карты
-        if (mapObj.current) {
-          lastViewRef.current = {
-            center: mapObj.current.getCenter(),
-            zoom: mapObj.current.getZoom()
-          };
-        }
         setSelVessel(v);
         if (isMobile) setSidebarOpen(false);
-        const currentZoom = mapObj.current?.getZoom() || 5;
-        const newZoom = currentZoom < 7 ? 7 : currentZoom;
-        mapObj.current?.setView([v.lat!, v.lng!], newZoom, { animate: true });
+        mapObj.current?.setView([v.lat!, v.lng!], Math.max(mapObj.current.getZoom(), 7), { animate: true });
       });
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
     });
-    
-    // Восстанавливаем предыдущий вид, если он был сохранён
-    if (lastViewRef.current) {
-      mapObj.current.setView(lastViewRef.current.center, lastViewRef.current.zoom);
-      lastViewRef.current = null;
-    } else if (bounds.length > 1 && filtered.length > 0) {
+    if (bounds.length > 1) {
       mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
     }
-    
     const updateLabels = () => {
       markersRef.current!.getLayers().forEach((m: any) => {
         if (!m.getTooltip) return;
@@ -295,7 +277,7 @@ export function FleetMap({
           coord_raw: v.coordRaw,
           lat: v.lat,
           lng: v.lng,
-          note: v.note || null,
+          note: v.note,
           supplies: v.supplies,
           contract_info: v.contract_info || null,
           work_period: v.work_period || null,
@@ -318,6 +300,35 @@ export function FleetMap({
   const cRem = filtered.filter((v) => cls(v.status) === "rem").length;
   const noPos = filtered.filter((v) => v.lat == null).length;
 
+  const fmtDateRu = (d: string) => { const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
+
+  const filterRow = (label: string, value: string, options: string[], onChange: (v: string) => void) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 11, color: T.text3 }}>{label}</span>
+      <select 
+        value={value} 
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          padding: "6px 8px",
+          borderRadius: 6,
+          border: `1px solid ${T.border}`,
+          fontSize: 12,
+          fontWeight: 500,
+          background: T.bg2,
+          color: T.text,
+          cursor: "pointer",
+          width: "100%",
+        }}
+      >
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const showSidebar = isMobile ? sidebarOpen : true;
+
   return (
     <div style={{ display: "flex", height: "calc(100vh - 90px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
       {dragging && isAdmin && (
@@ -336,44 +347,44 @@ export function FleetMap({
         <div onClick={() => setSidebarOpen(false)} style={{ position: "absolute", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.3)" }} />
       )}
 
-      <Sidebar
-        dates={dates}
-        selDate={selDate}
-        onDateChange={setSelDate}
-        filterType={filterType}
-        filterBranch={filterBranch}
-        filterStatus={filterStatus}
-        allTypes={allTypes}
-        allBranches={allBranches}
-        allStatuses={allStatuses}
-        onFilterTypeChange={setFilterType}
-        onFilterBranchChange={setFilterBranch}
-        onFilterStatusChange={setFilterStatus}
-        cAsg={cAsg}
-        cAsd={cAsd}
-        cRem={cRem}
-        total={filtered.length}
-        noPos={noPos}
-        uploadMsg={uploadMsg}
-        uploading={uploading}
-        search={search}
-        onSearchChange={setSearch}
-        filteredVessels={searchFiltered}
-        typeMap={typeMap}
-        selectedVessel={selVessel}
-        onSelectVessel={(v) => {
-          setSelVessel(v);
-          if (isMobile) setSidebarOpen(false);
-          if (v.lat != null && v.lng != null && mapObj.current) {
-            const currentZoom = mapObj.current.getZoom();
-            const newZoom = currentZoom < 7 ? 7 : currentZoom;
-            mapObj.current.setView([v.lat, v.lng], newZoom, { animate: true });
-          }
-        }}
-        isMobile={isMobile}
-        onCloseSidebar={() => setSidebarOpen(false)}
-        sidebarOpen={sidebarOpen}
-      />
+      {showSidebar && (
+        <Sidebar
+          dates={dates}
+          selDate={selDate}
+          onDateChange={setSelDate}
+          filterType={filterType}
+          filterBranch={filterBranch}
+          filterStatus={filterStatus}
+          allTypes={allTypes}
+          allBranches={allBranches}
+          allStatuses={allStatuses}
+          onFilterTypeChange={setFilterType}
+          onFilterBranchChange={setFilterBranch}
+          onFilterStatusChange={setFilterStatus}
+          cAsg={cAsg}
+          cAsd={cAsd}
+          cRem={cRem}
+          total={filtered.length}
+          noPos={noPos}
+          uploadMsg={uploadMsg}
+          uploading={uploading}
+          search={search}
+          onSearchChange={setSearch}
+          filteredVessels={searchFiltered}
+          typeMap={typeMap}
+          selectedVessel={selVessel}
+          onSelectVessel={(v) => {
+            setSelVessel(v);
+            if (isMobile) setSidebarOpen(false);
+            if (v.lat != null && v.lng != null && mapObj.current) {
+              mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+            }
+          }}
+          isMobile={isMobile}
+          onCloseSidebar={() => setSidebarOpen(false)}
+          sidebarOpen={sidebarOpen}
+        />
+      )}
 
       <div style={{ flex: 1, position: "relative" }}>
         <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
@@ -386,14 +397,13 @@ export function FleetMap({
         )}
 
         {selVessel && (
-  <VesselPopup
-    key={selVessel.vessel_name}
-    vessel={selVessel}
-    vesselType={getVesselType(selVessel.vessel_name)}
-    canView={canView}
-    onClose={() => setSelVessel(null)}
-  />
-)}
+          <VesselPopup
+            vessel={selVessel}
+            vesselType={getVesselType(selVessel.vessel_name)}
+            canView={canView}
+            onClose={() => setSelVessel(null)}
+          />
+        )}
       </div>
 
       <style>{`
