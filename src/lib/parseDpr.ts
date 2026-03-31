@@ -192,10 +192,6 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
   if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
     C.pos = C.stat + 1;
   }
-  // Если колонка "Остаток" не найдена — берём следующую после "Запасы" (формат СХЛФ)
-  if (C.amt < 0 && C.sup >= 0) {
-    C.amt = C.sup + 1;
-  }
 
   let date: Date | null = null;
   for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
@@ -235,14 +231,24 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       String(name).includes("беспеч")) { i++; continue; }
 
     const statStr = stat ? String(stat).trim() : "";
-    if (!statStr || statStr === "0") { i += 5; continue; }
 
+    // Проверяем есть ли данные о запасах (для СХЛФ где stat может быть пустым)
+    const hasSupplyData = C.sup >= 0 && row[C.sup] && String(row[C.sup]).trim();
+
+    // Пропускаем если нет ни статуса ни запасов
+    if (!statStr && !hasSupplyData) { i += 5; continue; }
+    if (statStr === "0") { i += 5; continue; }
+
+    // Проверка устаревших дат
     const limVal = C.lim >= 0 ? row[C.lim] : null;
     if (typeof limVal === "number" && limVal > 0 && limVal < 43831) { i += 5; continue; }
     if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
 
+    // Общая проверка stale-дат — пропускаем lim колонку чтобы не блокировать СХЛФ
     let staleRow = false;
-    for (const cell of row) {
+    for (let ci2 = 0; ci2 < row.length; ci2++) {
+      if (ci2 === C.lim) continue;
+      const cell = row[ci2];
       if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
     }
     if (staleRow) { i += 5; continue; }
