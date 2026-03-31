@@ -7,15 +7,18 @@ const PORT_REPLACE: [RegExp, string][] = [
   [/камыш[\s-]бурун/gi, "Камыш-Бурун"],
 ];
 
-/* ── Префиксы которые сохраняем как есть ── */
+/* ── Слова с которых начинаются детали (после запятой) ── */
+const DETAIL_START = /^(пр|причал|терминал|наб|набережная|гр|м\.|мыс|ул|якорная|плавпричал|ПД|СРП|СРЗ|КФ|МСС|КМРП|ССРЗ|КТПБ|КМН|пос\.)/i;
+
+/* ── Префиксы которые сохраняем ── */
 const KEEP_PREFIX = /^(п\.|б\.|р\.|я\.)\s*/i;
 
 export function extractLocation(raw: string): string {
   if (!raw) return "";
 
-  // 1. Убираем опреснитель (Да/Нет) и электропитание (БЭП/СЭП) в конце строки
+  // 1. Убираем Да/Нет (опреснитель) и БЭП/СЭП в конце
   let s = raw
-    .replace(/\s+(Да|Нет)\s*$/i, "")
+    .replace(/[\s,]+(да|нет)\s*$/i, "")
     .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
     .trim();
 
@@ -25,7 +28,10 @@ export function extractLocation(raw: string): string {
     /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s);
   if (isCoord) return s;
 
-  // 3. Сохраняем существующий префикс или добавляем "п."
+  // 3. Убираем "пос." в начале чтобы не было "п. пос. ..."
+  s = s.replace(/^пос\.\s*/i, "");
+
+  // 4. Сохраняем существующий префикс или добавляем "п."
   let prefix = "п.";
   const pm = s.match(KEEP_PREFIX);
   if (pm) {
@@ -33,13 +39,26 @@ export function extractLocation(raw: string): string {
     s = s.slice(pm[0].length).trim();
   }
 
-  // 4. Заменяем аббревиатуры портов
+  // 5. Заменяем аббревиатуры портов
   for (const [re, replacement] of PORT_REPLACE) {
     s = s.replace(re, replacement);
   }
 
-  // 5. Убираем лишние точки/запятые в конце и двойные пробелы
+  // 6. Убираем лишние символы в конце и двойные пробелы
   s = s.replace(/[.,\s]+$/, "").trim().replace(/\s{2,}/g, " ");
+
+  // 7. Расставляем запятые: после названия порта перед деталями
+  const parts = s.split(/\s+/);
+  if (parts.length > 1) {
+    const detailStart = parts.findIndex(
+      (p, i) => i > 0 && DETAIL_START.test(p)
+    );
+    if (detailStart > 0) {
+      const portPart = parts.slice(0, detailStart).join(" ");
+      const detailPart = parts.slice(detailStart).join(" ");
+      s = `${portPart}, ${detailPart}`;
+    }
+  }
 
   return `${prefix} ${s}`;
 }
