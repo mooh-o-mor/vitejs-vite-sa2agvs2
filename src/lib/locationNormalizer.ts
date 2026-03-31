@@ -3,16 +3,12 @@ const locationMap: Record<string, string> = {
   // Порты
   "спб": "Санкт-Петербург",
   "санкт-петербург": "Санкт-Петербург",
-  "санкт петербург": "Санкт-Петербург",
   "клнг": "Калининград",
   "калининград": "Калининград",
-  "клд": "Калининград",
   "петр-камчатский": "Петропавловск-Камчатский",
   "петропавловск": "Петропавловск-Камчатский",
   "петропавловск-камчатский": "Петропавловск-Камчатский",
-  "петр камчатский": "Петропавловск-Камчатский",
   "усть-луга": "Усть-Луга",
-  "усть луга": "Усть-Луга",
   "астрахань": "Астрахань",
   "владивосток": "Владивосток",
   "мурманск": "Мурманск",
@@ -48,7 +44,6 @@ const locationMap: Record<string, string> = {
   
   // Специальные места
   "камыш бурун": "Камыш-Бурун",
-  "камыш-бурун": "Камыш-Бурун",
   "б. камыш бурун": "Камыш-Бурун",
   "поспелова": "мыс Поспелова",
   "м. поспелова": "мыс Поспелова",
@@ -58,90 +53,45 @@ const locationMap: Record<string, string> = {
   "адм.макарова": "наб. Адмирала Макарова",
   "наб. адм.макарова": "наб. Адмирала Макарова",
   "мсс": "МСС",
+  "кф": "КФ",
+  "фгуб": "ФГУБ",
 };
 
-// Функция нормализации местоположения
-export function normalizeLocation(raw: string): string {
+// Функция для нормализации местоположения
+export function extractLocation(raw: string): string {
   if (!raw) return "";
   
-  let normalized = raw.toLowerCase().trim();
+  let result = raw;
   
-  // Сохраняем БЭП/СЭП для добавления в конец
-  let powerSuffix = "";
-  const powerMatch = normalized.match(/(бэп|сэп)\s*$/i);
-  if (powerMatch) {
-    powerSuffix = powerMatch[1].toUpperCase();
-    normalized = normalized.replace(/\s*(бэп|сэп)\s*$/i, "").trim();
-  }
-  
-  // Убираем слова "да" и "нет" (из опреснителя)
-  normalized = normalized.replace(/\s*(да|нет)\s*$/i, "").trim();
-  
-  // Сохраняем части для деталей
-  let details = "";
-  
-  // Извлекаем детали (причалы, районы, бухты)
-  const detailMatches = normalized.match(/(пр\.\s*\d+|причал\s*\d+|р-н\s*[\d\w]+|пл\.\s*[\d\w]+|б\.\s*[\w-]+|м\.\s*[\w-]+|мыс\s*[\w-]+)/i);
-  if (detailMatches) {
-    details = detailMatches[0];
-    normalized = normalized.replace(detailMatches[0], "").trim();
-  }
-  
-  // Убираем лишние запятые и точки в конце
-  normalized = normalized.replace(/[.,]\s*$/, "").trim();
-  
-  // Применяем замены из словаря (ищем ключевые слова)
-  let result = normalized;
+  // Заменяем по словарю (без учёта регистра)
   for (const [key, value] of Object.entries(locationMap)) {
-    if (result.includes(key)) {
-      result = result.replace(new RegExp(key, "g"), value);
-      break;
+    const regex = new RegExp(key, "gi");
+    if (regex.test(result)) {
+      result = result.replace(regex, value);
     }
   }
   
-  // Если ничего не заменилось, делаем первую букву каждого слова заглавной
-  if (result === normalized && result.length > 0) {
-    result = result.split(" ").map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    ).join(" ");
+  // Убираем лишние пробелы
+  result = result.replace(/\s+/g, " ").trim();
+  
+  // Убираем "да" и "нет" в конце (опреснитель)
+  result = result.replace(/\s+(да|нет)\s*$/i, "").trim();
+  
+  // Для координат (содержат цифры и градусы) — не трогаем
+  if (result.match(/[0-9°-]/)) {
+    return result;
   }
   
-  // Определяем, нужно ли добавлять префикс "п."
-  const isPort = /(санкт-петербург|калининград|владивосток|мурманск|астрахань|корсаков|кандалакша|архангельск|новороссийск|севастополь|керчь|находка|ванино|холмск|магадан|анадырь|певек|дудинка|тикси|онега|нарьян-мар|сабетта|хатанга|восточный|темрюк|беломорск|усть-луга|светлый|янтарный|усть-камчатск|петропавловск-камчатский|витино|пригородное|волна)/i.test(result);
-  
-  // Добавляем "п." только если это порт и в исходной строке не было "п."
-  const hadPortPrefix = raw.toLowerCase().includes("п.");
-  if (isPort && !hadPortPrefix) {
-    result = `п. ${result}`;
-  }
-  
-  // Добавляем детали
-  if (details) {
-    let formattedDetails = details;
-    // Форматируем детали с заглавной буквы
-    formattedDetails = formattedDetails.split(" ").map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    ).join(" ");
-    result = `${result}, ${formattedDetails}`;
-  }
-  
-  // Убираем лишние запятые и пробелы
-  result = result.replace(/,\s*$/, "").replace(/\s+/g, " ");
-  
-  // Добавляем обратно БЭП/СЭП
-  if (powerSuffix) {
-    result = `${result} ${powerSuffix}`;
-  }
-  
-  // Финальная чистка: убираем двойные пробелы и лишние запятые
-  result = result.replace(/\s+/g, " ").replace(/,\s*,/g, ",");
+  // Приводим к формату: первая буква каждого слова заглавная
+  result = result.split(" ").map(word => {
+    // Слова, которые должны быть в верхнем регистре
+    const upperWords = ["МСС", "КФ", "ФГУБ", "СРП", "КМН", "БЭП", "СЭП"];
+    if (upperWords.includes(word.toUpperCase())) {
+      return word.toUpperCase();
+    }
+    // Остальные — с заглавной буквы
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(" ");
   
   return result;
-}
-
-// Функция для извлечения только местоположения без БЭП/СЭП
-export function extractLocation(raw: string): string {
-  if (!raw) return "";
-  const withoutPower = raw.replace(/\s*(БЭП|СЭП)\s*$/i, "").trim();
-  return normalizeLocation(withoutPower);
 }
