@@ -72,34 +72,27 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
-
-  const m1 = s.match(
-    /(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
-  );
-  if (m1) {
-    const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
-    const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  
+  // Универсальный парсер: ищем любые четыре числа (градусы и минуты)
+  const coordPattern = /(\d{1,3})[^\d]*(\d{1,2}[,.]?\d*)[^\d]*(\d{1,3})[^\d]*(\d{1,2}[,.]?\d*)/;
+  const match = s.match(coordPattern);
+  
+  if (match) {
+    const latDeg = +match[1];
+    const latMin = +match[2].replace(",", ".");
+    const lngDeg = +match[3];
+    const lngMin = +match[4].replace(",", ".");
+    
+    const lat = latDeg + latMin / 60;
+    const lng = lngDeg + lngMin / 60;
+    
+    // Проверяем разумные пределы
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) {
+      return [lat, lng];
+    }
   }
-
-  const m2 = s.match(
-    /(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
-  );
-  if (m2) {
-    const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
-    const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
-  }
-
-  const m3 = s.match(
-    /(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i
-  );
-  if (m3) {
-    const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
-    const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
-  }
-
+  
+  // Поиск по портам
   const low = s
     .toLowerCase()
     .replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "")
@@ -107,6 +100,7 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   for (const [k, c] of Object.entries(PORTS)) {
     if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
   }
+  
   return null;
 }
 
@@ -117,12 +111,6 @@ function xlSerialToDate(n: number): Date {
 
 function fmtDate(v: any): string {
   if (!v) return "";
-  
-  // Обработка формул Excel (начинаются с =)
-  if (typeof v === "string" && v.startsWith("=")) {
-    return "";
-  }
-  
   if (typeof v === "number" && v > 43831) {
     const d = xlSerialToDate(v);
     const dd = String(d.getUTCDate()).padStart(2, "0");
@@ -172,7 +160,7 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
   return best;
 }
 
-/* ── Filial data parser ── */
+/* ── Filial data parser (с поддержкой branchMap и нормализацией названий) ── */
 export function parseFilial(rows: any[][], branchMap?: Map<string, string>): DprVessel[] {
   let hRow = -1;
   for (let i = 0; i < Math.min(15, rows.length); i++) {
@@ -193,33 +181,20 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     stat: ci("АСГ", "АСД", "РЕМ", "БУК"),
     pos: ci("Координат", "/Порт"),
     sup: ci("Запасы"),
-    amt: -1,
-    pct: -1,
-    cons: -1,
-    lim: -1,
-    del: -1,
+    amt: ci("Остаток"),
+    pct: ci("%"),
+    cons: ci("Расход"),
+    lim: ci("лимит"),
+    del: ci("поставки"),
     note: ci("Примечание"),
   };
 
-  // Ищем столбцы по названиям
-  C.amt = ci("Остаток", "Остаток на борту", "Остаток на борту, т");
-  C.pct = ci("%");
-  C.cons = ci("Расход", "Расход за сутки");
-  C.lim = ci("лимит", "Дата / лимит запасов");
-  C.del = ci("поставки", "Дата поставки запасов");
-
-  // Если не нашли остаток, определяем по позиции (после "Запасы")
-  if (C.amt === -1 && C.sup >= 0) {
-    C.amt = C.sup + 1;
-    // Если остаток найден по позиции, ищем остальные по позиции
-    if (C.pct === -1) C.pct = C.amt + 1;
-    if (C.cons === -1) C.cons = C.pct + 1;
-    if (C.lim === -1) C.lim = C.cons + 1;
-    if (C.del === -1) C.del = C.lim + 1;
-  }
-
   if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
     C.pos = C.stat + 1;
+  }
+  // Если колонка "Остаток" не найдена — берём следующую после "Запасы" (формат СХЛФ)
+  if (C.amt < 0 && C.sup >= 0) {
+    C.amt = C.sup + 1;
   }
 
   let date: Date | null = null;
@@ -262,27 +237,18 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     const statStr = stat ? String(stat).trim() : "";
     if (!statStr || statStr === "0") { i += 5; continue; }
 
-    // Проверка на устаревшие данные (дата лимита < 2025)
-    let skipRow = false;
-    for (let j = 0; j < 5 && i + j < rows.length; j++) {
-      const sr = rows[i + j];
-      if (!sr) continue;
-      const limVal = C.lim >= 0 ? sr[C.lim] : null;
-      if (limVal) {
-        const limStr = String(limVal);
-        // Если это формула или старая дата — пропускаем всю группу
-        if (limStr.startsWith("=")) continue;
-        if (limStr.match(/201[0-9]|202[0-4]/)) {
-          skipRow = true;
-          break;
-        }
-      }
+    const limVal = C.lim >= 0 ? row[C.lim] : null;
+    if (typeof limVal === "number" && limVal > 0 && limVal < 43831) { i += 5; continue; }
+    if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
+
+    let staleRow = false;
+    for (const cell of row) {
+      if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
     }
-    if (skipRow) { i += 5; continue; }
+    if (staleRow) { i += 5; continue; }
 
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
-    
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
       const sr = rows[i + j];
       if (!sr) continue;
@@ -292,20 +258,9 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
       const ft = C.sup >= 0 ? sr[C.sup] : null;
       if (ft && String(ft).trim()) {
-        // Извлекаем тип запаса (иногда в одной ячейке с остатком, например "Топливо ДТ 123,2")
-        let typeStr = String(ft).trim();
-        let amtStr = "";
-        
-        // Если в ячейке есть число, отделяем его
-        const match = typeStr.match(/^(.+?)\s+(\d+[\d\s,.]*)$/);
-        if (match) {
-          typeStr = match[1].trim();
-          amtStr = match[2].trim();
-        }
-        
         supplies.push({
-          type: typeStr,
-          amt: amtStr || (C.amt >= 0 && sr[C.amt] != null ? String(sr[C.amt]) : "—"),
+          type: String(ft).trim(),
+          amt: C.amt >= 0 && sr[C.amt] != null ? String(sr[C.amt]) : "—",
           pct: C.pct >= 0 && sr[C.pct] != null ? String(sr[C.pct]) : "",
           cons: C.cons >= 0 && sr[C.cons] != null ? String(sr[C.cons]) : "—",
           lim: C.lim >= 0 && sr[C.lim] ? fmtDate(sr[C.lim]) : "",
@@ -338,7 +293,7 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
     }
 
-    // Нормализуем имя судна
+    // Нормализуем имя судна: убираем лишние пробелы, приводим к нижнему регистру
     let vesselName = name ? String(name).trim() : "";
     vesselName = vesselName.replace(/\s+/g, " ");
     vesselName = vesselName.toLowerCase();
@@ -398,7 +353,7 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
   return null;
 }
 
-/* ── Full pipeline ── */
+/* ── Full pipeline: File[] → DprVessel[] (с поддержкой branchMap) ── */
 export async function parseMsgFiles(
   files: File[],
   branchMap?: Map<string, string>
