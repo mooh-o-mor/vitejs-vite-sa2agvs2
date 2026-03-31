@@ -43,15 +43,12 @@ export interface DprRow {
 /* ── Status normalizer ── */
 function normalizeStatus(raw: string): { status: string; extra: string } {
   const s = raw.trim();
-
   const sep = s.search(/[\/,]/);
   const firstPart = (sep >= 0 ? s.slice(0, sep) : s).trim();
   const afterSep = sep >= 0 ? s.slice(sep + 1).trim() : "";
-
   const fu = firstPart.toUpperCase();
   let status: string;
   let extraFromFirst = "";
-
   if (fu.startsWith("АСГ")) {
     status = "АСГ";
     extraFromFirst = firstPart.slice(3).trim();
@@ -63,7 +60,6 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
   } else {
     status = firstPart;
   }
-
   const extra = [extraFromFirst, afterSep].filter(Boolean).join(" / ");
   return { status, extra };
 }
@@ -72,45 +68,62 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
-  
-  // Универсальный парсер: ищем любые четыре числа (градусы и минуты)
-  const coordPattern = /(\d{1,3})[^\d]*(\d{1,2}[,.]?\d*)[^\d]*(\d{1,3})[^\d]*(\d{1,2}[,.]?\d*)/;
-  const match = s.match(coordPattern);
-  
-  if (match) {
-    const latDeg = +match[1];
-    const latMin = +match[2].replace(",", ".");
-    const lngDeg = +match[3];
-    const lngMin = +match[4].replace(",", ".");
-    
-    const lat = latDeg + latMin / 60;
-    const lng = lngDeg + lngMin / 60;
-    
-    // Проверяем разумные пределы
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) {
-      return [lat, lng];
-    }
+
+  // 1. DD-MM,M N DDD-MM,M E
+  const m1 = s.match(/(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
+  if (m1) {
+    const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
+    const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
-  
-  // Поиск по портам
-  const low = s
-    .toLowerCase()
-    .replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "")
-    .trim();
+
+  // 2. DD°MM N/DDD°MM E
+  const m2 = s.match(/(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
+  if (m2) {
+    const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
+    const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
+  // 3. DD MM,M N DDD MM,M E (пробел вместо дефиса)
+  const m3 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
+  if (m3) {
+    const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
+    const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
+  // 4. DD MM,Mсев.DDD MM,Mв.
+  const m4 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)[.\s]/i);
+  if (m4) {
+    const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
+    const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
+  // Port lookup
+  const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
   for (const [k, c] of Object.entries(PORTS)) {
     if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
   }
-  
+
   return null;
 }
 
-/* ── Excel date helpers ── */
+/* ── Helpers ── */
 function xlSerialToDate(n: number): Date {
   return new Date(Math.round((n - 25569) * 86400 * 1000));
 }
 
 function fmtDate(v: any): string {
   if (!v) return "";
+  if (v instanceof Date) {
+    if (v.getFullYear() < 2020) return "";
+    const dd = String(v.getDate()).padStart(2, "0");
+    const mm = String(v.getMonth() + 1).padStart(2, "0");
+    const yy = String(v.getFullYear()).slice(-2);
+    return `${dd}.${mm}.${yy}`;
+  }
   if (typeof v === "number" && v > 43831) {
     const d = xlSerialToDate(v);
     const dd = String(d.getUTCDate()).padStart(2, "0");
@@ -121,6 +134,15 @@ function fmtDate(v: any): string {
   const s = String(v);
   if (/^\d{1,2}[./]\d{1,2}/.test(s)) return s.replace(/\d{4}/, (y) => y.slice(-2));
   return s;
+}
+
+/* Проверяет устаревшую дату (до 2020) в любом формате */
+function isStaleDate(v: any): boolean {
+  if (!v) return false;
+  if (v instanceof Date) return v.getFullYear() < 2020;
+  if (typeof v === "number" && v > 0 && v < 43831) return true;
+  if (/201[0-9]/.test(String(v))) return true;
+  return false;
 }
 
 /* ── MSG → XLSX extraction ── */
@@ -160,7 +182,7 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
   return best;
 }
 
-/* ── Filial data parser (с поддержкой branchMap и нормализацией названий) ── */
+/* ── Filial data parser ── */
 export function parseFilial(rows: any[][], branchMap?: Map<string, string>): DprVessel[] {
   let hRow = -1;
   for (let i = 0; i < Math.min(15, rows.length); i++) {
@@ -172,8 +194,7 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
   if (hRow < 0) return [];
 
   const H = rows[hRow];
-  const ci = (...kw: string[]) =>
-    H.findIndex((v: any) => v && kw.some((k) => String(v).includes(k)));
+  const ci = (...kw: string[]) => H.findIndex((v: any) => v && kw.some((k) => String(v).includes(k)));
 
   const C = {
     name: ci("Название судна"),
@@ -189,13 +210,20 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     note: ci("Примечание"),
   };
 
+  // Фолбэк: если pos не найден — ставим после stat
   if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
     C.pos = C.stat + 1;
   }
+  // Фолбэк: если amt не найден — ставим после sup (формат СХЛФ)
+  if (C.amt < 0 && C.sup >= 0) {
+    C.amt = C.sup + 1;
+  }
 
+  // Определяем дату отчёта
   let date: Date | null = null;
   for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
     for (const v of rows[i] || []) {
+      if (v instanceof Date && v.getFullYear() >= 2025) { date = v; break; }
       if (typeof v === "number" && v > 45000 && v < 47000) {
         const d = xlSerialToDate(v);
         if (d.getFullYear() >= 2025) { date = d; break; }
@@ -231,28 +259,24 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       String(name).includes("беспеч")) { i++; continue; }
 
     const statStr = stat ? String(stat).trim() : "";
-
-    // Проверяем есть ли данные о запасах (для СХЛФ где stat может быть пустым)
     const hasSupplyData = C.sup >= 0 && row[C.sup] && String(row[C.sup]).trim();
 
     // Пропускаем если нет ни статуса ни запасов
     if (!statStr && !hasSupplyData) { i += 5; continue; }
     if (statStr === "0") { i += 5; continue; }
 
-    // Проверка устаревших дат
+    // Проверяем lim на устаревшую дату (блокирует строку)
     const limVal = C.lim >= 0 ? row[C.lim] : null;
-    if (typeof limVal === "number" && limVal > 0 && limVal < 43831) { i += 5; continue; }
-    if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
+    if (isStaleDate(limVal)) { i += 5; continue; }
 
-    // Общая проверка stale-дат — пропускаем lim колонку чтобы не блокировать СХЛФ
-   let staleRow = false;
+    // Проверяем остальные ячейки на stale-даты (кроме lim и del)
+    let staleRow = false;
     for (let ci2 = 0; ci2 < row.length; ci2++) {
       if (ci2 === C.lim || ci2 === C.del) continue;
-      const cell = row[ci2];
-      if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
+      if (isStaleDate(row[ci2])) { staleRow = true; break; }
     }
     if (staleRow) { i += 5; continue; }
-    
+
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
@@ -283,7 +307,6 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     const combinedNote = [statusExtra, rawNote].filter(Boolean).join(" / ");
 
     let branch = C.fil >= 0 && row[C.fil] ? String(row[C.fil]).trim() : "";
-    
     if (!branch && branchMap) {
       const vesselNameClean = String(name).trim().toUpperCase();
       const fromMap = branchMap.get(vesselNameClean);
@@ -299,10 +322,8 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
     }
 
-    // Нормализуем имя судна: убираем лишние пробелы, приводим к нижнему регистру
     let vesselName = name ? String(name).trim() : "";
     vesselName = vesselName.replace(/\s+/g, " ");
-    vesselName = vesselName.toLowerCase();
 
     vessels.push({
       name: vesselName,
@@ -359,7 +380,7 @@ async function extractXlsxFromEml(text: string): Promise<any[][] | null> {
   return null;
 }
 
-/* ── Full pipeline: File[] → DprVessel[] (с поддержкой branchMap) ── */
+/* ── Full pipeline ── */
 export async function parseMsgFiles(
   files: File[],
   branchMap?: Map<string, string>
