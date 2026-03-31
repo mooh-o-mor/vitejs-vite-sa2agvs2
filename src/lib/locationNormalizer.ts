@@ -7,8 +7,11 @@ const PORT_REPLACE: [RegExp, string][] = [
   [/камыш[\s-]бурун/gi, "Камыш-Бурун"],
 ];
 
-/* ── Слова с которых начинаются детали (после запятой) ── */
-const DETAIL_START = /^(пр|причал|терминал|наб|набережная|гр|м\.|мыс|ул|якорная|плавпричал|ПД|СРП|СРЗ|КФ|МСС|КМРП|ССРЗ|КТПБ|КМН|пос\.)/i;
+/* ── Слова с которых начинаются детали (перед ними ставим запятую) ── */
+const DETAIL_START = /^(пр|причал|терминал|наб|набережная|гр|м\.|мыс|ул|якорная|плавпричал|ПД|СРП|СРЗ|КФ|МСС|КМРП|ССРЗ|КТПБ|КМН|Лукойл)/i;
+
+/* ── Аббревиатуры которые всегда в верхнем регистре ── */
+const UPPER_ABBR = ["МСС","КНР","СЧКМ","СРП","СРЗ","КФ","КМРП","ССРЗ","КТПБ","КМН","БОФ","ФГБУ","ПД","СФ","СК"];
 
 /* ── Префиксы которые сохраняем ── */
 const KEEP_PREFIX = /^(п\.|б\.|р\.|я\.)\s*/i;
@@ -24,11 +27,11 @@ export function extractLocation(raw: string): string {
 
   // 2. Координаты не трогаем
   const isCoord =
-    /\d{1,3}[-°\s]\d{1,2}[,.]?\d*\s*[NСнсCc°]/.test(s) ||
+    /\d{1,3}[-°\/]\d{1,2}[,.]?\d*\s*[NСнсCc°]/.test(s) ||
     /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s);
   if (isCoord) return s;
 
-  // 3. Убираем "пос." в начале чтобы не было "п. пос. ..."
+  // 3. Убираем "пос." в начале чтобы не было "п. пос."
   s = s.replace(/^пос\.\s*/i, "");
 
   // 4. Сохраняем существующий префикс или добавляем "п."
@@ -39,25 +42,33 @@ export function extractLocation(raw: string): string {
     s = s.slice(pm[0].length).trim();
   }
 
-  // 5. Заменяем аббревиатуры портов
+  // 5. Убираем повторный "п." в начале остатка
+  s = s.replace(/^[пП]\.\s+/, "");
+
+  // 6. Заменяем аббревиатуры портов
   for (const [re, replacement] of PORT_REPLACE) {
     s = s.replace(re, replacement);
   }
 
-  // 6. Убираем лишние символы в конце и двойные пробелы
-  s = s.replace(/[.,\s]+$/, "").trim().replace(/\s{2,}/g, " ");
+  // 7. Убираем лишнее в конце, двойные пробелы и двойные запятые
+  s = s
+    .replace(/[.,\s]+$/, "")
+    .trim()
+    .replace(/\s{2,}/g, " ")
+    .replace(/,\s*,/g, ",");
 
-  // 7. Расставляем запятые: после названия порта перед деталями
-  const parts = s.split(/\s+/);
-  if (parts.length > 1) {
-    const detailStart = parts.findIndex(
-      (p, i) => i > 0 && DETAIL_START.test(p)
-    );
-    if (detailStart > 0) {
-      const portPart = parts.slice(0, detailStart).join(" ");
-      const detailPart = parts.slice(detailStart).join(" ");
-      s = `${portPart}, ${detailPart}`;
+  // 8. Расставляем запятую между портом и деталями (если её ещё нет)
+  if (!s.includes(",")) {
+    const parts = s.split(/\s+/);
+    const di = parts.findIndex((p, i) => i > 0 && DETAIL_START.test(p));
+    if (di > 0) {
+      s = parts.slice(0, di).join(" ") + ", " + parts.slice(di).join(" ");
     }
+  }
+
+  // 9. Восстанавливаем аббревиатуры в верхний регистр
+  for (const abbr of UPPER_ABBR) {
+    s = s.replace(new RegExp(`\\b${abbr}\\b`, "gi"), abbr);
   }
 
   return `${prefix} ${s}`;
