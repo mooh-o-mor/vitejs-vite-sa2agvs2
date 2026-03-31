@@ -141,7 +141,9 @@ function isStaleDate(v: any): boolean {
   if (!v) return false;
   if (v instanceof Date) return v.getFullYear() < 2020;
   if (typeof v === "number" && v > 0 && v < 43831) return true;
-  if (/201[0-9]/.test(String(v))) return true;
+  const s = String(v);
+  if (s.match(/201[0-9]/)) return true;
+  if (s.match(/202[0-4]/)) return true;
   return false;
 }
 
@@ -184,6 +186,10 @@ export async function extractXlsx(buf: ArrayBuffer): Promise<any[][] | null> {
 
 /* ── Filial data parser ── */
 export function parseFilial(rows: any[][], branchMap?: Map<string, string>): DprVessel[] {
+  console.log("=== parseFilial START ===");
+  console.log("Rows count:", rows.length);
+  console.log("First 3 rows:", rows.slice(0, 3).map(r => r?.slice(0, 10)));
+
   let hRow = -1;
   for (let i = 0; i < Math.min(15, rows.length); i++) {
     if (rows[i] && rows[i].some((v: any) => v && String(v).includes("Название судна"))) {
@@ -191,9 +197,12 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       break;
     }
   }
+  console.log("Header row index:", hRow);
   if (hRow < 0) return [];
 
   const H = rows[hRow];
+  console.log("Header row:", H?.slice(0, 15));
+
   const ci = (...kw: string[]) => H.findIndex((v: any) => v && kw.some((k) => String(v).includes(k)));
 
   const C = {
@@ -210,14 +219,24 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     note: ci("Примечание"),
   };
 
-  // Фолбэк: если pos не найден — ставим после stat
-  if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
-    C.pos = C.stat + 1;
-  }
+  console.log("Column indices (by name):", C);
+
   // Фолбэк: если amt не найден — ставим после sup (формат СХЛФ)
   if (C.amt < 0 && C.sup >= 0) {
     C.amt = C.sup + 1;
+    console.log(`amt not found, set to ${C.amt} (sup+1)`);
   }
+
+  // Фолбэк: если pos не найден — ставим после stat
+  if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
+    C.pos = C.stat + 1;
+    console.log(`pos not found, set to ${C.pos}`);
+  }
+
+  console.log("Final column indices:", {
+    name: C.name, fil: C.fil, stat: C.stat, pos: C.pos, sup: C.sup,
+    amt: C.amt, pct: C.pct, cons: C.cons, lim: C.lim, del: C.del, note: C.note
+  });
 
   // Определяем дату отчёта
   let date: Date | null = null;
@@ -243,9 +262,11 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
     }
   }
+  console.log("Report date:", date);
 
   const vessels: DprVessel[] = [];
   let i = hRow + 1;
+  let vesselCounter = 0;
 
   while (i < rows.length) {
     const row = rows[i];
@@ -261,24 +282,52 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     const statStr = stat ? String(stat).trim() : "";
     const hasSupplyData = C.sup >= 0 && row[C.sup] && String(row[C.sup]).trim();
 
+    console.log(`\n--- Vessel candidate at row ${i} ---`);
+    console.log("Name:", name);
+    console.log("Status:", statStr);
+    console.log("Has supply data:", hasSupplyData);
+
     // Пропускаем если нет ни статуса ни запасов
-    if (!statStr && !hasSupplyData) { i += 5; continue; }
-    if (statStr === "0") { i += 5; continue; }
+    if (!statStr && !hasSupplyData) { 
+      console.log("Skip: no status and no supply data");
+      i += 5; 
+      continue; 
+    }
+    if (statStr === "0") { 
+      console.log("Skip: status is 0");
+      i += 5; 
+      continue; 
+    }
 
     // Проверяем lim на устаревшую дату (блокирует строку)
     const limVal = C.lim >= 0 ? row[C.lim] : null;
-    if (isStaleDate(limVal)) { i += 5; continue; }
+    console.log("limVal:", limVal, "isStaleDate:", isStaleDate(limVal));
+    if (isStaleDate(limVal)) { 
+      console.log("Skip: stale lim date");
+      i += 5; 
+      continue; 
+    }
 
     // Проверяем остальные ячейки на stale-даты (кроме lim и del)
     let staleRow = false;
     for (let ci2 = 0; ci2 < row.length; ci2++) {
       if (ci2 === C.lim || ci2 === C.del) continue;
-      if (isStaleDate(row[ci2])) { staleRow = true; break; }
+      if (isStaleDate(row[ci2])) { 
+        console.log(`Stale date found at column ${ci2}:`, row[ci2]);
+        staleRow = true; 
+        break; 
+      }
     }
-    if (staleRow) { i += 5; continue; }
+    if (staleRow) { 
+      console.log("Skip: stale date in row");
+      i += 5; 
+      continue; 
+    }
 
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
+    
+    console.log(`Reading 5 supply rows starting at ${i}`);
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
       const sr = rows[i + j];
       if (!sr) continue;
@@ -288,19 +337,22 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
       const ft = C.sup >= 0 ? sr[C.sup] : null;
       if (ft && String(ft).trim()) {
-        supplies.push({
+        const supply = {
           type: String(ft).trim(),
           amt: C.amt >= 0 && sr[C.amt] != null ? String(sr[C.amt]) : "—",
           pct: C.pct >= 0 && sr[C.pct] != null ? String(sr[C.pct]) : "",
           cons: C.cons >= 0 && sr[C.cons] != null ? String(sr[C.cons]) : "—",
           lim: C.lim >= 0 && sr[C.lim] ? fmtDate(sr[C.lim]) : "",
           del: C.del >= 0 && sr[C.del] ? fmtDate(sr[C.del]) : "",
-        });
+        };
+        console.log(`Supply row ${j}: type=${supply.type}, amt=${supply.amt}, lim=${supply.lim}`);
+        supplies.push(supply);
       }
     }
 
     const coordRaw = coordParts.join(" ").trim();
     const coords = parseCoord(coordRaw);
+    console.log("Coord raw:", coordRaw, "parsed coords:", coords);
 
     const { status: cleanStatus, extra: statusExtra } = normalizeStatus(statStr);
     const rawNote = C.note >= 0 && row[C.note] ? String(row[C.note]).trim() : "";
@@ -325,6 +377,9 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     let vesselName = name ? String(name).trim() : "";
     vesselName = vesselName.replace(/\s+/g, " ");
 
+    vesselCounter++;
+    console.log(`✅ Vessel ${vesselCounter}: ${vesselName}, branch: ${branch}, status: ${cleanStatus}, supplies: ${supplies.length}`);
+
     vessels.push({
       name: vesselName,
       branch,
@@ -341,6 +396,8 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
 
     i += 5;
   }
+
+  console.log(`=== parseFilial END: ${vessels.length} vessels parsed ===`);
   return vessels;
 }
 
@@ -385,10 +442,12 @@ export async function parseMsgFiles(
   files: File[],
   branchMap?: Map<string, string>
 ): Promise<{ vessels: DprVessel[]; date: Date | null }> {
+  console.log("=== parseMsgFiles START ===");
   let reportDate: Date | null = null;
   const all: DprVessel[] = [];
 
   for (const f of files) {
+    console.log(`Processing file: ${f.name}`);
     try {
       let rows: any[][] | null = null;
       if (f.name.toLowerCase().endsWith(".eml")) {
@@ -398,8 +457,13 @@ export async function parseMsgFiles(
         const buf = await f.arrayBuffer();
         rows = await extractXlsx(buf);
       }
-      if (!rows) continue;
+      if (!rows) {
+        console.log(`No rows extracted from ${f.name}`);
+        continue;
+      }
+      console.log(`Extracted ${rows.length} rows from ${f.name}`);
       const vs = parseFilial(rows, branchMap);
+      console.log(`Parsed ${vs.length} vessels from ${f.name}`);
       if (vs.length) {
         if (!reportDate && vs[0].reportDate) reportDate = vs[0].reportDate;
         all.push(...vs);
@@ -417,5 +481,6 @@ export async function parseMsgFiles(
       map.set(key, v);
     }
   });
+  console.log(`=== parseMsgFiles END: ${map.size} unique vessels ===`);
   return { vessels: Array.from(map.values()), date: reportDate };
 }
