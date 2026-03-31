@@ -245,14 +245,14 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     if (limVal && /201[0-9]/.test(String(limVal))) { i += 5; continue; }
 
     // Общая проверка stale-дат — пропускаем lim колонку чтобы не блокировать СХЛФ
-    let staleRow = false;
+   let staleRow = false;
     for (let ci2 = 0; ci2 < row.length; ci2++) {
-      if (ci2 === C.lim) continue;
+      if (ci2 === C.lim || ci2 === C.del) continue;
       const cell = row[ci2];
       if (typeof cell === "number" && cell > 30000 && cell < 43831) { staleRow = true; break; }
     }
     if (staleRow) { i += 5; continue; }
-
+    
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
