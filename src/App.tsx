@@ -13,6 +13,7 @@ import { LoginForm } from "./components/LoginForm";
 import { FilterBar } from "./components/FilterBar";
 import { FleetMap } from "./components/FleetMap";
 import { SummaryReport } from "./components/SummaryReport";
+import { loadPorts } from "./lib/ports";  // <-- добавить импорт
 
 const EMPTY_FORM: FormState = {
   counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`,
@@ -75,6 +76,7 @@ const loadData = useCallback(async () => {
 
   useEffect(() => {
     loadData();
+    loadPorts();  // <-- добавить вызов
     const s1 = supabase.channel("vessels-ch").on("postgres_changes", { event:"*", schema:"public", table:"vessels" }, () => loadData()).subscribe();
     const s2 = supabase.channel("contracts-ch").on("postgres_changes", { event:"*", schema:"public", table:"contracts" }, () => loadData()).subscribe();
     return () => { supabase.removeChannel(s1); supabase.removeChannel(s2); };
