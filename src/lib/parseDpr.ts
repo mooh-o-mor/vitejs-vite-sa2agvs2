@@ -69,7 +69,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
 
-  // 1. DD-MM,M N DDD-MM,M E
   const m1 = s.match(/(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m1) {
     const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
@@ -77,7 +76,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // 2. DD°MM N/DDD°MM E
   const m2 = s.match(/(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m2) {
     const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
@@ -85,7 +83,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // 3. DD MM,M N DDD MM,M E (пробел вместо дефиса)
   const m3 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m3) {
     const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
@@ -93,7 +90,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // 4. DD MM,Mсев.DDD MM,Mв.
   const m4 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)[.\s]/i);
   if (m4) {
     const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
@@ -101,7 +97,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  // Port lookup
   const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
   for (const [k, c] of Object.entries(PORTS)) {
     if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
@@ -221,13 +216,11 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
 
   console.log("Column indices (by name):", C);
 
-  // Фолбэк: если amt не найден — ставим после sup (формат СХЛФ)
   if (C.amt < 0 && C.sup >= 0) {
     C.amt = C.sup + 1;
     console.log(`amt not found, set to ${C.amt} (sup+1)`);
   }
 
-  // Фолбэк: если pos не найден — ставим после stat
   if (C.pos < 0 && C.stat >= 0 && C.sup >= 0 && C.sup - C.stat === 2) {
     C.pos = C.stat + 1;
     console.log(`pos not found, set to ${C.pos}`);
@@ -238,7 +231,6 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     amt: C.amt, pct: C.pct, cons: C.cons, lim: C.lim, del: C.del, note: C.note
   });
 
-  // Определяем дату отчёта
   let date: Date | null = null;
   for (let i = 0; i < Math.min(10, rows.length) && !date; i++) {
     for (const v of rows[i] || []) {
@@ -287,7 +279,6 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     console.log("Status:", statStr);
     console.log("Has supply data:", hasSupplyData);
 
-    // Пропускаем если нет ни статуса ни запасов
     if (!statStr && !hasSupplyData) { 
       console.log("Skip: no status and no supply data");
       i += 5; 
@@ -299,25 +290,23 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       continue; 
     }
 
-    // ✅ НОВАЯ ЛОГИКА: проверяем только lim (дата лимита)
+    // ✅ Проверяем только lim (дата лимита)
     const limVal = C.lim >= 0 ? row[C.lim] : null;
     console.log("limVal:", limVal, "isStaleDate:", isStaleDate(limVal));
     
-    // Если лимит устаревший — пропускаем ВСЁ судно
     if (isStaleDate(limVal)) { 
       console.log("Skip vessel: stale lim date");
       i += 5; 
       continue; 
     }
     
-    // Дата поставки может быть старой — не блокируем, просто логируем
+    // Дата поставки — только предупреждение
     const delVal = C.del >= 0 ? row[C.del] : null;
     if (isStaleDate(delVal)) {
-      console.log(`Warning: stale delivery date for vessel: ${delVal}`);
+      console.log(`Warning: stale delivery date: ${delVal}`);
     }
     
-    // ❌ УБРАНА проверка остальных ячеек на stale даты!
-    // Числа 1,2,3, порядковые номера больше не блокируют парсинг
+    // ❌ НЕТ проверки других ячеек!
 
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
@@ -332,7 +321,6 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
       const ft = C.sup >= 0 ? sr[C.sup] : null;
       if (ft && String(ft).trim()) {
-        // Для каждого запаса проверяем лимит индивидуально
         const supplyLim = C.lim >= 0 ? sr[C.lim] : null;
         if (isStaleDate(supplyLim)) {
           console.log(`Skip supply ${String(ft).trim()} due to stale lim: ${supplyLim}`);
