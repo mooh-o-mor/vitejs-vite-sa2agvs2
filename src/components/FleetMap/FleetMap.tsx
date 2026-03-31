@@ -8,10 +8,9 @@ import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
 import { T, typeOrder } from "../../lib/types";
 import { getType } from "../../lib/utils";
-import { mkIcon, mkPieIcon, CLR, STATUS_BG, STATUS_HEADER_BG } from "./mapIcons";
+import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
-import { extractLocation } from "../../lib/locationNormalizer";
 
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
