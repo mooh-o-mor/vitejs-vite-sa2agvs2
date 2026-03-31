@@ -18,6 +18,6 @@ export async function loadPorts() {
       newPorts[port.name.toLowerCase()] = [port.lat, port.lng];
     });
     PORTS = newPorts;
-    console.log(Загружено ${Object.keys(PORTS).length} портов);
+    console.log(`Загружено ${Object.keys(PORTS).length} портов`);
   }
 }
