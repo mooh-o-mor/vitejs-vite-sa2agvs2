@@ -11,7 +11,6 @@ import { getType, formatVesselName } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
-import { loadPorts } from "../../lib/ports";  // ← ДОБАВИТЬ ЭТУ СТРОКУ
 
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
@@ -157,7 +156,6 @@ export function FleetMap({
 
   async function loadVessels(date: string) {
     setLoading(true);
-    await loadPorts();  // ← ДОБАВИТЬ ЭТУ СТРОКУ
     const { data } = await supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name");
     setVessels(data || []);
     setSelVessel(null);
@@ -265,7 +263,6 @@ export function FleetMap({
     setUploading(true);
     setUploadMsg("Обработка...");
     try {
-      await loadPorts();  // ← ДОБАВИТЬ ЭТУ СТРОКУ
       const { data: vesselList } = await supabase.from("vessels").select("name, branch");
       const branchMap = new Map<string, string>();
       (vesselList || []).forEach((v: any) => {
