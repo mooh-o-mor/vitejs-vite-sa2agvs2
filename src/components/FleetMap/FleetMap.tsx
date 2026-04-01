@@ -270,22 +270,30 @@ export function FleetMap({
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
 
       let ok = 0, fail = 0;
-      for (const v of parsed) {
-        const row = {
-          vessel_name: v.name,
-          branch: v.branch,
-          report_date: dateStr,
-          status: v.status,
-          coord_raw: v.coordRaw,
-          lat: v.lat,
-          lng: v.lng,
-          note: v.note,
-          supplies: v.supplies,
-          contract_info: v.contract_info || null,
-          work_period: v.work_period || null,
-        };
-        const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
-        if (error) { fail++; console.error(v.name, error); } else ok++;
+      // СТАЛО:
+// Загружаем существующие записи чтобы не затирать contract_info и work_period
+const { data: existing } = await supabase
+  .from("dpr_entries")
+  .select("vessel_name, contract_info, work_period")
+  .eq("report_date", dateStr);
+const existingMap = new Map((existing || []).map((r: any) => [r.vessel_name, r]));
+
+for (const v of parsed) {
+  const prev = existingMap.get(v.name);
+  const row = {
+    vessel_name: v.name,
+    branch: (v.branch && v.branch.trim()) || branchMap.get(v.name.toUpperCase().trim()) || "",
+    report_date: dateStr,
+    status: v.status,
+    coord_raw: v.coordRaw,
+    lat: v.lat,
+    lng: v.lng,
+    note: v.note,
+    supplies: v.supplies,
+    contract_info: prev?.contract_info || null,
+    work_period: prev?.work_period || null,
+  };
+  const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
       }
       
       setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
