@@ -64,11 +64,18 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     });
     setTypeMap(t);
 
-    // specMap
+    // specMap - формируем ссылки из project или spec_url
     const sm = new Map<string, string>();
     (specData || []).forEach((s: any) => {
-      const url = s.spec_url || `${SUPABASE_URL}/storage/v1/object/public/specs/${s.project}.pdf`;
-      sm.set(s.vessel_name.toUpperCase().trim(), url);
+      const vesselKey = s.vessel_name.toUpperCase().trim();
+      // Если есть spec_url - используем его
+      if (s.spec_url) {
+        sm.set(vesselKey, s.spec_url);
+      } 
+      // Если нет spec_url, но есть project - формируем по шаблону
+      else if (s.project) {
+        sm.set(vesselKey, `${SUPABASE_URL}/storage/v1/object/public/specs/${s.project}.pdf`);
+      }
     });
     setSpecMap(sm);
 
