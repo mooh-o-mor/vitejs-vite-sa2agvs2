@@ -26,7 +26,7 @@ const thStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   color: "#fff",
-  borderBottom: "2px solid #90a4ae",gjxtve 49 pfghjcjd&
+  borderBottom: "2px solid #90a4ae",
   borderRight: "1px solid #546E7A",
   whiteSpace: "nowrap",
   position: "sticky",
