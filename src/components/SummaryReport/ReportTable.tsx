@@ -21,8 +21,6 @@ interface Props {
   onUpdateField: (vesselName: string, field: string, newValue: string) => void;
 }
 
-const STORAGE_URL = "https://otjiwxvszomwpqmwusqd.supabase.co/storage/v1/object/public/specs";
-
 const thStyle: React.CSSProperties = {
   padding: "8px 8px",
   textAlign: "center",
@@ -47,28 +45,6 @@ const tdBase: React.CSSProperties = {
 };
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, specMap, onUpdateField }: Props) {
-  // Функция для получения URL спецификации
-  const getSpecUrl = (vessel: DprRow): string | null => {
-    // 1. Сначала пробуем взять из specMap (если есть)
-    const specUrl = specMap.get(vessel.vessel_name.toUpperCase().trim());
-    if (specUrl) return specUrl;
-    
-    // 2. Если нет, пробуем сформировать по проекту из vessel_specs (через project поле)
-    // @ts-ignore - project может быть в DprRow, если добавили в тип
-    if (vessel.project) {
-      return `${STORAGE_URL}/${vessel.project}.pdf`;
-    }
-    
-    // 3. Если и проекта нет, пробуем сформировать по названию судна
-    // Это как fallback, если ничего другого нет
-    const vesselNameFormatted = vessel.vessel_name
-      .toUpperCase()
-      .trim()
-      .replace(/\s+/g, '_')
-      .replace(/[^A-ZА-Я0-9_]/g, '');
-    return `${STORAGE_URL}/${vesselNameFormatted}.pdf`;
-  };
-
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -95,7 +71,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
             const vType = getVesselType(v.vessel_name);
             const power = getPower(v.coord_raw);
             const coordDisplay = extractLocation(v.coord_raw || "");
-            const specUrl = getSpecUrl(v);
+            const specUrl = specMap.get(v.vessel_name.toUpperCase().trim());
 
             let statusDisplay = v.status;
             if (canView && sc === "asd") {
@@ -111,23 +87,19 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                 <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
                 <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
-                  {formatVesselName(v.vessel_name)}
                   {specUrl ? (
                     <a 
                       href={specUrl} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      title="Спецификация (PDF)"
-                      style={{ marginLeft: 6, fontSize: 11, textDecoration: "none", display: "inline-block" }}
+                      style={{ textDecoration: "none", color: "#1a2a3a" }}
+                      title="Открыть спецификацию"
                     >
-                      📄
+                      {formatVesselName(v.vessel_name)}
                     </a>
                   ) : (
-                    <span 
-                      style={{ marginLeft: 6, fontSize: 11, color: "#ccc", display: "inline-block", cursor: "default" }} 
-                      title="Нет спецификации"
-                    >
-                      📄
+                    <span style={{ color: "#1a2a3a" }}>
+                      {formatVesselName(v.vessel_name)}
                     </span>
                   )}
                 </td>
