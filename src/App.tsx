@@ -11,8 +11,8 @@ import { ContractForm } from "./components/ContractForm";
 import { VesselForm } from "./components/VesselForm";
 import { LoginForm } from "./components/LoginForm";
 import { FilterBar } from "./components/FilterBar";
-//import { FleetMap } from "./components/FleetMap";
-import { YandexMap } from "./components/YandexMap";
+import { FleetMap } from "./components/FleetMap";
+//import { YandexMap } from "./components/YandexMap";
 import { SummaryReport } from "./components/SummaryReport";
 
 const EMPTY_FORM: FormState = {
@@ -397,12 +397,8 @@ const filtered = useMemo(() => {
           />
         )}
         {activeTab === "map" && (
-        //  <FleetMap
-        //    isAdmin={isAdmin}
-        //    canView={canView}
-        //    externalFiles={headerUploadFiles}
-         //   onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
-        <YandexMap
+        <FleetMap
+        //<YandexMap
     isAdmin={isAdmin}
     canView={canView}
     externalFiles={headerUploadFiles}
