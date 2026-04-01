@@ -50,18 +50,18 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
   // Функция для получения URL спецификации
   const getSpecUrl = (vessel: DprRow): string | null => {
     // 1. Сначала пробуем взять из specMap (если есть)
-    const specUrl = specMap.get(v.vessel_name.toUpperCase().trim());
+    const specUrl = specMap.get(vessel.vessel_name.toUpperCase().trim());
     if (specUrl) return specUrl;
     
     // 2. Если нет, пробуем сформировать по проекту из vessel_specs (через project поле)
     // @ts-ignore - project может быть в DprRow, если добавили в тип
-    if (v.project) {
-      return `${STORAGE_URL}/${v.project}.pdf`;
+    if (vessel.project) {
+      return `${STORAGE_URL}/${vessel.project}.pdf`;
     }
     
     // 3. Если и проекта нет, пробуем сформировать по названию судна
     // Это как fallback, если ничего другого нет
-    const vesselNameFormatted = v.vessel_name
+    const vesselNameFormatted = vessel.vessel_name
       .toUpperCase()
       .trim()
       .replace(/\s+/g, '_')
