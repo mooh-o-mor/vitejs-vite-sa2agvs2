@@ -2,6 +2,7 @@ import { T } from "../../lib/types";
 import type { DprSupply, DprRow } from "../../lib/parseDpr";
 import { STATUS_HEADER_BG } from "./mapIcons";
 import { extractLocation } from "../../lib/locationNormalizer";
+import { formatVesselName, formatVesselType } from "../../lib/utils";
 
 interface Props {
   vessel: DprRow;
@@ -25,6 +26,9 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const power = powerMatch ? powerMatch[1].toUpperCase() : null;
   const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
   const coordDisplay = extractLocation(vessel.coord_raw || "");
+  const formattedName = formatVesselName(
+  vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim()
+);
 
   return (
     <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -49,10 +53,10 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
               padding: "0px",
               flexShrink: 0,
             }}>
-              {vesselType}
+              {formatVesselType(vesselType)}
             </span>
           )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{vessel.vessel_name}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{formattedName}</span>
           {vessel.branch && (
             <span style={{ 
               fontSize: 11, 
