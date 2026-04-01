@@ -1,8 +1,10 @@
+import { useState, useEffect } from "react";
 import { T } from "../../lib/types";
 import type { DprSupply, DprRow } from "../../lib/parseDpr";
 import { STATUS_HEADER_BG } from "./mapIcons";
 import { extractLocation } from "../../lib/locationNormalizer";
 import { formatVesselName, formatVesselType } from "../../lib/utils";
+import { supabase } from "../../lib/supabase";
 
 interface Props {
   vessel: DprRow;
@@ -26,46 +28,56 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const power = powerMatch ? powerMatch[1].toUpperCase() : null;
   const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
   const coordDisplay = extractLocation(vessel.coord_raw || "");
-  const formattedName = formatVesselName(
-  vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim()
-);
+  const nameWithoutPrefix = vessel.vessel_name
+    .replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "")
+    .trim();
+  const formattedName = formatVesselName(nameWithoutPrefix);
+
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [specUrl, setSpecUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPhotoUrl(null);
+    setSpecUrl(null);
+    const fetchData = async () => {
+      const { data: vData } = await supabase
+        .from("vessels")
+        .select("photo_url")
+        .ilike("name", `%${nameWithoutPrefix}`)
+        .maybeSingle();
+      if (vData?.photo_url) setPhotoUrl(vData.photo_url);
+
+      const { data: specs } = await supabase
+        .from("vessel_specs")
+        .select("project, spec_url")
+        .ilike("vessel_name", nameWithoutPrefix)
+        .maybeSingle();
+      if (specs?.spec_url) {
+        setSpecUrl(specs.spec_url);
+      } else if (specs?.project) {
+        const { data: u } = supabase.storage.from("specs").getPublicUrl(`${specs.project}.pdf`);
+        setSpecUrl(u.publicUrl);
+      }
+    };
+    fetchData();
+  }, [nameWithoutPrefix]);
 
   return (
     <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ 
-        padding: "10px 14px", 
-        borderBottom: `1px solid ${T.border}`, 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "space-between",
-        flexWrap: "nowrap",
-        gap: 8,
-        background: STATUS_HEADER_BG[c],
-        flexShrink: 0
-      }}>
+
+      {/* Заголовок */}
+      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "nowrap", gap: 8, background: STATUS_HEADER_BG[c], flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flex: 1, minWidth: 0, overflow: "hidden" }}>
           {vesselType && (
-            <span style={{ 
-              fontSize: 11, 
-              color: T.text, 
-              fontFamily: "monospace", 
-              fontWeight: 500, 
-              padding: "0px",
-              flexShrink: 0,
-            }}>
+            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, padding: "0px", flexShrink: 0 }}>
               {formatVesselType(vesselType)}
             </span>
           )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{formattedName}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+            {formattedName}
+          </span>
           {vessel.branch && (
-            <span style={{ 
-              fontSize: 11, 
-              color: T.text, 
-              fontFamily: "monospace", 
-              fontWeight: 500,
-              padding: "0px",
-              flexShrink: 0,
-            }}>
+            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, padding: "0px", flexShrink: 0 }}>
               {vessel.branch}
             </span>
           )}
@@ -73,6 +85,29 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
         <button onClick={onClose} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
       </div>
 
+      {/* Фото — кликабельное если есть спецификация */}
+      {photoUrl && (
+        <div style={{ padding: "8px 14px", borderBottom: `1px solid ${T.border}`, background: "#f8f9fa", textAlign: "center", position: "relative" }}>
+          {specUrl ? (
+            <a href={specUrl} target="_blank" rel="noopener noreferrer" title="Открыть спецификацию (PDF)">
+              <img src={photoUrl} alt={formattedName}
+                style={{ maxWidth: "100%", maxHeight: "180px", objectFit: "contain", borderRadius: 4, cursor: "pointer" }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+                onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+              />
+              <div style={{ position: "absolute", bottom: 12, right: 18, background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 10, padding: "2px 6px", borderRadius: 4, pointerEvents: "none" }}>
+                📄 Спецификация
+              </div>
+            </a>
+          ) : (
+            <img src={photoUrl} alt={formattedName}
+              style={{ maxWidth: "100%", maxHeight: "180px", objectFit: "contain", borderRadius: 4 }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Тело */}
       <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
           <span style={{ color: T.text2 }}>Местоположение</span>
@@ -86,7 +121,7 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                 <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 250 }}>{vessel.note}</span>
               </div>
             )}
-            {(vessel.supplies && vessel.supplies.length > 0) && (
+            {vessel.supplies && vessel.supplies.length > 0 && (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
                   <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
