@@ -258,12 +258,31 @@ export function FleetMap({
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
 
-      // Загружаем существующие записи чтобы не затирать contract_info и work_period
+      // Загружаем записи за ту же дату (если перезаливка)
       const { data: existing } = await supabase
         .from("dpr_entries")
         .select("vessel_name, contract_info, work_period")
         .eq("report_date", dateStr);
-      const existingMap = new Map((existing || []).map((r: any) => [r.vessel_name, r]));
+
+      // Если для этой даты нет данных о контрактах — берём из последней предыдущей даты
+      let prevData = existing || [];
+      if (prevData.filter((r: any) => r.contract_info || r.work_period).length === 0) {
+        const { data: prevDates } = await supabase
+          .from("dpr_entries")
+          .select("report_date")
+          .lt("report_date", dateStr)
+          .order("report_date", { ascending: false })
+          .limit(1);
+        if (prevDates && prevDates.length > 0) {
+          const { data: prevRecords } = await supabase
+            .from("dpr_entries")
+            .select("vessel_name, contract_info, work_period")
+            .eq("report_date", prevDates[0].report_date);
+          prevData = prevRecords || [];
+        }
+      }
+
+      const existingMap = new Map(prevData.map((r: any) => [r.vessel_name, r]));
 
       let ok = 0, fail = 0;
       for (const v of parsed) {
