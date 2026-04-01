@@ -293,7 +293,7 @@ for (const v of parsed) {
     contract_info: prev?.contract_info || null,
     work_period: prev?.work_period || null,
   };
-  const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
+  //const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
       }
       
       setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
