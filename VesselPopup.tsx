@@ -1,0 +1,165 @@
+import { useState, useEffect } from "react";
+import { T } from "../../lib/types";
+import type { DprSupply, DprRow } from "../../lib/parseDpr";
+import { STATUS_HEADER_BG } from "./mapIcons";
+import { formatVesselName, formatVesselType } from "../../lib/utils";
+import { extractLocation } from "../../lib/locationNormalizer";
+import { supabase } from "../../lib/supabase";
+
+interface Props {
+  vessel: DprRow;
+  vesselType: string;
+  canView: boolean;
+  onClose: () => void;
+}
+
+function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
+  if (!stat) return "oth";
+  const s = stat.toUpperCase();
+  if (s.startsWith("АСГ")) return "asg";
+  if (s.startsWith("АСД")) return "asd";
+  if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
+  return "oth";
+}
+
+export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
+  const c = cls(vessel.status);
+  const powerMatch = /(БЭП|СЭП)/i.exec(vessel.coord_raw || "");
+  const power = powerMatch ? powerMatch[1].toUpperCase() : null;
+  const powerText = power === "БЭП" ? "БЕРЕГОВОЕ" : power === "СЭП" ? "СУДОВОЕ" : null;
+  const coordDisplay = extractLocation(vessel.coord_raw || "");
+
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [specUrl, setSpecUrl] = useState<string | null>(null);
+
+  const nameWithoutPrefix = vessel.vessel_name
+    .replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "")
+    .trim();
+  const formattedName = formatVesselName(nameWithoutPrefix);
+
+  useEffect(() => {
+    setPhotoUrl(null);
+    setSpecUrl(null);
+
+    const fetchData = async () => {
+      // Фото из vessels
+      const { data: vData } = await supabase
+        .from("vessels")
+        .select("photo_url")
+        .ilike("name", `%${nameWithoutPrefix}`)
+        .maybeSingle();
+      if (vData?.photo_url) setPhotoUrl(vData.photo_url);
+
+      // Спецификация из vessel_specs
+      const { data: specs } = await supabase
+        .from("vessel_specs")
+        .select("project, spec_url")
+        .ilike("vessel_name", nameWithoutPrefix)
+        .maybeSingle();
+      if (specs) {
+        if (specs.spec_url) {
+          setSpecUrl(specs.spec_url);
+        } else if (specs.project) {
+          const { data: urlData } = supabase.storage
+            .from("specs")
+            .getPublicUrl(`${specs.project}.pdf`);
+          setSpecUrl(urlData.publicUrl);
+        }
+      }
+    };
+    fetchData();
+  }, [nameWithoutPrefix]);
+
+  return (
+    <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+      {/* Заголовок */}
+      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "nowrap", gap: 8, background: STATUS_HEADER_BG[c], flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flex: 1, minWidth: 0, overflow: "hidden" }}>
+          {vesselType && (
+            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, flexShrink: 0 }}>
+              {formatVesselType(vesselType)}
+            </span>
+          )}
+          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+            {formattedName}
+          </span>
+          {vessel.branch && (
+            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, flexShrink: 0 }}>
+              {vessel.branch}
+            </span>
+          )}
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
+      </div>
+
+      {/* Фото — кликабельное если есть спецификация */}
+      {photoUrl && (
+        <div style={{ padding: "8px 14px", borderBottom: `1px solid ${T.border}`, background: "#f8f9fa", textAlign: "center", position: "relative" }}>
+          {specUrl ? (
+            <a href={specUrl} target="_blank" rel="noopener noreferrer" title="Открыть спецификацию (PDF)">
+              <img src={photoUrl} alt={formattedName}
+                style={{ maxWidth: "100%", maxHeight: "180px", objectFit: "contain", borderRadius: 4, cursor: "pointer" }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+                onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+              />
+              <div style={{ position: "absolute", bottom: 12, right: 18, background: "rgba(0,0,0,0.55)", color: "#fff", fontSize: 10, padding: "2px 6px", borderRadius: 4, pointerEvents: "none" }}>
+                📄 Спецификация
+              </div>
+            </a>
+          ) : (
+            <img src={photoUrl} alt={formattedName}
+              style={{ maxWidth: "100%", maxHeight: "180px", objectFit: "contain", borderRadius: 4 }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Тело */}
+      <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+          <span style={{ color: T.text2 }}>Местоположение</span>
+          <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 250 }}>{coordDisplay || "—"}</span>
+        </div>
+        {canView && (
+          <>
+            {vessel.note && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
+                <span style={{ color: T.text2 }}>Примечание</span>
+                <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 250 }}>{vessel.note}</span>
+              </div>
+            )}
+            {vessel.supplies && vessel.supplies.length > 0 && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 4px" }}>
+                  <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>Запасы</span>
+                  {powerText && <span style={{ fontSize: 10, color: T.text2 }}>Электропитание: <b>{powerText}</b></span>}
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      {["Вид", "Остаток", "%", "Расход", "До"].map((h) => (
+                        <th key={h} style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(vessel.supplies as DprSupply[]).map((s, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>{s.pct && !isNaN(parseFloat(s.pct.replace(",", "."))) ? parseFloat(s.pct.replace(",", ".")).toFixed(1) + "%" : "—"}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
