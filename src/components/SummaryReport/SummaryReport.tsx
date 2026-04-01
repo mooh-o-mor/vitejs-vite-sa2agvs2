@@ -7,11 +7,14 @@ import { FilterBar } from "./FilterBar";
 import { ReportTable } from "./ReportTable";
 import { exportToExcel } from "./exportExcel";
 
+const SUPABASE_URL = "https://otjiwxvszomwpqmwusqd.supabase.co";
+
 export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
   const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
+  const [specMap, setSpecMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
@@ -38,38 +41,44 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   async function loadVessels(date: string) {
     setLoading(true);
-    const [{ data }, { data: vData }] = await Promise.all([
+    const [{ data }, { data: vData }, { data: specData }] = await Promise.all([
       supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name"),
       supabase.from("vessels").select("name"),
+      supabase.from("vessel_specs").select("vessel_name, project, spec_url"),
     ]);
     
+    // typeMap
     const t = new Map<string, string>();
     (vData || []).forEach((v: any) => {
       const originalName = v.name;
       const upperName = originalName.toUpperCase().trim();
       const typeMatch = upperName.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|БП|ВСП|Баржа)\s+/);
       const typeStr = typeMatch ? typeMatch[1] : "";
-      
       if (typeStr) {
         t.set(originalName, typeStr);
         t.set(upperName, typeStr);
         const withoutPrefix = upperName.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-        if (withoutPrefix !== upperName) {
-          t.set(withoutPrefix, typeStr);
-        }
+        if (withoutPrefix !== upperName) t.set(withoutPrefix, typeStr);
         t.set(originalName.toLowerCase(), typeStr);
       }
     });
     setTypeMap(t);
+
+    // specMap
+    const sm = new Map<string, string>();
+    (specData || []).forEach((s: any) => {
+      const url = s.spec_url || `${SUPABASE_URL}/storage/v1/object/public/specs/${s.project}.pdf`;
+      sm.set(s.vessel_name.toUpperCase().trim(), url);
+    });
+    setSpecMap(sm);
+
     setVessels(data || []);
     setLoading(false);
   }
 
   const updateField = useCallback((vesselName: string, field: string, newValue: string) => {
     setVessels(prev => prev.map(v => 
-      v.vessel_name === vesselName 
-        ? { ...v, [field]: newValue }
-        : v
+      v.vessel_name === vesselName ? { ...v, [field]: newValue } : v
     ));
   }, []);
 
@@ -82,25 +91,18 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     const normalized = vesselName.toUpperCase().trim();
     let type = typeMap.get(normalized);
     if (type) return type;
-    
     const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
     type = typeMap.get(withoutPrefix);
     if (type) return type;
-    
     for (const [key, val] of typeMap.entries()) {
-      if (normalized.includes(key) || key.includes(normalized)) {
-        return val;
-      }
+      if (normalized.includes(key) || key.includes(normalized)) return val;
     }
     return "";
   }, [typeMap]);
 
   const allTypes = useMemo(() => {
     const types = new Set<string>();
-    vessels.forEach(v => {
-      const t = getVesselType(v.vessel_name);
-      if (t) types.add(t);
-    });
+    vessels.forEach(v => { const t = getVesselType(v.vessel_name); if (t) types.add(t); });
     return Array.from(types).sort();
   }, [vessels, getVesselType]);
 
@@ -109,18 +111,12 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   }, [vessels]);
 
   const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
-    if (value === "Все") {
-      setter([]);
-      return;
-    }
+    if (value === "Все") { setter([]); return; }
     setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
   };
 
   const toggleStatus = (value: string) => {
-    if (value === "Все") {
-      setFilterStatuses([]);
-      return;
-    }
+    if (value === "Все") { setFilterStatuses([]); return; }
     const statusKey = value === "АСГ" ? "asg" : value === "АСД" ? "asd" : "rem";
     setFilterStatuses(prev => prev.includes(statusKey) ? prev.filter(v => v !== statusKey) : [...prev, statusKey]);
   };
@@ -132,7 +128,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
       const statusOk = filterStatuses.length === 0 || filterStatuses.includes(statusCls(v.status));
       return typeOk && branchOk && statusOk;
     });
-
     result.sort((a,b) => {
       if (sortBy === "name") return a.vessel_name.localeCompare(b.vessel_name, "ru");
       if (sortBy === "branch") return (a.branch || "").localeCompare(b.branch || "", "ru");
@@ -148,58 +143,23 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      <div style={{ 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "space-between",
-        marginBottom: 12,
-        flexWrap: "wrap",
-        gap: 10
-      }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>
-          Сводная таблица судов МСС
-        </div>
-        
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>Сводная таблица судов МСС</div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <select 
-            value={selDate} 
-            onChange={(e) => setSelDate(e.target.value)}
-            style={{ 
-              padding: "5px 8px", 
-              borderRadius: 4, 
-              border: `1px solid ${T.border}`, 
-              fontSize: 13, 
-              fontFamily: "monospace", 
-              fontWeight: 600,
-              background: "#fff"
-            }}
-          >
+          <select value={selDate} onChange={(e) => setSelDate(e.target.value)}
+            style={{ padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "monospace", fontWeight: 600, background: "#fff" }}>
             {dates.length === 0 && <option value="">— нет данных —</option>}
             {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
           </select>
-          
           <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
             <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
             <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
             <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
             <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
           </div>
-          
           {canView && (
-            <button 
-              onClick={() => exportToExcel(filtered, selDate, fmtDateRu, getVesselType)}
-              style={{ 
-                padding: "6px 16px", 
-                borderRadius: 6, 
-                border: "none", 
-                background: "#2e7d32", 
-                color: "#fff", 
-                fontWeight: 600, 
-                fontSize: 12, 
-                cursor: "pointer",
-                whiteSpace: "nowrap"
-              }}
-            >
+            <button onClick={() => exportToExcel(filtered, selDate, fmtDateRu, getVesselType)}
+              style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
               ⬇ Экспорт в Excel
             </button>
           )}
@@ -224,6 +184,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         selDate={selDate}
         canView={canView}
         getVesselType={getVesselType}
+        specMap={specMap}
         onUpdateField={updateField}
       />
 
