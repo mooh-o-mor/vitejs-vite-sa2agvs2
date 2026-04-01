@@ -396,22 +396,20 @@ const filtered = useMemo(() => {
             onEditContract={openEditContract}
           />
         )}
-        //{activeTab === "map" && (
+        {activeTab === "map" && (
         //  <FleetMap
         //    isAdmin={isAdmin}
         //    canView={canView}
         //    externalFiles={headerUploadFiles}
          //   onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
-        //  />
-        //)}
-      {activeTab === "map" && (
-  <YandexMap
+        <YandexMap
     isAdmin={isAdmin}
     canView={canView}
     externalFiles={headerUploadFiles}
     onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
-  />
-)}
+      />
+        )}
+     
         {activeTab === "summary" && (
           <SummaryReport isAdmin={isAdmin} canView={canView} />
         )}
