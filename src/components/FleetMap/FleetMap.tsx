@@ -72,9 +72,7 @@ export function FleetMap({
           if (typeStr) {
             t.set(full, typeStr);
             const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-            if (short !== full) {
-              t.set(short, typeStr);
-            }
+            if (short !== full) t.set(short, typeStr);
           }
         });
         setTypeMap(t);
@@ -168,27 +166,20 @@ export function FleetMap({
     type = typeMap.get(withoutPrefix);
     if (type) return type;
     for (const [key, val] of typeMap.entries()) {
-      if (normalized.includes(key) || key.includes(normalized)) {
-        return val;
-      }
+      if (normalized.includes(key) || key.includes(normalized)) return val;
     }
     return "";
   };
 
   const allTypes = useMemo(() => {
     const types = new Set<string>();
-    vessels.forEach(v => {
-      const t = getVesselType(v.vessel_name);
-      if (t) types.add(t);
-    });
+    vessels.forEach(v => { const t = getVesselType(v.vessel_name); if (t) types.add(t); });
     return ["Все", ...Array.from(types).sort()];
   }, [vessels, getVesselType]);
 
   const allBranches = useMemo(() => {
     const branches = new Set<string>();
-    vessels.forEach(v => {
-      if (v.branch) branches.add(v.branch);
-    });
+    vessels.forEach(v => { if (v.branch) branches.add(v.branch); });
     return ["Все", ...Array.from(branches).sort()];
   }, [vessels]);
 
@@ -215,10 +206,8 @@ export function FleetMap({
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      marker.bindTooltip(
-  formatVesselName(v.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim()),
-  { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" }
-);
+      const label = formatVesselName(v.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim());
+      marker.bindTooltip(label, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", () => {
         setSelVessel(v);
         if (isMobile) setSidebarOpen(false);
@@ -262,15 +251,23 @@ export function FleetMap({
       });
 
       const { vessels: parsed, date } = await parseMsgFiles(Array.from(files), branchMap);
-      
+
       if (!parsed.length) { setUploadMsg("⚠ Данные не найдены"); setUploading(false); return; }
       if (!date) { setUploadMsg("⚠ Дата не определена"); setUploading(false); return; }
-      
+
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
 
+      // Загружаем существующие записи чтобы не затирать contract_info и work_period
+      const { data: existing } = await supabase
+        .from("dpr_entries")
+        .select("vessel_name, contract_info, work_period")
+        .eq("report_date", dateStr);
+      const existingMap = new Map((existing || []).map((r: any) => [r.vessel_name, r]));
+
       let ok = 0, fail = 0;
       for (const v of parsed) {
+        const prev = existingMap.get(v.name);
         const row = {
           vessel_name: v.name,
           branch: v.branch,
@@ -281,13 +278,13 @@ export function FleetMap({
           lng: v.lng,
           note: v.note,
           supplies: v.supplies,
-          contract_info: v.contract_info || null,
-          work_period: v.work_period || null,
+          contract_info: prev?.contract_info || null,
+          work_period: prev?.work_period || null,
         };
         const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
         if (error) { fail++; console.error(v.name, error); } else ok++;
       }
-      
+
       setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
       await loadDates();
       setSelDate(dateStr);
