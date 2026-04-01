@@ -9,7 +9,7 @@
 
 /**
  * Извлекает и форматирует местоположение из строки coord_raw
- * Убирает опреснитель ("Да"/"Нет") и форматирует с запятыми
+ * Убирает опреснитель ("Да"/"Нет") и форматирует с запятыми между логическими частями
  * Электропитание не включается в результат (выводится отдельно)
  * 
  * @param coordRaw - сырая строка с координатами
@@ -20,59 +20,111 @@ export function extractLocation(coordRaw: string): string {
     return '';
   }
 
-  // Разбиваем строку на части по пробелам
-  const parts = coordRaw.trim().split(/\s+/);
+  let raw = coordRaw.trim();
   
-  if (parts.length === 0) {
-    return coordRaw;
+  // Удаляем опреснитель (Да/Нет)
+  raw = raw.replace(/\s+(Да|Нет)\s+/i, ' ');
+  raw = raw.replace(/^(Да|Нет)\s+/i, '');
+  raw = raw.replace(/\s+(Да|Нет)$/i, '');
+  
+  // Удаляем электропитание (БЭП/СЭП) из конца строки
+  raw = raw.replace(/\s+(БЭП|СЭП)$/i, '');
+  raw = raw.replace(/\s+(БЭП|СЭП)\s+/i, ' ');
+  
+  // Если после удаления остались лишние пробелы, нормализуем
+  raw = raw.replace(/\s+/g, ' ').trim();
+  
+  if (!raw) {
+    return '';
   }
+  
+  // Разбиваем на логические части
+  // Части обычно разделены пробелами, но нужно сохранить составные элементы (например, "пр. № 1")
+  const parts = splitIntoLogicalParts(raw);
+  
+  // Объединяем с запятыми
+  return parts.join(', ');
+}
 
-  // Паттерны для определения опреснителя и электропитания
-  const desalinatorPattern = /^(Да|Нет)$/i;
-  const powerPattern = /^(БЭП|СЭП)$/i;
+/**
+ * Разбивает строку на логические части для форматирования
+ * Сохраняет составные элементы (например, "пр. № 1" как одну часть)
+ */
+function splitIntoLogicalParts(text: string): string[] {
+  const parts: string[] = [];
+  let currentPart = '';
+  let i = 0;
+  const words = text.split(/\s+/);
   
-  // Находим индексы опреснителя и электропитания
-  let desalinatorIndex = -1;
-  let powerIndex = -1;
-  
-  for (let i = 0; i < parts.length; i++) {
-    if (desalinatorPattern.test(parts[i])) {
-      desalinatorIndex = i;
-    } else if (powerPattern.test(parts[i])) {
-      powerIndex = i;
-    }
-  }
-  
-  // Формируем массив частей, исключая опреснитель и электропитание
-  const locationParts: string[] = [];
-  
-  for (let i = 0; i < parts.length; i++) {
-    // Пропускаем опреснитель
-    if (i === desalinatorIndex) {
-      continue;
-    }
+  while (i < words.length) {
+    const word = words[i];
     
-    // Пропускаем электропитание (выводится отдельно)
-    if (i === powerIndex) {
-      continue;
+    // Если это сокращение с точкой (п., м., пр., ул., и т.д.)
+    if (/^[а-яА-Яa-zA-Z]\.$/.test(word) && i + 1 < words.length) {
+      // Начинаем составную часть
+      currentPart = word;
+      i++;
+      
+      // Собираем следующие слова, пока не встретим новое сокращение или конец
+      while (i < words.length) {
+        const nextWord = words[i];
+        // Если следующее слово - сокращение с точкой, завершаем текущую часть
+        if (/^[а-яА-Яa-zA-Z]\.$/.test(nextWord)) {
+          break;
+        }
+        currentPart += ' ' + nextWord;
+        i++;
+      }
+      parts.push(currentPart);
+      currentPart = '';
+    } 
+    // Если это номер (№ или просто цифры) и предыдущая часть была сокращением
+    else if ((word === '№' || /^\d+$/.test(word)) && parts.length > 0) {
+      // Добавляем к последней части
+      if (parts.length > 0) {
+        parts[parts.length - 1] += ' ' + word;
+      } else {
+        parts.push(word);
+      }
+      i++;
     }
-    
-    locationParts.push(parts[i]);
+    // Если это географические координаты (с N, S, E, W)
+    else if (/^[\d-]+[,.]?\d*$/.test(word) && i + 1 < words.length && /^[NSWE]$/i.test(words[i + 1])) {
+      currentPart = word + ' ' + words[i + 1];
+      i += 2;
+      // Может быть вторая часть координат
+      if (i < words.length && /^[\d-]+[,.]?\d*$/.test(words[i])) {
+        currentPart += ' ' + words[i];
+        i++;
+        if (i < words.length && /^[NSWE]?$/i.test(words[i]) && words[i].length <= 2) {
+          currentPart += ' ' + words[i];
+          i++;
+        }
+      }
+      parts.push(currentPart);
+      currentPart = '';
+    }
+    else {
+      // Обычное слово
+      parts.push(word);
+      i++;
+    }
   }
   
-  // Форматируем: объединяем с запятыми
-  let formattedLocation = locationParts.join(', ');
-  
-  // Если после форматирования строка пустая, возвращаем исходную без опреснителя
-  if (formattedLocation === '') {
-    // Альтернативный вариант: возвращаем все части кроме опреснителя и электропитания
-    const fallbackParts = parts.filter((_, index) => 
-      index !== desalinatorIndex && index !== powerIndex
-    );
-    formattedLocation = fallbackParts.join(', ');
+  // Объединяем части, которые должны быть вместе (например, "п." + "Владивосток" -> "п. Владивосток")
+  const mergedParts: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    // Если это сокращение и следующая часть не является сокращением
+    if (/^[а-яА-Яa-zA-Z]\.$/.test(part) && i + 1 < parts.length && !/^[а-яА-Яa-zA-Z]\.$/.test(parts[i + 1])) {
+      mergedParts.push(part + ' ' + parts[i + 1]);
+      i++; // пропускаем следующую часть
+    } else {
+      mergedParts.push(part);
+    }
   }
   
-  return formattedLocation;
+  return mergedParts;
 }
 
 /**
@@ -86,11 +138,8 @@ export function extractPowerType(coordRaw: string): string {
     return '';
   }
   
-  const parts = coordRaw.trim().split(/\s+/);
-  const powerPattern = /^(БЭП|СЭП)$/i;
-  
-  const powerPart = parts.find(part => powerPattern.test(part));
-  return powerPart || '';
+  const match = coordRaw.match(/(БЭП|СЭП)/i);
+  return match ? match[1].toUpperCase() : '';
 }
 
 /**
@@ -104,14 +153,12 @@ export function hasDesalinator(coordRaw: string): boolean {
     return false;
   }
   
-  const parts = coordRaw.trim().split(/\s+/);
-  const desalinatorIndex = parts.findIndex(part => /^(Да|Нет)$/i.test(part));
-  
-  if (desalinatorIndex === -1) {
+  const match = coordRaw.match(/\b(Да|Нет)\b/i);
+  if (!match) {
     return false;
   }
   
-  return parts[desalinatorIndex].toLowerCase() === 'да';
+  return match[1].toLowerCase() === 'да';
 }
 
 /**
@@ -125,15 +172,12 @@ export function getDesalinatorStatus(coordRaw: string): string {
     return '';
   }
   
-  const parts = coordRaw.trim().split(/\s+/);
-  const desalinatorPart = parts.find(part => /^(Да|Нет)$/i.test(part));
-  
-  if (!desalinatorPart) {
+  const match = coordRaw.match(/\b(Да|Нет)\b/i);
+  if (!match) {
     return '';
   }
   
-  // Возвращаем с заглавной буквы для единообразия
-  return desalinatorPart.charAt(0).toUpperCase() + desalinatorPart.slice(1).toLowerCase();
+  return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
 }
 
 /**
@@ -143,17 +187,13 @@ export function getDesalinatorStatus(coordRaw: string): string {
  * @returns массив частей местоположения без опреснителя и электропитания
  */
 export function getLocationParts(coordRaw: string): string[] {
-  if (!coordRaw || coordRaw.trim() === '') {
+  const location = extractLocation(coordRaw);
+  if (!location) {
     return [];
   }
   
-  const parts = coordRaw.trim().split(/\s+/);
-  const desalinatorPattern = /^(Да|Нет)$/i;
-  const powerPattern = /^(БЭП|СЭП)$/i;
-  
-  return parts.filter(part => 
-    !desalinatorPattern.test(part) && !powerPattern.test(part)
-  );
+  // Разбиваем по запятым, но сохраняем составные части
+  return location.split(', ').filter(part => part.trim() !== '');
 }
 
 /**
