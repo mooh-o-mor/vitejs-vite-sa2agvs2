@@ -10,7 +10,6 @@ import {
   getPower,
 } from "./types";
 import { formatVesselName, formatVesselType } from "../../lib/utils";
-import { extractLocation } from "../../lib/locationNormalizer";
 
 interface Props {
   vessels: DprRow[];
@@ -21,14 +20,26 @@ interface Props {
 }
 
 const thStyle: React.CSSProperties = {
-  padding: "8px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
-  color: "#fff", borderBottom: "2px solid #90a4ae", borderRight: "1px solid #546E7A",
-  whiteSpace: "nowrap", position: "sticky", top: 0, background: "#37474F", zIndex: 1,
+  padding: "8px 8px",
+  textAlign: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#fff",
+  borderBottom: "2px solid #90a4ae",
+  borderRight: "1px solid #546E7A",
+  whiteSpace: "nowrap",
+  position: "sticky",
+  top: 0,
+  background: "#37474F",
+  zIndex: 1,
 };
 
 const tdBase: React.CSSProperties = {
-  padding: "5px 8px", fontSize: 12, borderBottom: "1px solid #cfd8dc",
-  borderRight: "1px solid #e8eaed", verticalAlign: "top",
+  padding: "5px 8px",
+  fontSize: 12,
+  borderBottom: "1px solid #cfd8dc",
+  borderRight: "1px solid #e8eaed",
+  verticalAlign: "top",
 };
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
@@ -57,7 +68,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
             const rowBg = branchBg(v.branch);
             const vType = getVesselType(v.vessel_name);
             const power = getPower(v.coord_raw);
-            const coordDisplay = extractLocation(v.coord_raw || "");
+         
+const coordDisplay = extractLocation(v.coord_raw || "");
 
             let statusDisplay = v.status;
             if (canView && sc === "asd") {
@@ -74,11 +86,11 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
 
             return (
               <tr key={v.vessel_name} style={{ background: rowBg }}>
-                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
-                <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
-                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)}</td>
-                <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
+                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1} </td>
+                <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)} </td>
+                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)} </td>
+                <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch} </td>
+                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay} </td>
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell
@@ -105,8 +117,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                     />
                   </td>
                 )}
-                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"}</td>
-                <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"}</td>
+                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"} </td>
+                <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"} </td>
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell
@@ -120,8 +132,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdate
                     />
                   </td>
                 )}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
+                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""} </td>}
+                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""} </td>}
               </tr>
             );
           })}
