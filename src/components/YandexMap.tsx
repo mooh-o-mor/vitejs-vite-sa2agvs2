@@ -22,20 +22,6 @@ const STATUS_COLORS: Record<string, string> = {
   oth: "#6b8aa8", // синий
 };
 
-const STATUS_BG = {
-  asg: "#ffebee",
-  asd: "#e8f5e9",
-  rem: "#f5f5f5",
-  oth: "#ffffff",
-};
-
-const STATUS_HEADER_BG = {
-  asg: "#ffcdd2",
-  asd: "#c8e6c9",
-  rem: "#e0e0e0",
-  oth: "#f5f5f5",
-};
-
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
   const s = stat.toUpperCase();
@@ -415,11 +401,6 @@ export function YandexMap({
   const cAsd = filtered.filter((v) => cls(v.status) === "asd").length;
   const cRem = filtered.filter((v) => cls(v.status) === "rem").length;
   const noPos = filtered.filter((v) => v.lat == null).length;
-
-  const fmtDateRu = (d: string) => {
-    const [y, m, day] = d.split("-");
-    return `${day}.${m}.${y}`;
-  };
 
   const filterRow = (label: string, value: string, options: string[], onChange: (v: string) => void) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
