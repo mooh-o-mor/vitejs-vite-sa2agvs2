@@ -1,67 +1,83 @@
-export interface DprRow {
-  vessel_name: string;
+// Типы для судов
+export interface Vessel {
+  id: number;
+  name: string;
+  type: string;
   branch: string;
   status: string;
-  coord_raw: string;
-  contract_info?: string;
+  coordinates?: string;
+  contract?: string;
   work_period?: string;
   note?: string;
-  supplies?: any;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export const STATUS_BG: Record<string, string> = {
-  asg: "#e8f5e9",
-  asd: "#fff3e0",
-  rem: "#ffebee",
+// Типы для контрактов
+export interface Contract {
+  id: number;
+  vessel_name: string;
+  contract_number: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Константы
+export const T = {
+  border: "#e0e0e0",
+  text: "#333333",
+  text2: "#666666",
+  bg: "#ffffff",
 };
 
-export const STATUS_COLOR: Record<string, string> = {
-  asg: "#2e7d32",
-  asd: "#ed6c02",
-  rem: "#d32f2f",
-};
-
-export const branchBg = (branch: string) => {
-  const colors: Record<string, string> = {
-    "Мурманск": "#f3f7fc",
-    "Архангельск": "#fef9e6",
-    "Астрахань": "#eef5ea",
-  };
-  return colors[branch] || "#ffffff";
-};
-
-export const getSupply = (supplies: any, type: string) => {
-  if (!supplies || !Array.isArray(supplies)) return "";
-  const item = supplies.find((s: any) => s.type === type);
-  return item ? item.value : "";
-};
-
-export const shortStatus = (status: string) => {
-  if (status.includes("АСГ")) return "АСГ";
-  if (status.includes("АСД")) return "АСД";
-  if (status.includes("РЕМ")) return "РЕМ";
-  return status;
-};
-
-export const statusCls = (status: string) => {
-  if (status.includes("АСГ")) return "asg";
-  if (status.includes("АСД")) return "asd";
-  if (status.includes("РЕМ")) return "rem";
-  return "asg";
-};
-
-export const getPower = (coord: string) => {
-  if (!coord) return "";
-  if (coord.includes("БЭП")) return "БЭП";
-  if (coord.includes("СЭП")) return "СЭП";
-  return "";
-};
-
-export const branchOrder = (branch: string) => {
+export const typeOrder = (type: string): number => {
   const order: Record<string, number> = {
-    "Мурманск": 1,
-    "Архангельск": 2,
-    "Астрахань": 3,
+    "МФАСС": 1,
+    "ТБС": 2,
+    "ССН": 3,
+    "АСС": 4,
+    "НИС": 5,
+    "МБС": 6,
+    "МВС": 7,
+    "МБ": 8,
+    "БП": 9,
+    "ВСП": 10,
+    "Баржа": 11,
   };
-  return order[branch] || 999;
+  return order[type] || 999;
+};
+
+export const YEAR = new Date().getFullYear();
+
+export const MONTHS = [
+  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+];
+
+export const COLORS = [
+  "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD",
+  "#98D8C8", "#F7D794", "#F3A683", "#778BEB", "#EA868F", "#2C3A47",
+  "#3B3B98", "#CD6133", "#B33771", "#F97F51", "#25CCF7", "#EAB543"
+];
+
+export const SPECIAL_COLORS = {
+  "АСГ": "#2e7d32",
+  "АСД": "#ed6c02",
+  "РЕМ": "#d32f2f",
+  "ПЛАВ": "#0288d1"
+};
+
+export const totalDays = (year: number): number => {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+};
+
+export const yearStart = (year: number): Date => {
+  return new Date(year, 0, 1);
+};
+
+export const yearEnd = (year: number): Date => {
+  return new Date(year, 11, 31);
 };
