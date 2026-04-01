@@ -1,76 +1,180 @@
-/* ── Замены аббревиатур портов ── */
-const PORT_REPLACE: [RegExp, string][] = [
-  [/(^|[\s,])СПб\.?($|[\s,])/gi, "$1Санкт-Петербург$2"],
-  [/(^|[\s,])Клнг\.?($|[\s,.])/gi, "$1Калининград$2"],
-  [/(^|[\s,])КЛД\.?($|[\s,.])/gi, "$1Калининград$2"],
-  [/(^|[\s,])Петр-Камчатский($|[\s,])/gi, "$1Петропавловск-Камчатский$2"],
-  [/камыш[\s-]бурун/gi, "Камыш-Бурун"],
-];
+/**
+ * Нормализация и форматирование местоположений для приложения Морспасслужба
+ * 
+ * Формат исходных данных в coord_raw:
+ * "порт деталь1 деталь2 опреснитель электропитание"
+ * 
+ * Пример: "п. Владивосток м. Поспелова пр. № 1 Да БЭП"
+ */
 
-/* ── Слова с которых начинаются детали (перед ними ставим запятую) ── */
-const DETAIL_START = /^(пр|причал|терминал|наб|набережная|гр|м\.|мыс|ул|якорная|плавпричал|ПД|СРП|СРЗ|КФ|МСС|КМРП|ССРЗ|КТПБ|КМН|Лукойл)/i;
-
-/* ── Аббревиатуры которые всегда в верхнем регистре ── */
-const UPPER_ABBR = ["МСС","КНР","СЧКМ","СРП","СРЗ","КФ","КМРП","ССРЗ","КТПБ","КМН","БОФ","ФГБУ","ПД","СФ","СК"];
-
-/* ── Префиксы которые сохраняем ── */
-const KEEP_PREFIX = /^(п\.|б\.|р\.|я\.)\s*/i;
-
-export function extractLocation(raw: string): string {
-  if (!raw) return "";
-
-  // 1. Убираем Да/Нет и БЭП/СЭП в конце
-  let s = raw
-    .replace(/[\s,]+(да|нет)\s*$/i, "")
-    .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
-    .trim();
-
-  // 2. Координаты не трогаем — все форматы включая СЧКМ 45 02,8N/048 33,4E
-  const isCoord =
-    /\d{1,3}[-°\/]\d{1,2}[,.]?\d*\s*[NСнсCc°]/.test(s) ||
-    /\d{1,3}\s+\d{1,2}[,.]?\d*\s*[NСнсNn]/.test(s) ||
-    /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s);
-  if (isCoord) return s;
-
-  // 3. Убираем "пос." в начале
-  s = s.replace(/^пос\.\s*/i, "");
-
-  // 4. Сохраняем существующий префикс или добавляем "п."
-  let prefix = "п.";
-  const pm = s.match(KEEP_PREFIX);
-  if (pm) {
-    prefix = pm[1].toLowerCase();
-    s = s.slice(pm[0].length).trim();
+/**
+ * Извлекает и форматирует местоположение из строки coord_raw
+ * Убирает опреснитель ("Да"/"Нет") и форматирует с запятыми
+ * Электропитание не включается в результат (выводится отдельно)
+ * 
+ * @param coordRaw - сырая строка с координатами
+ * @returns отформатированное местоположение без опреснителя и электропитания
+ */
+export function extractLocation(coordRaw: string): string {
+  if (!coordRaw || coordRaw.trim() === '') {
+    return '';
   }
 
-  // 5. Убираем повторный "п." в начале остатка
-  s = s.replace(/^[пП]\.\s+/, "");
-
-  // 6. Заменяем аббревиатуры портов
-  for (const [re, replacement] of PORT_REPLACE) {
-    s = s.replace(re, replacement);
+  // Разбиваем строку на части по пробелам
+  const parts = coordRaw.trim().split(/\s+/);
+  
+  if (parts.length === 0) {
+    return coordRaw;
   }
 
-  // 7. Убираем лишнее в конце, двойные пробелы и двойные запятые
-  s = s
-    .replace(/[.,\s]+$/, "")
-    .trim()
-    .replace(/\s{2,}/g, " ")
-    .replace(/,\s*,+/g, ",");
-
-  // 8. Расставляем запятую между портом и деталями (если её ещё нет)
-  if (!s.includes(",")) {
-    const parts = s.split(/\s+/);
-    const di = parts.findIndex((p, i) => i > 0 && DETAIL_START.test(p));
-    if (di > 0) {
-      s = parts.slice(0, di).join(" ") + ", " + parts.slice(di).join(" ");
+  // Паттерны для определения опреснителя и электропитания
+  const desalinatorPattern = /^(Да|Нет)$/i;
+  const powerPattern = /^(БЭП|СЭП)$/i;
+  
+  // Находим индексы опреснителя и электропитания
+  let desalinatorIndex = -1;
+  let powerIndex = -1;
+  
+  for (let i = 0; i < parts.length; i++) {
+    if (desalinatorPattern.test(parts[i])) {
+      desalinatorIndex = i;
+    } else if (powerPattern.test(parts[i])) {
+      powerIndex = i;
     }
   }
-
-  // 9. Восстанавливаем аббревиатуры в верхний регистр
-  for (const abbr of UPPER_ABBR) {
-    s = s.replace(new RegExp(`\\b${abbr}\\b`, "gi"), abbr);
+  
+  // Формируем массив частей, исключая опреснитель и электропитание
+  const locationParts: string[] = [];
+  
+  for (let i = 0; i < parts.length; i++) {
+    // Пропускаем опреснитель
+    if (i === desalinatorIndex) {
+      continue;
+    }
+    
+    // Пропускаем электропитание (выводится отдельно)
+    if (i === powerIndex) {
+      continue;
+    }
+    
+    locationParts.push(parts[i]);
   }
+  
+  // Форматируем: объединяем с запятыми
+  let formattedLocation = locationParts.join(', ');
+  
+  // Если после форматирования строка пустая, возвращаем исходную без опреснителя
+  if (formattedLocation === '') {
+    // Альтернативный вариант: возвращаем все части кроме опреснителя и электропитания
+    const fallbackParts = parts.filter((_, index) => 
+      index !== desalinatorIndex && index !== powerIndex
+    );
+    formattedLocation = fallbackParts.join(', ');
+  }
+  
+  return formattedLocation;
+}
 
-  return `${prefix} ${s}`;
+/**
+ * Извлекает тип электропитания из строки coord_raw
+ * 
+ * @param coordRaw - сырая строка с координатами
+ * @returns тип электропитания (БЭП, СЭП или пустая строка)
+ */
+export function extractPowerType(coordRaw: string): string {
+  if (!coordRaw || coordRaw.trim() === '') {
+    return '';
+  }
+  
+  const parts = coordRaw.trim().split(/\s+/);
+  const powerPattern = /^(БЭП|СЭП)$/i;
+  
+  const powerPart = parts.find(part => powerPattern.test(part));
+  return powerPart || '';
+}
+
+/**
+ * Проверяет, есть ли опреснитель на судне
+ * 
+ * @param coordRaw - сырая строка с координатами
+ * @returns true если опреснитель есть (Да), false если нет (Нет) или не указан
+ */
+export function hasDesalinator(coordRaw: string): boolean {
+  if (!coordRaw || coordRaw.trim() === '') {
+    return false;
+  }
+  
+  const parts = coordRaw.trim().split(/\s+/);
+  const desalinatorIndex = parts.findIndex(part => /^(Да|Нет)$/i.test(part));
+  
+  if (desalinatorIndex === -1) {
+    return false;
+  }
+  
+  return parts[desalinatorIndex].toLowerCase() === 'да';
+}
+
+/**
+ * Получает статус опреснителя в виде строки
+ * 
+ * @param coordRaw - сырая строка с координатами
+ * @returns "Да", "Нет" или пустая строка
+ */
+export function getDesalinatorStatus(coordRaw: string): string {
+  if (!coordRaw || coordRaw.trim() === '') {
+    return '';
+  }
+  
+  const parts = coordRaw.trim().split(/\s+/);
+  const desalinatorPart = parts.find(part => /^(Да|Нет)$/i.test(part));
+  
+  if (!desalinatorPart) {
+    return '';
+  }
+  
+  // Возвращаем с заглавной буквы для единообразия
+  return desalinatorPart.charAt(0).toUpperCase() + desalinatorPart.slice(1).toLowerCase();
+}
+
+/**
+ * Получает все части местоположения в виде массива
+ * 
+ * @param coordRaw - сырая строка с координатами
+ * @returns массив частей местоположения без опреснителя и электропитания
+ */
+export function getLocationParts(coordRaw: string): string[] {
+  if (!coordRaw || coordRaw.trim() === '') {
+    return [];
+  }
+  
+  const parts = coordRaw.trim().split(/\s+/);
+  const desalinatorPattern = /^(Да|Нет)$/i;
+  const powerPattern = /^(БЭП|СЭП)$/i;
+  
+  return parts.filter(part => 
+    !desalinatorPattern.test(part) && !powerPattern.test(part)
+  );
+}
+
+/**
+ * Основная функция для отображения полной информации о местоположении
+ * Возвращает объект с разобранными данными
+ * 
+ * @param coordRaw - сырая строка с координатами
+ * @returns объект с разобранными данными
+ */
+export function parseLocation(coordRaw: string): {
+  location: string;
+  powerType: string;
+  hasDesalinator: boolean;
+  desalinatorStatus: string;
+  parts: string[];
+} {
+  return {
+    location: extractLocation(coordRaw),
+    powerType: extractPowerType(coordRaw),
+    hasDesalinator: hasDesalinator(coordRaw),
+    desalinatorStatus: getDesalinatorStatus(coordRaw),
+    parts: getLocationParts(coordRaw)
+  };
 }
