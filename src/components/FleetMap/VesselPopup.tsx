@@ -22,6 +22,8 @@ function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   return "oth";
 }
 
+const NO_RS_CLASS = ["артемис оффшор", "артемис"];
+
 export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   const c = cls(vessel.status);
   const powerMatch = /(БЭП|СЭП)/i.exec(vessel.coord_raw || "");
@@ -35,17 +37,20 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string | null>(null);
+  const [imo, setImo] = useState<string>("");
 
   useEffect(() => {
     setPhotoUrl(null);
     setSpecUrl(null);
+    setImo("");
     const fetchData = async () => {
       const { data: vData } = await supabase
         .from("vessels")
-        .select("photo_url")
+        .select("photo_url, imo")
         .ilike("name", `%${nameWithoutPrefix}`)
         .maybeSingle();
       if (vData?.photo_url) setPhotoUrl(vData.photo_url);
+      if (vData?.imo) setImo(String(vData.imo));
 
       const { data: specs } = await supabase
         .from("vessel_specs")
@@ -62,6 +67,10 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
     fetchData();
   }, [nameWithoutPrefix]);
 
+  const rsClassUrl = imo && !NO_RS_CLASS.some(ex => vessel.vessel_name.toLowerCase().includes(ex))
+    ? `https://rs-class.org/c/getves.php?imo=${imo}`
+    : null;
+
   return (
     <div style={{ position: "absolute", right: 14, bottom: 36, width: 420, maxWidth: "calc(100vw - 40px)", maxHeight: "70vh", background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, zIndex: 900, boxShadow: "0 12px 48px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
@@ -69,15 +78,22 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
       <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "nowrap", gap: 8, background: STATUS_HEADER_BG[c], flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flex: 1, minWidth: 0, overflow: "hidden" }}>
           {vesselType && (
-            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, padding: "0px", flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, flexShrink: 0 }}>
               {formatVesselType(vesselType)}
             </span>
           )}
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-            {formattedName}
-          </span>
+          {rsClassUrl ? (
+            <a href={rsClassUrl} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 16, fontWeight: 700, color: T.accent, textDecoration: "underline", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+              {formattedName}
+            </a>
+          ) : (
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+              {formattedName}
+            </span>
+          )}
           {vessel.branch && (
-            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, padding: "0px", flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, flexShrink: 0 }}>
               {vessel.branch}
             </span>
           )}
