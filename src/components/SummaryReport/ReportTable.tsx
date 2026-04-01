@@ -10,6 +10,7 @@ import {
   getPower,
 } from "./types";
 import { formatVesselName, formatVesselType } from "../../lib/utils";
+import { extractLocation } from "../../lib/locationNormalizer";
 
 interface Props {
   vessels: DprRow[];
@@ -25,7 +26,7 @@ const thStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   color: "#fff",
-  borderBottom: "2px solid #90a4ae",
+  borderBottom: "2px solid #90a4ae",gjxtve 49 pfghjcjd&
   borderRight: "1px solid #546E7A",
   whiteSpace: "nowrap",
   position: "sticky",
