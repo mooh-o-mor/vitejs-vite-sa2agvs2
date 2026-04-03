@@ -115,11 +115,13 @@ export function FleetMap({
     }).addTo(map);
     L.control.zoom({ position: "topright" }).addTo(map);
 
-    markersRef.current = (L as any).markerClusterGroup({
-      maxClusterRadius: 40,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      zoomToBoundsOnClick: false,
+   markersRef.current = (L as any).markerClusterGroup({
+  maxClusterRadius: 40,
+  spiderfyOnMaxZoom: false,
+  showCoverageOnHover: false,
+  zoomToBoundsOnClick: true,
+  disableClusteringAtZoom: 10,
+  
       iconCreateFunction: (cluster: any) => {
         const children = cluster.getAllChildMarkers();
         const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
