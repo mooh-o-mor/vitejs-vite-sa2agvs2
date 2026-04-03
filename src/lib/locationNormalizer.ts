@@ -24,10 +24,10 @@ export function extractLocation(raw: string): string {
   if (!raw) return "";
 
   // 1. Убираем Да/Нет и БЭП/СЭП в конце
-  let s = raw
-    .replace(/[\s,]+(да|нет)\s*$/i, "")
-    .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
-    .trim();
+let s = raw
+  .replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "")
+  .replace(/[\s,]+(да|нет)\s*$/i, "")
+  .trim();
 
   // 2. Координаты не трогаем
   const isCoord =
