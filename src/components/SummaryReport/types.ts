@@ -1,83 +1,88 @@
-// Типы для судов
-export interface Vessel {
-  id: number;
-  name: string;
-  type: string;
-  branch: string;
-  status: string;
-  coordinates?: string;
-  contract?: string;
-  work_period?: string;
-  note?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+import type { DprSupply } from "../../lib/parseDpr";
 
-// Типы для контрактов
-export interface Contract {
+// ── DprRow ──
+export interface DprRow {
   id: number;
   vessel_name: string;
-  contract_number: string;
-  start_date: string;
-  end_date: string;
+  branch: string;
+  report_date: string;
   status: string;
-  created_at?: string;
-  updated_at?: string;
+  coord_raw: string;
+  lat: number | null;
+  lng: number | null;
+  note: string;
+  supplies: DprSupply[];
+  contract_info?: string;
+  work_period?: string;
 }
 
-// Константы
-export const T = {
-  border: "#e0e0e0",
-  text: "#333333",
-  text2: "#666666",
-  bg: "#ffffff",
+// ── Статусы ──
+export function statusCls(stat: string): "asg" | "asd" | "rem" | "oth" {
+  const s = (stat || "").toUpperCase();
+  if (s.startsWith("АСГ")) return "asg";
+  if (s.startsWith("АСД")) return "asd";
+  if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
+  return "oth";
+}
+
+export function shortStatus(stat: string): string {
+  const s = (stat || "").toUpperCase();
+  if (s.startsWith("АСГ")) return "АСГ";
+  if (s.startsWith("АСД")) return "АСД";
+  if (s.startsWith("РЕМ")) return "РЕМ";
+  return stat;
+}
+
+export const STATUS_BG: Record<string, string> = {
+  asg: "#FFCDD2", asd: "#C8E6C9", rem: "#F5F5F5", oth: "#F5F5F5",
 };
 
-export const typeOrder = (type: string): number => {
-  const order: Record<string, number> = {
-    "МФАСС": 1,
-    "ТБС": 2,
-    "ССН": 3,
-    "АСС": 4,
-    "НИС": 5,
-    "МБС": 6,
-    "МВС": 7,
-    "МБ": 8,
-    "БП": 9,
-    "ВСП": 10,
-    "Баржа": 11,
-  };
-  return order[type] || 999;
+export const STATUS_COLOR: Record<string, string> = {
+  asg: "#C62828", asd: "#1B5E20", rem: "#424242", oth: "#616161",
 };
 
-export const YEAR = new Date().getFullYear();
-
-export const MONTHS = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-];
-
-export const COLORS = [
-  "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD",
-  "#98D8C8", "#F7D794", "#F3A683", "#778BEB", "#EA868F", "#2C3A47",
-  "#3B3B98", "#CD6133", "#B33771", "#F97F51", "#25CCF7", "#EAB543"
-];
-
-export const SPECIAL_COLORS = {
-  "АСГ": "#2e7d32",
-  "АСД": "#ed6c02",
-  "РЕМ": "#d32f2f",
-  "ПЛАВ": "#0288d1"
+export const STATUS_XL_BG: Record<string, string> = {
+  asg: "FFCDD2", asd: "C8E6C9", rem: "F5F5F5", oth: "F5F5F5",
 };
 
-export const totalDays = (year: number): number => {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+export const STATUS_XL_FG: Record<string, string> = {
+  asg: "C62828", asd: "1B5E20", rem: "424242", oth: "616161",
 };
 
-export const yearStart = (year: number): Date => {
-  return new Date(year, 0, 1);
+// ── Филиалы ──
+const BRANCH_COLORS: Record<string, string> = {
+  "АЧФ": "#FFF3E0", "БЛТФ": "#E3F2FD", "КСПФ": "#F3E5F5",
+  "СВРФ": "#E8F5E9", "ПРМФ": "#FFF9C4", "СХЛФ": "#FCE4EC",
+  "КМЧФ": "#E0F7FA",
 };
 
-export const yearEnd = (year: number): Date => {
-  return new Date(year, 11, 31);
+export const BRANCH_XL: Record<string, string> = {
+  "АЧФ": "FFF3E0", "БЛТФ": "E3F2FD", "КСПФ": "F3E5F5",
+  "СВРФ": "E8F5E9", "ПРМФ": "FFF9C4", "СХЛФ": "FCE4EC",
+  "КМЧФ": "E0F7FA",
 };
+
+const BRANCHES_ORDER = ["АЧФ", "БЛТФ", "КСПФ", "СВРФ", "ПРМФ", "СХЛФ", "КМЧФ"];
+
+export function branchOrder(b: string): number {
+  const idx = BRANCHES_ORDER.findIndex(x => b?.toUpperCase().includes(x.toUpperCase()));
+  return idx >= 0 ? idx : 99;
+}
+
+export function branchBg(b: string): string {
+  return BRANCH_COLORS[b] || "#FFFFFF";
+}
+
+// ── Запасы ──
+export function getSupply(supplies: DprSupply[], keyword: string): string {
+  if (!supplies || !Array.isArray(supplies)) return "";
+  const s = supplies.find(x => x.type && x.type.toLowerCase().includes(keyword.toLowerCase()));
+  return s ? s.amt : "";
+}
+
+// ── Электропитание ──
+export function getPower(coordRaw: string): string {
+  const m = /(БЭП|СЭП)/i.exec(coordRaw || "");
+  if (!m) return "";
+  return m[1].toUpperCase();
+}
