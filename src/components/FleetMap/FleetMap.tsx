@@ -140,10 +140,12 @@ markersRef.current.on("clusterclick", (e: any) => {
   const allSameCoords = lats.size === 1 && lngs.size === 1;
 
   if (allSameCoords) {
-    cluster.spiderfy();
-  } else {
-    cluster.zoomToBounds({ padding: [50, 50] });
+  const map = mapObj.current;
+  if (map) {
+    map.setView(cluster.getLatLng(), map.getMaxZoom());
+    setTimeout(() => cluster.spiderfy(), 300);
   }
+}
 });
     mapObj.current = map;
     return () => { map.remove(); mapObj.current = null; };
@@ -225,10 +227,16 @@ markersRef.current.on("clusterclick", (e: any) => {
       marker.bindTooltip(label, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", (e: any) => {
   L.DomEvent.stopPropagation(e);
+  const savedZoom = mapObj.current?.getZoom();
+  const savedCenter = mapObj.current?.getCenter();
   setSelVessel(v);
   if (isMobile) setSidebarOpen(false);
-        //mapObj.current?.([v.lat!, v.lng!], Math.max(mapObj.current.getZoom(), 7), { animate: true });
-      });
+  setTimeout(() => {
+    if (mapObj.current && savedZoom && savedCenter) {
+      mapObj.current.setView(savedCenter, savedZoom, { animate: false });
+    }
+  }, 50);
+});
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
     });
