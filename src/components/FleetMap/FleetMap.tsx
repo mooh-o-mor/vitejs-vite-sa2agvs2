@@ -133,17 +133,11 @@ export function FleetMap({
 markersRef.current.on("clusterclick", (e: any) => {
   const cluster = e.layer;
   const children = cluster.getAllChildMarkers();
-
   const lats = new Set(children.map((m: any) => m.getLatLng().lat.toFixed(6)));
   const lngs = new Set(children.map((m: any) => m.getLatLng().lng.toFixed(6)));
   const allSameCoords = lats.size === 1 && lngs.size === 1;
-
   if (allSameCoords) {
-    const map = mapObj.current;
-    if (map) {
-      map.setView(cluster.getLatLng(), map.getMaxZoom());
-      setTimeout(() => cluster.spiderfy(), 300);
-    }
+    cluster.spiderfy();
   } else {
     cluster.zoomToBounds({ padding: [50, 50] });
   }
