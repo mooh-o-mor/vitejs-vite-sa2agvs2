@@ -241,9 +241,9 @@ markersRef.current.on("clusterclick", (e: any) => {
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
     });
-    if (bounds.length > 1) {
-      mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
-    }
+    //if (bounds.length > 1) {
+      //mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
+    //}
     const updateLabels = () => {
       markersRef.current!.getLayers().forEach((m: any) => {
         if (!m.getTooltip) return;
