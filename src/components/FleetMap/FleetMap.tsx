@@ -134,18 +134,19 @@ markersRef.current.on("clusterclick", (e: any) => {
   const cluster = e.layer;
   const children = cluster.getAllChildMarkers();
 
-  // Все ли маркеры в одних координатах?
-  const lats = new Set(children.map((m: any) => m.getLatLng().lat.toFixed(4)));
-  const lngs = new Set(children.map((m: any) => m.getLatLng().lng.toFixed(4)));
+  const lats = new Set(children.map((m: any) => m.getLatLng().lat.toFixed(2)));
+  const lngs = new Set(children.map((m: any) => m.getLatLng().lng.toFixed(2)));
   const allSameCoords = lats.size === 1 && lngs.size === 1;
 
   if (allSameCoords) {
-  const map = mapObj.current;
-  if (map) {
-    map.setView(cluster.getLatLng(), map.getMaxZoom());
-    setTimeout(() => cluster.spiderfy(), 300);
+    const map = mapObj.current;
+    if (map) {
+      map.setView(cluster.getLatLng(), map.getMaxZoom());
+      setTimeout(() => cluster.spiderfy(), 300);
+    }
+  } else {
+    cluster.zoomToBounds({ padding: [50, 50] });
   }
-}
 });
     mapObj.current = map;
     return () => { map.remove(); mapObj.current = null; };
