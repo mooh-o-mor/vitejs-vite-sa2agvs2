@@ -1,205 +1,145 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "../../lib/supabase";
-import { T } from "../../lib/types";
+import { EditableCell } from "./EditableCell";
 import type { DprRow } from "./types";
-import { branchOrder, statusCls, STATUS_COLOR } from "./types";
-import { FilterBar } from "./FilterBar";
-import { ReportTable } from "./ReportTable";
-import { exportToExcel } from "./exportExcel";
+import {
+  STATUS_BG,
+  STATUS_COLOR,
+  branchBg,
+  getSupply,
+  shortStatus,
+  statusCls,
+  getPower,
+} from "./types";
+import { formatVesselName, formatVesselType } from "../../lib/utils";
+import { extractLocation } from "../../lib/locationNormalizer";
 
-const SUPABASE_URL = "https://otjiwxvszomwpqmwusqd.supabase.co";
+interface Props {
+  vessels: DprRow[];
+  selDate: string;
+  canView: boolean;
+  getVesselType: (name: string) => string;
+  onUpdateField: (vesselName: string, field: string, newValue: string) => void;
+}
 
-export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean; canView: boolean }) {
-  const [dates, setDates] = useState<string[]>([]);
-  const [selDate, setSelDate] = useState("");
-  const [vessels, setVessels] = useState<DprRow[]>([]);
-  const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
-  const [specMap, setSpecMap] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
-  
-  const [filterTypes, setFilterTypes] = useState<string[]>([]);
-  const [filterBranches, setFilterBranches] = useState<string[]>([]);
-  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("branch");
+const thStyle: React.CSSProperties = {
+  padding: "8px 8px",
+  textAlign: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#fff",
+  borderBottom: "2px solid #90a4ae",gjxtve 49 pfghjcjd&
+  borderRight: "1px solid #546E7A",
+  whiteSpace: "nowrap",
+  position: "sticky",
+  top: 0,
+  background: "#37474F",
+  zIndex: 1,
+};
 
-  useEffect(() => { loadDates(); }, []);
+const tdBase: React.CSSProperties = {
+  padding: "5px 8px",
+  fontSize: 12,
+  borderBottom: "1px solid #cfd8dc",
+  borderRight: "1px solid #e8eaed",
+  verticalAlign: "top",
+};
 
-  async function loadDates() {
-    const { data } = await supabase
-      .from("dpr_entries")
-      .select("report_date")
-      .order("report_date", { ascending: false });
-    if (data) {
-      const unique = [...new Set(data.map((r: any) => r.report_date))];
-      setDates(unique);
-      if (unique.length > 0) setSelDate(unique[0]);
-    }
-    setLoading(false);
-  }
-
-  useEffect(() => { if (selDate) loadVessels(selDate); }, [selDate]);
-
-  async function loadVessels(date: string) {
-    setLoading(true);
-    const [{ data }, { data: vData }, { data: specData }] = await Promise.all([
-      supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name"),
-      supabase.from("vessels").select("name"),
-      supabase.from("vessel_specs").select("vessel_name, project, spec_url"),
-    ]);
-    
-    // typeMap
-    const t = new Map<string, string>();
-    (vData || []).forEach((v: any) => {
-      const originalName = v.name;
-      const upperName = originalName.toUpperCase().trim();
-      const typeMatch = upperName.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|БП|ВСП|Баржа)\s+/);
-      const typeStr = typeMatch ? typeMatch[1] : "";
-      if (typeStr) {
-        t.set(originalName, typeStr);
-        t.set(upperName, typeStr);
-        const withoutPrefix = upperName.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-        if (withoutPrefix !== upperName) t.set(withoutPrefix, typeStr);
-        t.set(originalName.toLowerCase(), typeStr);
-      }
-    });
-    setTypeMap(t);
-
-    // specMap - формируем ссылки из project или spec_url
-    const sm = new Map<string, string>();
-    (specData || []).forEach((s: any) => {
-      const vesselKey = s.vessel_name.toUpperCase().trim();
-      // Если есть spec_url - используем его
-      if (s.spec_url) {
-        sm.set(vesselKey, s.spec_url);
-      } 
-      // Если нет spec_url, но есть project - формируем по шаблону
-      else if (s.project) {
-        sm.set(vesselKey, `${SUPABASE_URL}/storage/v1/object/public/specs/${s.project}.pdf`);
-      }
-    });
-    setSpecMap(sm);
-
-    setVessels(data || []);
-    setLoading(false);
-  }
-
-  const updateField = useCallback((vesselName: string, field: string, newValue: string) => {
-    setVessels(prev => prev.map(v => 
-      v.vessel_name === vesselName ? { ...v, [field]: newValue } : v
-    ));
-  }, []);
-
-  const fmtDateRu = (d: string) => {
-    const [y, m, day] = d.split("-");
-    return `${day}.${m}.${y}`;
-  };
-
-  const getVesselType = useCallback((vesselName: string): string => {
-    const normalized = vesselName.toUpperCase().trim();
-    let type = typeMap.get(normalized);
-    if (type) return type;
-    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-    type = typeMap.get(withoutPrefix);
-    if (type) return type;
-    for (const [key, val] of typeMap.entries()) {
-      if (normalized.includes(key) || key.includes(normalized)) return val;
-    }
-    return "";
-  }, [typeMap]);
-
-  const allTypes = useMemo(() => {
-    const types = new Set<string>();
-    vessels.forEach(v => { const t = getVesselType(v.vessel_name); if (t) types.add(t); });
-    return Array.from(types).sort();
-  }, [vessels, getVesselType]);
-
-  const allBranches = useMemo(() => {
-    return [...new Set(vessels.map(v => v.branch).filter(Boolean))].sort((a,b) => branchOrder(a)-branchOrder(b));
-  }, [vessels]);
-
-  const toggleFilter = (setter: React.Dispatch<React.SetStateAction<string[]>>, value: string) => {
-    if (value === "Все") { setter([]); return; }
-    setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-  };
-
-  const toggleStatus = (value: string) => {
-    if (value === "Все") { setFilterStatuses([]); return; }
-    const statusKey = value === "АСГ" ? "asg" : value === "АСД" ? "asd" : "rem";
-    setFilterStatuses(prev => prev.includes(statusKey) ? prev.filter(v => v !== statusKey) : [...prev, statusKey]);
-  };
-
-  const filtered = useMemo(() => {
-    let result = vessels.filter(v => {
-      const typeOk = filterTypes.length === 0 || filterTypes.includes(getVesselType(v.vessel_name));
-      const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
-      const statusOk = filterStatuses.length === 0 || filterStatuses.includes(statusCls(v.status));
-      return typeOk && branchOk && statusOk;
-    });
-    result.sort((a,b) => {
-      if (sortBy === "name") return a.vessel_name.localeCompare(b.vessel_name, "ru");
-      if (sortBy === "branch") return (a.branch || "").localeCompare(b.branch || "", "ru");
-      if (sortBy === "status") return statusCls(a.status).localeCompare(statusCls(b.status));
-      return 0;
-    });
-    return result;
-  }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselType]);
-
-  const cAsg = filtered.filter((v) => statusCls(v.status) === "asg").length;
-  const cAsd = filtered.filter((v) => statusCls(v.status) === "asd").length;
-  const cRem = filtered.filter((v) => statusCls(v.status) === "rem").length;
-
+export function ReportTable({ vessels, selDate, canView, getVesselType, onUpdateField }: Props) {
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>Сводная таблица судов МСС</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <select value={selDate} onChange={(e) => setSelDate(e.target.value)}
-            style={{ padding: "5px 8px", borderRadius: 4, border: `1px solid ${T.border}`, fontSize: 13, fontFamily: "monospace", fontWeight: 600, background: "#fff" }}>
-            {dates.length === 0 && <option value="">— нет данных —</option>}
-            {dates.map((d) => <option key={d} value={d}>на {fmtDateRu(d)}</option>)}
-          </select>
-          <div style={{ display: "flex", gap: 12, fontSize: 13, fontWeight: 600 }}>
-            <span style={{ color: STATUS_COLOR.asg }}>АСГ: {cAsg}</span>
-            <span style={{ color: STATUS_COLOR.asd }}>АСД: {cAsd}</span>
-            <span style={{ color: STATUS_COLOR.rem }}>РЕМ: {cRem}</span>
-            <span style={{ color: "#1a2a3a" }}>Всего: {filtered.length}</span>
-          </div>
-          {canView && (
-            <button onClick={() => exportToExcel(filtered, selDate, fmtDateRu, getVesselType)}
-              style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-              ⬇ Экспорт в Excel
-            </button>
-          )}
-        </div>
-      </div>
+    <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr>
+            <th style={{ ...thStyle, width: 36 }}>№</th>
+            <th style={{ ...thStyle, width: 50 }}>Тип</th>
+            <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Название судна</th>
+            <th style={thStyle}>Филиал</th>
+            <th style={{ ...thStyle, textAlign: "left", minWidth: 80 }}>Статус</th>
+            {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Контракт</th>}
+            {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Период работ</th>}
+            <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
+            <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
+            {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
+            {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
+            {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {vessels.map((v, i) => {
+            const sc = statusCls(v.status);
+            const rowBg = branchBg(v.branch);
+            const vType = getVesselType(v.vessel_name);
+            const power = getPower(v.coord_raw);
+         
+const coordDisplay = extractLocation(v.coord_raw || "");
 
-      <FilterBar
-        allTypes={allTypes}
-        allBranches={allBranches}
-        filterTypes={filterTypes}
-        filterBranches={filterBranches}
-        filterStatuses={filterStatuses}
-        sortBy={sortBy}
-        onToggleType={(v) => toggleFilter(setFilterTypes, v)}
-        onToggleBranch={(v) => toggleFilter(setFilterBranches, v)}
-        onToggleStatus={toggleStatus}
-        onSortBy={setSortBy}
-      />
+            let statusDisplay = v.status;
+            if (canView && sc === "asd") {
+              const parts = v.status.split(/[,/]/);
+              if (parts.length > 1) {
+                statusDisplay = parts[0].trim();
+              }
+            }
+            if (!canView) {
+              statusDisplay = shortStatus(v.status);
+            }
 
-      <ReportTable
-        vessels={filtered}
-        selDate={selDate}
-        canView={canView}
-        getVesselType={getVesselType}
-        specMap={specMap}
-        onUpdateField={updateField}
-      />
+            const isAsd = sc === "asd";
 
-      {filtered.length === 0 && !loading && (
-        <div style={{ padding: 30, textAlign: "center", color: T.text2, fontSize: 13 }}>
-          {dates.length === 0 ? "Нет загруженных данных ДПР" : "Нет судов по фильтру"}
-        </div>
-      )}
+            return (
+              <tr key={v.vessel_name} style={{ background: rowBg }}>
+                <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1} </td>
+                <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)} </td>
+                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>{formatVesselName(v.vessel_name)} </td>
+                <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch} </td>
+                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay} </td>
+                {canView && (
+                  <td style={{ ...tdBase, background: rowBg }}>
+                    <EditableCell
+                      value={v.contract_info || ""}
+                      vesselName={v.vessel_name}
+                      reportDate={selDate}
+                      field="contract_info"
+                      onUpdate={onUpdateField}
+                      editable={isAsd}
+                      placeholder="✎ добавить"
+                    />
+                  </td>
+                )}
+                {canView && (
+                  <td style={{ ...tdBase, background: rowBg }}>
+                    <EditableCell
+                      value={v.work_period || ""}
+                      vesselName={v.vessel_name}
+                      reportDate={selDate}
+                      field="work_period"
+                      onUpdate={onUpdateField}
+                      editable={true}
+                      placeholder="✎ добавить период"
+                    />
+                  </td>
+                )}
+                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"} </td>
+                <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"} </td>
+                {canView && (
+                  <td style={{ ...tdBase, background: rowBg }}>
+                    <EditableCell
+                      value={v.note || ""}
+                      vesselName={v.vessel_name}
+                      reportDate={selDate}
+                      field="note"
+                      onUpdate={onUpdateField}
+                      editable={true}
+                      placeholder="✎ добавить примечание"
+                    />
+                  </td>
+                )}
+                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""} </td>}
+                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""} </td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

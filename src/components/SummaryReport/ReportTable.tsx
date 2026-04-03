@@ -87,20 +87,11 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                 <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
                 <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
-                  {specUrl ? (
-                    <a 
-                      href={specUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      style={{ textDecoration: "none", color: "#1a2a3a" }}
-                      title="Открыть спецификацию"
-                    >
-                      {formatVesselName(v.vessel_name)}
-                    </a>
-                  ) : (
-                    <span style={{ color: "#1a2a3a" }}>
-                      {formatVesselName(v.vessel_name)}
-                    </span>
+                  {formatVesselName(v.vessel_name)}
+                  {specUrl && (
+                    <a href={specUrl} target="_blank" rel="noopener noreferrer"
+                      title="Спецификация (PDF)"
+                      style={{ marginLeft: 6, fontSize: 11, textDecoration: "none" }}>📄</a>
                   )}
                 </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
