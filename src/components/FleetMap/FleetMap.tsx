@@ -121,22 +121,29 @@ export function FleetMap({
   showCoverageOnHover: false,
   zoomToBoundsOnClick: false,
   iconCreateFunction: (cluster: any) => {
-        const children = cluster.getAllChildMarkers();
-        const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
-        children.forEach((m: any) => {
-          if (m.options._status) counts[m.options._status as keyof typeof counts]++;
-        });
-        return mkPieIcon(counts, children.length);
-      },
-    }).addTo(map);
+    const children = cluster.getAllChildMarkers();
+    const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
+    children.forEach((m: any) => {
+      if (m.options._status) counts[m.options._status as keyof typeof counts]++;
+    });
+    return mkPieIcon(counts, children.length);
+  },
+}).addTo(map);
+
 markersRef.current.on("clusterclick", (e: any) => {
-  const currentZoom = mapObj.current?.getZoom();
-  e.layer.spiderfy();
-  setTimeout(() => {
-    if (mapObj.current && currentZoom) {
-      mapObj.current.setZoom(currentZoom);
-    }
-  }, 100);
+  const cluster = e.layer;
+  const children = cluster.getAllChildMarkers();
+
+  // Все ли маркеры в одних координатах?
+  const lats = new Set(children.map((m: any) => m.getLatLng().lat.toFixed(4)));
+  const lngs = new Set(children.map((m: any) => m.getLatLng().lng.toFixed(4)));
+  const allSameCoords = lats.size === 1 && lngs.size === 1;
+
+  if (allSameCoords) {
+    cluster.spiderfy();
+  } else {
+    cluster.zoomToBounds({ padding: [50, 50] });
+  }
 });
     mapObj.current = map;
     return () => { map.remove(); mapObj.current = null; };
