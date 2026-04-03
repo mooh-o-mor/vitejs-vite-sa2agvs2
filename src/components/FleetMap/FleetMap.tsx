@@ -115,14 +115,12 @@ export function FleetMap({
     }).addTo(map);
     L.control.zoom({ position: "topright" }).addTo(map);
 
-   markersRef.current = (L as any).markerClusterGroup({
+  markersRef.current = (L as any).markerClusterGroup({
   maxClusterRadius: 40,
-  spiderfyOnMaxZoom: false,
+  spiderfyOnMaxZoom: true,
   showCoverageOnHover: false,
-  zoomToBoundsOnClick: true,
-  //disableClusteringAtZoom: 10,
-  
-      iconCreateFunction: (cluster: any) => {
+  zoomToBoundsOnClick: false,
+  iconCreateFunction: (cluster: any) => {
         const children = cluster.getAllChildMarkers();
         const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
         children.forEach((m: any) => {
@@ -131,7 +129,15 @@ export function FleetMap({
         return mkPieIcon(counts, children.length);
       },
     }).addTo(map);
-
+markersRef.current.on("clusterclick", (e: any) => {
+  const currentZoom = mapObj.current?.getZoom();
+  e.layer.spiderfy();
+  setTimeout(() => {
+    if (mapObj.current && currentZoom) {
+      mapObj.current.setZoom(currentZoom);
+    }
+  }, 100);
+});
     mapObj.current = map;
     return () => { map.remove(); mapObj.current = null; };
   }, []);
