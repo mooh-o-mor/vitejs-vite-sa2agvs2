@@ -211,7 +211,7 @@ export function FleetMap({
       marker.on("click", () => {
         setSelVessel(v);
         if (isMobile) setSidebarOpen(false);
-        mapObj.current?.setView([v.lat!, v.lng!], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+        mapObj.current?.([v.lat!, v.lng!], Math.max(mapObj.current.getZoom(), 7), { animate: true });
       });
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
@@ -368,7 +368,7 @@ export function FleetMap({
             setSelVessel(v);
             if (isMobile) setSidebarOpen(false);
             if (v.lat != null && v.lng != null && mapObj.current) {
-              mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+              //mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
             }
           }}
           isMobile={isMobile}
