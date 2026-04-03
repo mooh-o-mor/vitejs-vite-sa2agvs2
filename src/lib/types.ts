@@ -1,83 +1,91 @@
-// Типы для судов
 export interface Vessel {
   id: number;
   name: string;
-  type: string;
   branch: string;
-  status: string;
-  coordinates?: string;
-  contract?: string;
-  work_period?: string;
-  note?: string;
-  created_at?: string;
-  updated_at?: string;
+  imo: string;
+  show_on_gantt?: boolean;
+  photo_url?: string;  // добавляем
 }
 
-// Типы для контрактов
 export interface Contract {
   id: number;
-  vessel_name: string;
-  contract_number: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  created_at?: string;
-  updated_at?: string;
+  vesselId: number;
+  counterparty: string;
+  start: string;
+  end: string;
+  rate: number;
+  mob: number;
+  demob: number;
+  firmDays: number;
+  optionDays: number;
+  priority: "contract" | "kp" | "plan";
+  altGroup: number | null;
 }
 
-// Константы
-export const T = {
-  border: "#e0e0e0",
-  text: "#333333",
-  text2: "#666666",
-  bg: "#ffffff",
-};
+export interface FormState {
+  counterparty: string;
+  start: string;
+  end: string;
+  rate: string;
+  mob: string;
+  demob: string;
+  firmDays: string;
+  optionDays: string;
+  priority: "contract" | "kp" | "plan";
+  altGroup: string;
+}
 
-export const typeOrder = (type: string): number => {
-  const order: Record<string, number> = {
-    "МФАСС": 1,
-    "ТБС": 2,
-    "ССН": 3,
-    "АСС": 4,
-    "НИС": 5,
-    "МБС": 6,
-    "МВС": 7,
-    "МБ": 8,
-    "БП": 9,
-    "ВСП": 10,
-    "Баржа": 11,
-  };
-  return order[type] || 999;
-};
+export interface DprSupply {
+  type: string;
+  amt: string;
+  pct: string;
+  cons: string;
+  lim: string;
+  del: string;
+}
 
-export const YEAR = new Date().getFullYear();
+export interface DprRow {
+  id: number;
+  vessel_name: string;
+  branch: string;
+  report_date: string;
+  status: string;
+  coord_raw: string;
+  lat: number | null;
+  lng: number | null;
+  note: string;
+  supplies: DprSupply[];
+  contract_info?: string;
+  work_period?: string;
+}
 
-export const MONTHS = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-];
-
+export const YEAR = 2026;
+export const yearStart = new Date(YEAR, 0, 1);
+export const yearEnd = new Date(YEAR, 11, 31);
+export const totalDays = (yearEnd.getTime() - yearStart.getTime()) / 86400000 + 1;
+export const typeOrder = ["МФАСС","ТБС","ССН","АСС","НИС","МБС","МВС","МБ","БП","ВСП","Баржа"];
+export const MONTHS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+export const ADMIN_PASSWORD = "vjhcgfc";
+export const VIEWER_PASSWORD = "mss75";
 export const COLORS = [
-  "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD",
-  "#98D8C8", "#F7D794", "#F3A683", "#778BEB", "#EA868F", "#2C3A47",
-  "#3B3B98", "#CD6133", "#B33771", "#F97F51", "#25CCF7", "#EAB543"
+  "#1D4ED8","#059669","#D97706","#DC2626","#7C3AED",
+  "#DB2777","#0891B2","#65A30D","#EA580C","#4F46E5",
+  "#0D9488","#E11D48","#9333EA","#16A34A","#CA8A04"
 ];
-
-export const SPECIAL_COLORS = {
-  "АСГ": "#2e7d32",
-  "АСД": "#ed6c02",
-  "РЕМ": "#d32f2f",
-  "ПЛАВ": "#0288d1"
+export const SPECIAL_COLORS: Record<string,string> = {
+  "Ремонт": "#9ca3af",
+  "АСГ": "#dc2626"
 };
-
-export const totalDays = (year: number): number => {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+export const T = {
+  bg:"#f8fafc", bg2:"#ffffff", bg3:"#f1f5f9",
+  border:"#cbd5e1", border2:"#e2e8f0",
+  text:"#0f172a", text2:"#475569", text3:"#94a3b8",
+  accent:"#1d4ed8", green:"#059669", amber:"#d97706", red:"#dc2626",
+  header:"#1e40af",
 };
-
-export const yearStart = (year: number): Date => {
-  return new Date(year, 0, 1);
+export const PRIORITY_LABELS: Record<string, string> = {
+  contract: "Контракт",
+  kp: "КП",
+  plan: "План",
 };
-
-export const yearEnd = (year: number): Date => {
-  return new Date(year, 11, 31);
-};
+export const PRIORITY_ORDER = ["contract", "kp", "plan"];
