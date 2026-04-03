@@ -120,7 +120,7 @@ export function FleetMap({
   spiderfyOnMaxZoom: false,
   showCoverageOnHover: false,
   zoomToBoundsOnClick: true,
-  disableClusteringAtZoom: 10,
+  //disableClusteringAtZoom: 10,
   
       iconCreateFunction: (cluster: any) => {
         const children = cluster.getAllChildMarkers();
@@ -210,9 +210,10 @@ export function FleetMap({
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
       const label = formatVesselName(v.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim());
       marker.bindTooltip(label, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
-      marker.on("click", () => {
-        setSelVessel(v);
-        if (isMobile) setSidebarOpen(false);
+      marker.on("click", (e: any) => {
+  L.DomEvent.stopPropagation(e);
+  setSelVessel(v);
+  if (isMobile) setSidebarOpen(false);
         //mapObj.current?.([v.lat!, v.lng!], Math.max(mapObj.current.getZoom(), 7), { animate: true });
       });
       markersRef.current!.addLayer(marker);
