@@ -113,13 +113,14 @@ useEffect(() => {
 const map = L.map(mapRef.current, { 
   center: [62, 90], 
   zoom: 3, 
-  zoomControl: true, 
+  zoomControl: false, 
   attributionControl: false,
-  scrollWheelZoom: false,   // отключаем встроенный
   zoomSnap: 1,
+  zoomDelta: 1,
+  wheelPxPerZoomLevel: 120,
 });
 
-// Включаем свой обработчик колесика
+// Принудительно отключаем сглаженный зум
 map.on('wheel', (e: any) => {
   const delta = e.originalEvent.deltaY > 0 ? 1 : -1;
   const newZoom = Math.max(0, Math.min(map.getMaxZoom(), map.getZoom() + delta));
