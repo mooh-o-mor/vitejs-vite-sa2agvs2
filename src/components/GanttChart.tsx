@@ -99,8 +99,8 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
         const nLanes = Math.max(1, lanes.length);
         const rh = rowHeight(nLanes);
 
-        const vesselType = getType(v.name, ["МФАСС", "ТБС", "ССН", "МБС", "МВС", "МБ", "НИС", "АСС", "БП"]);
-        const nameWithoutPrefix = v.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+        const vesselType = getType(v.name, ["МФАСС", "ТБС", "ССН", "МБС", "МВС", "МБ", "НИС", "АСС", "СКБ"]);
+        const nameWithoutPrefix = v.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
         const formattedName = formatVesselName(nameWithoutPrefix);
         const formattedType = formatVesselType(vesselType);
 
