@@ -110,7 +110,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                     <EditableCell value={v.work_period || ""} vesselName={v.vessel_name} reportDate={selDate} field="work_period" onUpdate={onUpdateField} editable={true} placeholder="✎ добавить период" />
                   </td>
                 )}
-                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{coordDisplay || "—"}</td>
+                <td style={{ ...tdBase, fontSize: 11, fontFamily: "monospace", color: "#37474F" }}>{(canView ? coordDisplay : coordPublic) || "—"}</td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 11, fontWeight: 700, color: power === "БЭП" ? "#1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }}>{power || "—"}</td>
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
