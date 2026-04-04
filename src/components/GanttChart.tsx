@@ -81,7 +81,7 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
       </div>
 
       {vessels.map((v, idx) => {
-        const vc = contracts.filter(c => c.vesselId === v.id);
+       const vc = visibleContracts.filter(c => c.vesselId === v.id);
 
         // altGroup: показываем лучший из группы в основном наборе
         const altGroups = new Set(vc.filter(c => c.altGroup).map(c => c.altGroup!));
