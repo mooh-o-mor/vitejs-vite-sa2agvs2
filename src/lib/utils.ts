@@ -34,14 +34,16 @@ export function cpKey(s: string) {
   return clean;
 }
 
-// Для легенды и фильтра — только то, что до скобки
-export function cpShortKey(s: string): string {
-  if (!s) return "";
-  const bracketIndex = s.indexOf('(');
+export function cpShortKey(cp: string): string {
+  if (!cp) return "";
+  const clean = cp.replace(/[^а-яА-Яa-zA-Z0-9]/g, "");
+  if (clean.includes("Ремонт")) return "Ремонт";
+  if (clean.includes("АСГ")) return "АСГ";
+  const bracketIndex = cp.indexOf('(');
   if (bracketIndex > 0) {
-    return s.slice(0, bracketIndex).trim();
+    return cp.slice(0, bracketIndex).trim();
   }
-  return s;
+  return cp;
 }
 
 // Определение типа электропитания (устойчив к опечаткам)
