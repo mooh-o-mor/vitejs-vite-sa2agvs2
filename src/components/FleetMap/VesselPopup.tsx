@@ -127,7 +127,7 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
       <div style={{ overflowY: "auto", padding: "12px 14px", flex: 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "5px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}>
           <span style={{ color: T.text2 }}>Местоположение</span>
-          <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 250 }}>{coordDisplay || "—"}</span>
+          <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 10, maxWidth: 250 }}>{(canView ? coordDisplay : coordDisplay.replace(/,.*$/, "").trim()) || "—"}</span>
         </div>
         {canView && (
           <>
