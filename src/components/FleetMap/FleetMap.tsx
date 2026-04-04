@@ -107,52 +107,56 @@ export function FleetMap({
     };
   }, [isAdmin]);
 
-  useEffect(() => {
-    if (!mapRef.current || mapObj.current) return;
- const map = L.map(mapRef.current, { 
-  center: [62, 90], 
-  zoom: 3, 
-  zoomControl: true, 
-  attributionControl: false,
-  wheelPxPerZoomLevel: 600,
-  zoomSnap: 1,
-  zoomDelta: 1,
-});
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      attribution: "", subdomains: "abcd", maxZoom: 19,
-    }).addTo(map);
-    L.control.zoom({ position: "topright" }).addTo(map);
+useEffect(() => {
+  if (!mapRef.current || mapObj.current) return;
+  
+  const map = L.map(mapRef.current, { 
+    center: [62, 90], 
+    zoom: 3, 
+    zoomControl: false, 
+    attributionControl: false,
+    zoomSnap: 1,
+    zoomDelta: 1,
+    wheelPxPerZoomLevel: 60,
+  });
+  
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    attribution: "", subdomains: "abcd", maxZoom: 19,
+  }).addTo(map);
+  
+  L.control.zoom({ position: "topright" }).addTo(map);
 
-markersRef.current = (L as any).markerClusterGroup({
-  maxClusterRadius: 40,
-  spiderfyOnMaxZoom: false,
-  showCoverageOnHover: false,
-  zoomToBoundsOnClick: false,
-  iconCreateFunction: (cluster: any) => {
+  markersRef.current = (L as any).markerClusterGroup({
+    maxClusterRadius: 40,
+    spiderfyOnMaxZoom: false,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: false,
+    iconCreateFunction: (cluster: any) => {
+      const children = cluster.getAllChildMarkers();
+      const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
+      children.forEach((m: any) => {
+        if (m.options._status) counts[m.options._status as keyof typeof counts]++;
+      });
+      return mkPieIcon(counts, children.length);
+    },
+  }).addTo(map);
+
+  markersRef.current.on("clusterclick", (e: any) => {
+    const cluster = e.layer;
     const children = cluster.getAllChildMarkers();
-    const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
-    children.forEach((m: any) => {
-      if (m.options._status) counts[m.options._status as keyof typeof counts]++;
-    });
-    return mkPieIcon(counts, children.length);
-  },
-}).addTo(map);
-
-markersRef.current.on("clusterclick", (e: any) => {
-  const cluster = e.layer;
-  const children = cluster.getAllChildMarkers();
-  const lats = new Set(children.map((m: any) => m.getLatLng().lat.toFixed(6)));
-  const lngs = new Set(children.map((m: any) => m.getLatLng().lng.toFixed(6)));
-  const allSameCoords = lats.size === 1 && lngs.size === 1;
-  if (allSameCoords) {
-    cluster.spiderfy();
-  } else {
-    cluster.zoomToBounds({ padding: [50, 50] });
-  }
-});
-    mapObj.current = map;
-    return () => { map.remove(); mapObj.current = null; };
-  }, []);
+    const lats = new Set(children.map((m: any) => m.getLatLng().lat.toFixed(6)));
+    const lngs = new Set(children.map((m: any) => m.getLatLng().lng.toFixed(6)));
+    const allSameCoords = lats.size === 1 && lngs.size === 1;
+    if (allSameCoords) {
+      cluster.spiderfy();
+    } else {
+      cluster.zoomToBounds({ padding: [50, 50] });
+    }
+  });
+  
+  mapObj.current = map;
+  return () => { map.remove(); mapObj.current = null; };
+}, []);
 
   useEffect(() => { loadDates(); }, []);
 
