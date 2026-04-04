@@ -48,7 +48,13 @@ export function extractLocation(raw: string): string {
   }
 
   // 6. Водные объекты — возвращаем без префикса
-  if (WATER_BODY.test(s.trim())) return s.trim();
+  if (WATER_BODY.test(s.trim())) {
+  // Добавляем запятую перед деталями типа "р-н", "з-д"
+  const parts = s.trim().split(/\s+/);
+  const di = parts.findIndex((p, i) => i > 0 && /^(р-н|з-д|район|завод)/i.test(p));
+  if (di > 0) return parts.slice(0, di).join(" ") + ", " + parts.slice(di).join(" ");
+  return s.trim();
+}
 
   // 7. Сохраняем существующий префикс или добавляем "п."
   let prefix = "п.";
