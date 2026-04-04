@@ -114,7 +114,7 @@ export function FleetMap({
   zoom: 3, 
   zoomControl: false, 
   attributionControl: false,
-  wheelPxPerZoomLevel: 120,  // больше = медленнее, меньше = быстрее
+  wheelPxPerZoomLevel: 240,  // больше = медленнее, меньше = быстрее
 });
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: "", subdomains: "abcd", maxZoom: 19,
