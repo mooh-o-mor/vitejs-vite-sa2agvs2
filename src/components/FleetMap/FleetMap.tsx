@@ -110,15 +110,22 @@ export function FleetMap({
 useEffect(() => {
   if (!mapRef.current || mapObj.current) return;
   
-  const map = L.map(mapRef.current, { 
-    center: [62, 90], 
-    zoom: 3, 
-    zoomControl: false, 
-    attributionControl: false,
-    zoomSnap: 1,
-    zoomDelta: 1,
-    wheelPxPerZoomLevel: 600,
-  });
+const map = L.map(mapRef.current, { 
+  center: [62, 90], 
+  zoom: 3, 
+  zoomControl: true, 
+  attributionControl: false,
+  scrollWheelZoom: false,   // отключаем встроенный
+  zoomSnap: 1,
+});
+
+// Включаем свой обработчик колесика
+map.on('wheel', (e: any) => {
+  const delta = e.originalEvent.deltaY > 0 ? 1 : -1;
+  const newZoom = Math.max(0, Math.min(map.getMaxZoom(), map.getZoom() + delta));
+  map.setZoom(newZoom, { animate: false });
+  e.originalEvent.preventDefault();
+});
   
   L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
     attribution: "", subdomains: "abcd", maxZoom: 19,
