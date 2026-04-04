@@ -45,7 +45,7 @@ export function VesselList({ vessels, contracts, onAdd, onEdit, onDelete, onVess
 
   const formatDisplayName = (name: string): string => {
     const type = getType(name, typeOrder);
-    const nameWithoutPrefix = name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
+    const nameWithoutPrefix = name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|скб)\s+/i, "").trim();
     const formattedType = formatVesselType(type);
     const formattedName = formatVesselName(nameWithoutPrefix);
     return formattedType ? `${formattedType} ${formattedName}` : formattedName;
