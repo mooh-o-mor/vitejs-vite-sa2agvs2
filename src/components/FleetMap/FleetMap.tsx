@@ -112,7 +112,7 @@ export function FleetMap({
   const map = L.map(mapRef.current, { 
   center: [62, 90], 
   zoom: 3, 
-  zoomControl: true, 
+  zoomControl: false, 
   attributionControl: false,
   wheelPxPerZoomLevel: 60,  // больше = медленнее, меньше = быстрее
 });
