@@ -71,7 +71,7 @@ export function FleetMap({
           const typeStr = getType(v.name, typeOrder);
           if (typeStr) {
             t.set(full, typeStr);
-            const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+            const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
             if (short !== full) t.set(short, typeStr);
           }
         });
@@ -200,7 +200,7 @@ map.on('wheel', (e: any) => {
     const normalized = vesselName.toUpperCase().trim();
     let type = typeMap.get(normalized);
     if (type) return type;
-    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
     type = typeMap.get(withoutPrefix);
     if (type) return type;
     for (const [key, val] of typeMap.entries()) {
@@ -244,7 +244,7 @@ map.on('wheel', (e: any) => {
       if (v.lat == null || v.lng == null) return;
       const c = cls(v.status);
       const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
-      const label = formatVesselName(v.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim());
+      const label = formatVesselName(v.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|скб)\s+/i, "").trim());
       marker.bindTooltip(label, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", (e: any) => {
   L.DomEvent.stopPropagation(e);
