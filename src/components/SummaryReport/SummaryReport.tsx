@@ -52,12 +52,12 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     (vData || []).forEach((v: any) => {
       const originalName = v.name;
       const upperName = originalName.toUpperCase().trim();
-      const typeMatch = upperName.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|БП|ВСП|Баржа)\s+/);
+      const typeMatch = upperName.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|СКБ|ВСП|Баржа)\s+/);
       const typeStr = typeMatch ? typeMatch[1] : "";
       if (typeStr) {
         t.set(originalName, typeStr);
         t.set(upperName, typeStr);
-        const withoutPrefix = upperName.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+        const withoutPrefix = upperName.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
         if (withoutPrefix !== upperName) t.set(withoutPrefix, typeStr);
         t.set(originalName.toLowerCase(), typeStr);
       }
@@ -91,7 +91,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
     const normalized = vesselName.toUpperCase().trim();
     let type = typeMap.get(normalized);
     if (type) return type;
-    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
+    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
     type = typeMap.get(withoutPrefix);
     if (type) return type;
     for (const [key, val] of typeMap.entries()) {
