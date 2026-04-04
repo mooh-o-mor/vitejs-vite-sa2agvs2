@@ -109,7 +109,13 @@ export function FleetMap({
 
   useEffect(() => {
     if (!mapRef.current || mapObj.current) return;
-    const map = L.map(mapRef.current, { center: [62, 90], zoom: 3, zoomControl: false, attributionControl: false });
+  const map = L.map(mapRef.current, { 
+  center: [62, 90], 
+  zoom: 3, 
+  zoomControl: false, 
+  attributionControl: false,
+  wheelPxPerZoomLevel: 120,  // больше = медленнее, меньше = быстрее
+});
     L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: "", subdomains: "abcd", maxZoom: 19,
     }).addTo(map);
