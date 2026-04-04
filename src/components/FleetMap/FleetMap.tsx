@@ -114,7 +114,7 @@ export function FleetMap({
   zoom: 3, 
   zoomControl: true, 
   attributionControl: false,
-  wheelPxPerZoomLevel: 60,
+  wheelPxPerZoomLevel: 600,
   zoomSnap: 1,
   zoomDelta: 1,
 });
