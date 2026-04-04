@@ -117,7 +117,7 @@ useEffect(() => {
     attributionControl: false,
     zoomSnap: 1,
     zoomDelta: 1,
-    wheelPxPerZoomLevel: 60,
+    wheelPxPerZoomLevel: 600,
   });
   
   L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
