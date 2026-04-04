@@ -20,7 +20,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("branch");
+  //const [sortBy, setSortBy] = useState<"name" | "branch" | "status">("branch");
 
   useEffect(() => { loadDates(); }, []);
 
@@ -128,14 +128,14 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
       const statusOk = filterStatuses.length === 0 || filterStatuses.includes(statusCls(v.status));
       return typeOk && branchOk && statusOk;
     });
-    result.sort((a,b) => {
+    {/*result.sort((a,b) => {
       if (sortBy === "name") return a.vessel_name.localeCompare(b.vessel_name, "ru");
       if (sortBy === "branch") return (a.branch || "").localeCompare(b.branch || "", "ru");
       if (sortBy === "status") return statusCls(a.status).localeCompare(statusCls(b.status));
       return 0;
     });
     return result;
-  }, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselType]);
+  }*/}, [vessels, filterTypes, filterBranches, filterStatuses,  {/*sortBy*/}, getVesselType]);
 
   const cAsg = filtered.filter((v) => statusCls(v.status) === "asg").length;
   const cAsd = filtered.filter((v) => statusCls(v.status) === "asd").length;
@@ -172,11 +172,11 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
         filterTypes={filterTypes}
         filterBranches={filterBranches}
         filterStatuses={filterStatuses}
-        sortBy={sortBy}
+        //sortBy={sortBy}
         onToggleType={(v) => toggleFilter(setFilterTypes, v)}
         onToggleBranch={(v) => toggleFilter(setFilterBranches, v)}
         onToggleStatus={toggleStatus}
-        onSortBy={setSortBy}
+        //onSortBy={setSortBy}
       />
 
       <ReportTable
