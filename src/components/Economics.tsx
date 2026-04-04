@@ -6,9 +6,11 @@ import { cpShortKey, contractDays, fmoney, fdate, formatVesselName, formatVessel
 interface Props {
   vessels: Vessel[];
   contracts: Contract[];
+  onAddContract: (vesselId: number) => void;
+  onEditContract: (contract: Contract) => void;
 }
 
-export function Economics({ vessels, contracts }: Props) {
+export function Economics({ vessels, contracts, onAddContract, onEditContract }: Props) {
   const cpKeys = [...new Set(contracts.map(c => cpShortKey(c.counterparty)))];
   const colorMap: Record<string, string> = Object.fromEntries(
     cpKeys.map((cp, i) => [cp, SPECIAL_COLORS[cp] || COLORS[i % COLORS.length]])
@@ -31,7 +33,8 @@ export function Economics({ vessels, contracts }: Props) {
           <col style={{ width: "10%" }} />
           <col style={{ width: "10%" }} />
           <col style={{ width: "10%" }} />
-          <col style={{ width: "12%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "2%" }} />
         </colgroup>
         <thead>
           <tr style={{ color: T.text2, borderBottom: `1px solid ${T.border}`, background: T.bg3, position: "sticky", top: 0, zIndex: 1 }}>
@@ -45,6 +48,7 @@ export function Economics({ vessels, contracts }: Props) {
             <th style={{ textAlign: "right", padding: "6px 6px" }}>Моб</th>
             <th style={{ textAlign: "right", padding: "6px 6px" }}>Демоб</th>
             <th style={{ textAlign: "right", padding: "6px 6px" }}>Выручка</th>
+            <th style={{ padding: "6px 6px" }} />
           </tr>
         </thead>
         <tbody>
@@ -62,24 +66,36 @@ export function Economics({ vessels, contracts }: Props) {
 
             return (
               <React.Fragment key={v.id}>
+                {/* Заголовок судна */}
                 <tr style={{ background: T.bg3, borderTop: `2px solid ${T.border}` }}>
                   <td colSpan={10} style={{ padding: "6px 8px", fontWeight: 700, fontSize: 12, color: T.accent }}>
                     {vesselType && <span style={{ fontFamily: "monospace", fontWeight: 500, marginRight: 6 }}>{formattedType}</span>}
                     {formattedName}
                     {v.branch && <span style={{ color: T.amber, fontWeight: 400, fontSize: 11, marginLeft: 8 }}>{v.branch}</span>}
                   </td>
+                  <td style={{ padding: "6px 4px", textAlign: "right" }}>
+                    <button
+                      onClick={() => onAddContract(v.id)}
+                      title="Добавить контракт"
+                      style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${T.border}`, background: T.bg2, color: T.accent, cursor: "pointer", fontSize: 14, lineHeight: 1, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    >+</button>
+                  </td>
                 </tr>
 
                 {ec.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ padding: "4px 8px", color: T.text3, fontSize: 11 }}>Нет контрактов</td>
+                    <td colSpan={11} style={{ padding: "4px 8px", color: T.text3, fontSize: 11 }}>Нет контрактов</td>
                   </tr>
                 ) : (
                   <>
                     {ec.map((c, i) => {
                       const shortKey = cpShortKey(c.counterparty);
                       return (
-                        <tr key={c.id} style={{ borderBottom: `1px solid ${T.border2}`, background: i % 2 === 0 ? T.bg2 : T.bg3 }}>
+                        <tr
+                          key={c.id}
+                          style={{ borderBottom: `1px solid ${T.border2}`, background: i % 2 === 0 ? T.bg2 : T.bg3, cursor: "pointer" }}
+                          onClick={() => onEditContract(c)}
+                        >
                           <td style={{ padding: "4px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: colorMap[shortKey] || "#888", marginRight: 4 }} />
                             {c.counterparty}
@@ -93,12 +109,14 @@ export function Economics({ vessels, contracts }: Props) {
                           <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.mob)}</td>
                           <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.demob)}</td>
                           <td style={{ padding: "4px 6px", textAlign: "right", color: T.green, fontWeight: 700 }}>{fmoney(c.revenue)}</td>
+                          <td style={{ padding: "4px 6px", textAlign: "center", color: T.text3, fontSize: 12 }}>✏️</td>
                         </tr>
                       );
                     })}
                     <tr style={{ background: T.bg3 }}>
                       <td colSpan={9} style={{ padding: "4px 6px", textAlign: "right", fontSize: 11, color: T.text2 }}>Итого:</td>
                       <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 700, color: T.green }}>{fmoney(tot)}</td>
+                      <td />
                     </tr>
                   </>
                 )}
