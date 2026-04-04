@@ -26,7 +26,7 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
   const fontSize = isMobile ? 10 : 11;
   const nameFontSize = isMobile ? 12 : 13;
   
-  const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|бп)\s+/i, "").trim();
+  const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|скб)\s+/i, "").trim();
   const formattedName = formatVesselName(nameWithoutPrefix);
 
   return (
