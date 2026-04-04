@@ -70,12 +70,14 @@ export function FilterBar({
           {allCps.map(cp => <button key={cp} onClick={() => onFilterCp(cp)} style={btn(filterCp === cp)}>{cp}</button>)}
         </div>
       )}
+      {/* Сортировка временно скрыта
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontSize: 11, color: T.text3, minWidth: 80 }}>Сортировка:</span>
         {([ ["type","По типу"], ["name","По названию"], ["branch","По филиалу"] ] as const).map(([k,l]) => (
           <button key={k} onClick={() => onSortBy(k)} style={btn(sortBy === k)}>{l}</button>
         ))}
       </div>
+      */}
     </div>
   );
 }
