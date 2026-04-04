@@ -364,13 +364,13 @@ const filtered = useMemo(() => {
             filterBranches={filterBranches}
             filterCp={filterCp}
             filterStatuses={filterStatuses}
-            sortBy={sortBy}
+            //sortBy={sortBy}
             canView={canView}
             onToggleType={toggleType}
             onToggleBranch={toggleBranch}
             onFilterCp={setFilterCp}
             onToggleStatus={toggleStatus}
-            onSortBy={setSortBy}
+            //onSortBy={setSortBy}
           />
         )}
 
