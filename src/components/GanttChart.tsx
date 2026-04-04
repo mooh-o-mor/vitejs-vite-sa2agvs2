@@ -109,8 +109,8 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
               style={{ width: 190, flexShrink: 0, fontSize: 11, color: T.text, paddingRight: 8, paddingLeft: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center" }}
               title={`${formattedType} ${formattedName}${v.branch ? ` (${v.branch})` : ""}`}
             >
-              {vesselType && <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{formattedType}</span>}
-              {" "}{formattedName}
+              {vesselType && <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{formattedType}&nbsp;</span>}
+{formattedName}
               {v.branch && <span style={{ color: T.amber, marginLeft: 4, fontSize: 10 }}>{v.branch}</span>}
             </div>
 
