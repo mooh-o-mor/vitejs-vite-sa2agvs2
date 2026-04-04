@@ -184,31 +184,17 @@ const saveVessel = useCallback(async (name: string, branch: string, imo: string,
 const getVesselStatus = useCallback((vesselId: number): string[] => {
   const vesselContracts = visibleContracts.filter(c => c.vesselId === vesselId);
   if (vesselContracts.length === 0) return [];
-  
-  const hasAsg = vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ");
-  const hasRem = vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт");
-  const hasAsd = vesselContracts.some(c => {
+
+  const statuses: string[] = [];
+  if (vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ"))
+    statuses.push("asg");
+  if (vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт"))
+    statuses.push("rem");
+  if (vesselContracts.some(c => {
     const key = cpShortKey(c.counterparty);
     return key !== "АСГ" && key !== "Ремонт";
-  });
-  
-  const statuses: string[] = [];
-  
-  // АСГ: только АСГ, нет РЕМ и нет АСД
-  if (hasAsg && !hasRem && !hasAsd) {
-    statuses.push("asg");
-  }
-  
-  // РЕМ: только РЕМ, нет АСГ и нет АСД
-  if (hasRem && !hasAsg && !hasAsd) {
-    statuses.push("rem");
-  }
-  
-  // АСД: есть хотя бы один контракт АСД (даже если есть АСГ или РЕМ)
-  if (hasAsd) {
-    statuses.push("asd");
-  }
-  
+  })) statuses.push("asd");
+
   return statuses;
 }, [visibleContracts]);
 
