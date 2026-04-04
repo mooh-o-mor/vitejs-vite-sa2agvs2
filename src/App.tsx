@@ -37,7 +37,7 @@ export default function App() {
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [filterCp, setFilterCp] = useState("Все");
-  const [sortBy, setSortBy] = useState<"type" | "name" | "branch">("type");
+  //const [sortBy, setSortBy] = useState<"type" | "name" | "branch">("type");
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
@@ -220,22 +220,10 @@ const filtered = useMemo(() => {
     const vesselStatuses = getVesselStatus(v.id);
     const statusOk = filterStatuses.length === 0 || vesselStatuses.some(s => filterStatuses.includes(s));
     return typeOk && branchOk && ganttOk && statusOk;
-  }).sort((a, b) => {
-    if (sortBy === "type") {
-      return typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder));
-    }
-    if (sortBy === "name") {
-      // Убираем тип из названия для сортировки
-      const nameA = a.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-      const nameB = b.name.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|БП)\s+/i, "").trim();
-      return nameA.localeCompare(nameB, "ru");
-    }
-    if (sortBy === "branch") {
-      return (a.branch || "").localeCompare(b.branch || "", "ru");
-    }
-    return 0;
-  });
-}, [vessels, filterTypes, filterBranches, filterStatuses, sortBy, getVesselStatus]);
+  }).sort((a, b) =>
+    typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder))
+  );
+}, [vessels, filterTypes, filterBranches, filterStatuses, getVesselStatus]);
 
   const totalRev = useMemo(() => {
     return visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
