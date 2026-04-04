@@ -71,6 +71,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
             const vType = getVesselType(v.vessel_name);
             const power = getPower(v.coord_raw);
             const coordDisplay = extractLocation(v.coord_raw || "");
+            const coordPublic = coordDisplay.replace(/,.*$/, "").trim();
             const specUrl = specMap.get(v.vessel_name.toUpperCase().trim());
 
             let statusDisplay = v.status;
