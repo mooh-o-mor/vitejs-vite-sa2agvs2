@@ -47,7 +47,9 @@ function priorityIdx(p: string): number {
 
 export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract, onEditContract }: Props) {
   const vesselIds = new Set(vessels.map(v => v.id));
-  const visibleContracts = contracts.filter(c => vesselIds.has(c.vesselId));
+  const visibleContracts = contracts.filter(c => 
+  vesselIds.has(c.vesselId) && (canView || c.priority === "contract")
+);
 
   const cpKeys = [...new Set(visibleContracts.map(c => cpShortKey(c.counterparty)))];
   const colorMap: Record<string, string> = Object.fromEntries(
