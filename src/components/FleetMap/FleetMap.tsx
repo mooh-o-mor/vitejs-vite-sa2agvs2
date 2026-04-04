@@ -163,6 +163,12 @@ map.on('wheel', (e: any) => {
   });
   
   mapObj.current = map;
+  mapRef.current.addEventListener("mousedown", (e) => {
+  if (e.button === 1) { // средняя кнопка мыши
+    e.preventDefault();
+    map.setView([62, 90], 3, { animate: true });
+  }
+});
   return () => { map.remove(); mapObj.current = null; };
 }, []);
 
