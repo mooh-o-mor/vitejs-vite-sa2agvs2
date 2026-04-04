@@ -384,8 +384,13 @@ const filtered = useMemo(() => {
           <SummaryReport isAdmin={isAdmin} canView={canView} />
         )}
         {activeTab === "economics" && isAdmin && (
-          <Economics vessels={filtered} contracts={visibleContracts} />
-        )}
+  <Economics
+    vessels={filtered}
+    contracts={visibleContracts}
+    onAddContract={openAddContract}
+    onEditContract={openEditContract}
+  />
+)}
         {activeTab === "vessels" && isAdmin && (
          <VesselList
   vessels={vessels}
