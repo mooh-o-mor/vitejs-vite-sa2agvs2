@@ -6,7 +6,7 @@ export function getType(name: string, order: string[]): string {
     }
   }
   if (upper.includes("АСС")) return "АСС";
-  if (upper.includes("БП")) return "БП";
+  if (upper.includes("СКБ")) return "СКБ";
   return "";
 }
 // Форматирует название судна: первая буква каждого слова заглавная
