@@ -44,6 +44,17 @@ const tdBase: React.CSSProperties = {
   verticalAlign: "top",
 };
 
+function formatSupplyCell(supplies: any[], keyword: string): string {
+  if (!supplies || !Array.isArray(supplies)) return "";
+  const s = supplies.find(x => x.type && x.type.toLowerCase().includes(keyword.toLowerCase()));
+  if (!s || !s.amt || s.amt === "—") return "";
+  const pct = s.pct && !isNaN(parseFloat(s.pct.replace(",", ".")))
+    ? ` (${parseFloat(s.pct.replace(",", ".")).toFixed(1)}%)`
+    : "";
+  const cons = s.cons && s.cons !== "—" ? s.cons : "0";
+  return `${s.amt}${pct} / ${cons}`;
+}
+
 export function ReportTable({ vessels, selDate, canView, getVesselType, specMap, onUpdateField }: Props) {
   return (
     <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
@@ -60,8 +71,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
             <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
             <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
-            {canView && <th style={{ ...thStyle, width: 70 }}>ДТ</th>}
-            {canView && <th style={{ ...thStyle, width: 70 }}>Мазут/ТТ</th>}
+            {canView && <th style={{ ...thStyle, width: 120 }}>ДТ (ост./расход)</th>}
+            {canView && <th style={{ ...thStyle, width: 120 }}>ТТ (ост./расход)</th>}
           </tr>
         </thead>
         <tbody>
@@ -87,17 +98,17 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
               <tr key={v.vessel_name} style={{ background: rowBg }}>
                 <td style={{ ...tdBase, textAlign: "center", color: "#546E7A", fontFamily: "monospace", fontSize: 11 }}>{i + 1}</td>
                 <td style={{ ...tdBase, textAlign: "center", fontSize: 10, color: "#546E7A", fontFamily: "monospace", fontWeight: 700 }}>{formatVesselType(vType)}</td>
-               <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
-  {specUrl ? (
-    <a href={specUrl} target="_blank" rel="noopener noreferrer"
-      title="Спецификация (PDF)"
-      style={{ color: "#1a2a3a", textDecoration: "underline", fontWeight: 600, cursor: "pointer" }}>
-      {formatVesselName(v.vessel_name)}
-    </a>
-  ) : (
-    formatVesselName(v.vessel_name)
-  )}
-</td>
+                <td style={{ ...tdBase, fontWeight: 600, color: "#1a2a3a" }}>
+                  {specUrl ? (
+                    <a href={specUrl} target="_blank" rel="noopener noreferrer"
+                      title="Спецификация (PDF)"
+                      style={{ color: "#1a2a3a", textDecoration: "underline", fontWeight: 600, cursor: "pointer" }}>
+                      {formatVesselName(v.vessel_name)}
+                    </a>
+                  ) : (
+                    formatVesselName(v.vessel_name)
+                  )}
+                </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
                 <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
                 {canView && (
@@ -117,8 +128,16 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                     <EditableCell value={v.note || ""} vesselName={v.vessel_name} reportDate={selDate} field="note" onUpdate={onUpdateField} editable={true} placeholder="✎ добавить примечание" />
                   </td>
                 )}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "ДТ") || ""}</td>}
-                {canView && <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11, fontWeight: 500 }}>{getSupply(v.supplies, "Мазут") || getSupply(v.supplies, "ТТ") || ""}</td>}
+                {canView && (
+                  <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11 }}>
+                    {formatSupplyCell(v.supplies, "ДТ")}
+                  </td>
+                )}
+                {canView && (
+                  <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11 }}>
+                    {formatSupplyCell(v.supplies, "Мазут") || formatSupplyCell(v.supplies, "ТТ")}
+                  </td>
+                )}
               </tr>
             );
           })}
