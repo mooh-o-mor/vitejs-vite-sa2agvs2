@@ -82,15 +82,17 @@ export function exportToExcel(
     const statusFont = { bold: true, sz: 10, color: { rgb: STATUS_XL_FG[sc] || "424242" } };
 
     // Топливо: ДТ и ТТ в одной ячейке двумя строками
-    const dtAmt = formatSupplyAmt(v.supplies, "ДТ");
-    const ttAmt = formatSupplyAmt(v.supplies, "Мазут") || formatSupplyAmt(v.supplies, "ТТ");
-    const fuelCell = [dtAmt, ttAmt].filter(Boolean).join("\n") || "";
+const dtAmt = formatSupplyAmt(v.supplies, "ДТ");
+const ttAmt = formatSupplyAmt(v.supplies, "Мазут") || formatSupplyAmt(v.supplies, "ТТ");
+const ttAmtFiltered = ttAmt && ttAmt !== "0" ? ttAmt : "";
+const fuelCell = [dtAmt, ttAmtFiltered].filter(Boolean).join("\n") || "";
 
-    // Расход: ДТ и ТТ в одной ячейке двумя строками
-    const dtCons = formatSupplyCons(v.supplies, "ДТ");
-    const ttCons = formatSupplyCons(v.supplies, "Мазут") || formatSupplyCons(v.supplies, "ТТ");
-    const consCell = [dtCons, ttCons].filter(Boolean).join("\n") || "";
-
+// Расход: ДТ и ТТ в одной ячейке двумя строками
+const dtCons = formatSupplyCons(v.supplies, "ДТ");
+const ttCons = formatSupplyCons(v.supplies, "Мазут") || formatSupplyCons(v.supplies, "ТТ");
+const ttConsFiltered = ttCons && ttCons !== "0" ? ttCons : "";
+const consCell = [dtCons, ttConsFiltered].filter(Boolean).join("\n") || "";
+    
     aoa.push([
       { v: i + 1, t: "n", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
       { v: formattedType, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" }, bold: true } } },
