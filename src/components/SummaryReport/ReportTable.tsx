@@ -50,19 +50,13 @@ function getSupplyAmt(supplies: any[], keyword: string): string {
   
   const pctNum = s.pct ? parseFloat(s.pct.replace(",", ".")) : NaN;
   
-  let amt = s.amt;
   let pct = "";
-  
-  if (!isNaN(pctNum) && pctNum > 100) {
-    // Вероятно разделитель тысяч — делим на 1000
-    const amtNum = parseFloat(String(s.amt).replace(",", "."));
-    if (!isNaN(amtNum)) amt = (amtNum / 1000).toFixed(3).replace(/\.?0+$/, "");
-    pct = ` (${(pctNum / 1000).toFixed(1)}%)`;
-  } else if (!isNaN(pctNum) && pctNum >= 0) {
-    pct = ` (${pctNum.toFixed(1)}%)`;
+  if (!isNaN(pctNum) && pctNum >= 0) {
+    const pctDisplay = pctNum > 100 ? pctNum / 1000 : pctNum;
+    pct = ` (${pctDisplay.toFixed(1)}%)`;
   }
   
-  return `${amt}${pct}`;
+  return `${s.amt}${pct}`;
 }
 
 function getSupplyCons(supplies: any[], keyword: string): string {
