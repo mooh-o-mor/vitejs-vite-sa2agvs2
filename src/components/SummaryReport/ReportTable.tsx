@@ -4,7 +4,6 @@ import {
   STATUS_BG,
   STATUS_COLOR,
   branchBg,
-  getSupply,
   shortStatus,
   statusCls,
   getPower,
