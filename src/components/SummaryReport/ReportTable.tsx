@@ -47,8 +47,9 @@ function getSupplyAmt(supplies: any[], keyword: string): string {
   if (!supplies || !Array.isArray(supplies)) return "";
   const s = supplies.find(x => x.type && x.type.toLowerCase().includes(keyword.toLowerCase()));
   if (!s || !s.amt || s.amt === "—") return "";
-  const pct = s.pct && !isNaN(parseFloat(s.pct.replace(",", ".")))
-    ? ` (${parseFloat(s.pct.replace(",", ".")).toFixed(1)}%)`
+  const pctNum = s.pct ? parseFloat(s.pct.replace(",", ".")) : NaN;
+  const pct = (!isNaN(pctNum) && pctNum <= 100 && pctNum >= 0)
+    ? ` (${pctNum.toFixed(1)}%)`
     : "";
   return `${s.amt}${pct}`;
 }
