@@ -2,6 +2,7 @@ import XLSX from "xlsx-js-style";
 import { BRANCH_XL, STATUS_XL_BG, STATUS_XL_FG, getSupply, getPower, statusCls } from "./types";
 import type { DprRow } from "./types";
 import { formatVesselName, formatVesselType } from "../../lib/utils";
+import { extractLocation } from "../../lib/locationNormalizer";
 
 export function exportToExcel(
   vessels: DprRow[], 
@@ -69,7 +70,7 @@ export function exportToExcel(
       { v: v.status, t: "s", s: { fill: statusFill, alignment: { ...wrap }, border: baseBorder, font: statusFont } },
       { v: v.contract_info || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
       { v: v.work_period || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
-      { v: (v.coord_raw || "").replace(/\s*(БЭП|СЭП|CЭП)\s*$/i, "").trim(), t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
+      { v: extractLocation(v.coord_raw || ""), t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "37474F" } } } },
       { v: power, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: power === "БЭП" ? "1565C0" : power === "СЭП" ? "#2E7D32" : "#ccc" }, bold: true } } },
       { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
       { v: getSupply(v.supplies, "ДТ") || "", t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
