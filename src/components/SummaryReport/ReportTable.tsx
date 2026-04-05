@@ -61,24 +61,6 @@ function getSupplyCons(supplies: any[], keyword: string): string {
   return cons;
 }
 
-function SupplyCell({ supplies, keyword1, keyword2 }: { supplies: any[], keyword1: string, keyword2?: string }) {
-  const amt1 = getSupplyAmt(supplies, keyword1);
-  const amt2 = keyword2 ? getSupplyAmt(supplies, keyword2) : "";
-  const amt = amt1 || amt2;
-  
-  const dt = getSupplyAmt(supplies, "ДТ");
-  const ttAmt = getSupplyAmt(supplies, "Мазут") || getSupplyAmt(supplies, "ТТ");
-  
-  if (keyword1 === "ДТ") {
-    return (
-      <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6 }}>
-        <div>{dt || "—"}</div>
-        <div style={{ color: "#888" }}>{ttAmt || "—"}</div>
-      </div>
-    );
-  }
-  return <span>{amt || ""}</span>;
-}
 
 function ConsCell({ supplies }: { supplies: any[] }) {
   const dt = getSupplyCons(supplies, "ДТ");
