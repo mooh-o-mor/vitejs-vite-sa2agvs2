@@ -43,15 +43,52 @@ const tdBase: React.CSSProperties = {
   verticalAlign: "top",
 };
 
-function formatSupplyCell(supplies: any[], keyword: string): string {
+function getSupplyAmt(supplies: any[], keyword: string): string {
   if (!supplies || !Array.isArray(supplies)) return "";
   const s = supplies.find(x => x.type && x.type.toLowerCase().includes(keyword.toLowerCase()));
   if (!s || !s.amt || s.amt === "—") return "";
   const pct = s.pct && !isNaN(parseFloat(s.pct.replace(",", ".")))
     ? ` (${parseFloat(s.pct.replace(",", ".")).toFixed(1)}%)`
     : "";
+  return `${s.amt}${pct}`;
+}
+
+function getSupplyCons(supplies: any[], keyword: string): string {
+  if (!supplies || !Array.isArray(supplies)) return "";
+  const s = supplies.find(x => x.type && x.type.toLowerCase().includes(keyword.toLowerCase()));
+  if (!s) return "";
   const cons = s.cons && s.cons !== "—" ? s.cons : "0";
-  return `${s.amt}${pct} / ${cons}`;
+  return cons;
+}
+
+function SupplyCell({ supplies, keyword1, keyword2 }: { supplies: any[], keyword1: string, keyword2?: string }) {
+  const amt1 = getSupplyAmt(supplies, keyword1);
+  const amt2 = keyword2 ? getSupplyAmt(supplies, keyword2) : "";
+  const amt = amt1 || amt2;
+  
+  const dt = getSupplyAmt(supplies, "ДТ");
+  const ttAmt = getSupplyAmt(supplies, "Мазут") || getSupplyAmt(supplies, "ТТ");
+  
+  if (keyword1 === "ДТ") {
+    return (
+      <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6 }}>
+        <div>{dt || "—"}</div>
+        <div style={{ color: "#888" }}>{ttAmt || "—"}</div>
+      </div>
+    );
+  }
+  return <span>{amt || ""}</span>;
+}
+
+function ConsCell({ supplies }: { supplies: any[] }) {
+  const dt = getSupplyCons(supplies, "ДТ");
+  const tt = getSupplyCons(supplies, "Мазут") || getSupplyCons(supplies, "ТТ");
+  return (
+    <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, textAlign: "right" }}>
+      <div>{dt || "—"}</div>
+      <div style={{ color: "#888" }}>{tt || "—"}</div>
+    </div>
+  );
 }
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, specMap, onUpdateField }: Props) {
@@ -70,8 +107,8 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
             <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
             <th style={{ ...thStyle, width: 50 }}>Эл-е</th>
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
-            {canView && <th style={{ ...thStyle, width: 120 }}>ДТ (ост./расход)</th>}
-            {canView && <th style={{ ...thStyle, width: 120 }}>ТТ (ост./расход)</th>}
+            {canView && <th style={{ ...thStyle, width: 110 }}>Топливо</th>}
+            {canView && <th style={{ ...thStyle, width: 70 }}>Расход</th>}
           </tr>
         </thead>
         <tbody>
@@ -128,13 +165,16 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                   </td>
                 )}
                 {canView && (
-                  <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11 }}>
-                    {formatSupplyCell(v.supplies, "ДТ")}
+                  <td style={{ ...tdBase }}>
+                    <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6 }}>
+                      <div>{getSupplyAmt(v.supplies, "ДТ") || "—"}</div>
+                      <div style={{ color: "#888" }}>{getSupplyAmt(v.supplies, "Мазут") || getSupplyAmt(v.supplies, "ТТ") || "—"}</div>
+                    </div>
                   </td>
                 )}
                 {canView && (
-                  <td style={{ ...tdBase, textAlign: "right", fontFamily: "monospace", fontSize: 11 }}>
-                    {formatSupplyCell(v.supplies, "Мазут") || formatSupplyCell(v.supplies, "ТТ")}
+                  <td style={{ ...tdBase }}>
+                    <ConsCell supplies={v.supplies} />
                   </td>
                 )}
               </tr>
