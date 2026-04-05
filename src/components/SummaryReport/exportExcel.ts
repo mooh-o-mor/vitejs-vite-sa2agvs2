@@ -84,7 +84,7 @@ export function exportToExcel(
 // Топливо: ДТ и ТТ в одной ячейке двумя строками
 const dtAmt = formatSupplyAmt(v.supplies, "ДТ");
 const ttAmtRaw = formatSupplyAmt(v.supplies, "Мазут") || formatSupplyAmt(v.supplies, "ТТ");
-const ttHasAmt = Boolean(ttAmtRaw) && !/^0[\s(%]|^0$/.test(ttAmtRaw.trim());
+const ttHasAmt = Boolean(ttAmtRaw?.trim()) && !/^0[\s(%]|^0$/.test(ttAmtRaw.trim());
 const fuelCell = [dtAmt, ttHasAmt ? ttAmtRaw : ""].filter(Boolean).join("\n") || "";
 
 // Расход: ДТ и ТТ в одной ячейке двумя строками
