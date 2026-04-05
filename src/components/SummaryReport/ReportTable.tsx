@@ -9,7 +9,7 @@ import {
   getPower,
 } from "./types";
 import { formatVesselName, formatVesselType } from "../../lib/utils";
-import { extractLocation } from "../../lib/locationNormalizer";
+import { extractLocation } from "../../lib/locationNormalizer";ф
 
 interface Props {
   vessels: DprRow[];
