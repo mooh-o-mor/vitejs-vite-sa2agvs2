@@ -136,13 +136,13 @@ const loadData = useCallback(async () => {
       contract_number:contractForm.contractNumber||null,  // ← добавить
       contract_date: contractForm.contractDate || null as any,
     };
-    if (editContractId) {
-      const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
-      if (error) alert("Ошибка: " + error.message);
-    } else {
-      const { error } = await supabase.from("contracts").insert(data);
-      if (error) alert("Ошибка: " + error.message);
-    }
+   if (editContractId) {
+  const { error } = await supabase.from("contracts").update(data as any).eq("id", editContractId);
+  if (error) alert("Ошибка: " + error.message);
+} else {
+  const { error } = await supabase.from("contracts").insert(data as any);
+  if (error) alert("Ошибка: " + error.message);
+}
     setSyncing(false); setShowContractForm(false); await loadData();
   }, [contractForm, activeVesselId, editContractId, loadData]);
 
