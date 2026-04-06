@@ -62,7 +62,7 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
             const formattedName = formatVesselName(nameWithoutPrefix);
             const formattedType = formatVesselType(vesselType);
 
-            const ec = contracts.filter(c => c.vesselId === v.id).map(c => {
+            const ec = contracts.filter(c => c.vesselId === v.id && cpShortKey(c.counterparty) !== "Ремонт").map(c => {
               const days = contractDays(c.start, c.end);
               return { ...c, days, revenue: days * c.rate + c.mob + c.demob };
             });
