@@ -54,7 +54,7 @@ function splitVesselName(full: string): { type: string; name: string } {
 
 interface Props {
   form: FormState;
-  editId: string | null;
+  editId: number | null;
   vesselName: string;
   readOnly: boolean;
   onChange: (f: FormState) => void;
