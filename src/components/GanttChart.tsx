@@ -83,7 +83,7 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
       {vessels.map((v, idx) => {
        const vc = visibleContracts.filter(c => c.vesselId === v.id);
 
-        // altGroup: показываем лучший из группы в основном наборе
+      {/*  // altGroup: показываем лучший из группы в основном наборе
         const altGroups = new Set(vc.filter(c => c.altGroup).map(c => c.altGroup!));
         const allMain: Contract[] = [];
         vc.filter(c => !c.altGroup).forEach(c => allMain.push(c));
@@ -92,7 +92,7 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
             .filter(c => c.altGroup === g)
             .sort((a, b) => priorityIdx(a.priority) - priorityIdx(b.priority));
           if (group.length > 0) allMain.push(group[0]);
-        });
+        });*/}
 
         // Раскладываем по дорожкам
         const lanes = assignLanes(allMain);
