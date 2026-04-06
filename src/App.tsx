@@ -421,7 +421,7 @@ const filtered = useMemo(() => {
         <ContractForm
           form={contractForm}
           editId={editContractId}
-          vesselName={vessels.find(v => v.id === activeVesselId)?.name || ""}
+          vesselName={vessels.find(v => v.id === activeVesselId!)?.name || ""}
           readOnly={!isAdmin}
           onChange={setContractForm}
           onSave={saveContract}
