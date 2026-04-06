@@ -51,8 +51,8 @@ function splitVesselName(full: string): { type: string; name: string } {
   for (const t of VESSEL_TYPES) {
     if (lower === t || lower.startsWith(t + " ")) {
       return {
-        type: toTitleCase(t),
-        name: toTitleCase(full.slice(t.length).trim()),
+  type: t.toUpperCase(),
+  name: toTitleCase(full.slice(t.length).trim()),
       };
     }
   }
