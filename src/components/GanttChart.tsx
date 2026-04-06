@@ -40,11 +40,6 @@ function rowHeight(laneCount: number): number {
   return laneCount * LANE_H + (laneCount - 1) * LANE_GAP + LANE_PAD * 2;
 }
 
-function priorityIdx(p: string): number {
-  const i = PRIORITY_ORDER.indexOf(p);
-  return i >= 0 ? i : 99;
-}
-
 export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract, onEditContract }: Props) {
   const vesselIds = new Set(vessels.map(v => v.id));
   const visibleContracts = contracts.filter(c => 
@@ -95,7 +90,7 @@ export function GanttChart({ vessels, contracts, isAdmin, canView, onAddContract
         });*/}
 
         // Раскладываем по дорожкам
-        const lanes = assignLanes(allMain);
+       const lanes = assignLanes(vc);
         const nLanes = Math.max(1, lanes.length);
         const rh = rowHeight(nLanes);
 
