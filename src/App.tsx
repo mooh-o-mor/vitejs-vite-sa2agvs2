@@ -134,13 +134,13 @@ const loadData = useCallback(async () => {
       firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
       priority:contractForm.priority||"contract",
       contract_number:contractForm.contractNumber||null,  // ← добавить
-      contract_date: contractForm.contractDate || null as any,
+      contract_date: contractForm.contractDate || null,
     };
    if (editContractId) {
-  const { error } = await supabase.from("contracts").update(data as any).eq("id", editContractId);
+  const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
   if (error) alert("Ошибка: " + error.message);
 } else {
-  const { error } = await supabase.from("contracts").insert(data as any);
+  const { error } = await supabase.from("contracts").insert(data);
   if (error) alert("Ошибка: " + error.message);
 }
     setSyncing(false); setShowContractForm(false); await loadData();
@@ -421,7 +421,7 @@ const filtered = useMemo(() => {
         <ContractForm
           form={contractForm}
           editId={editContractId}
-          vesselName={vessels.find(v => v.id === activeVesselId!)?.name || ""}
+          vesselName={vessels.find(v => v.id === activeVesselId)?.name || ""}
           readOnly={!isAdmin}
           onChange={setContractForm}
           onSave={saveContract}
