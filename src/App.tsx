@@ -134,7 +134,7 @@ const loadData = useCallback(async () => {
       firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
       priority:contractForm.priority||"contract",
       contract_number:contractForm.contractNumber||null,  // ← добавить
-      contract_date:contractForm.contractDate||null,       // ← добавить
+      contract_date: contractForm.contractDate || null as any,
     };
     if (editContractId) {
       const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
