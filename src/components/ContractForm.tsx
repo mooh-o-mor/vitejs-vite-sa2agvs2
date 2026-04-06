@@ -1,30 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ContractForm.tsx  —  Флот МСС  (morspas.vercel.app)
-//
-// ⚠️  ПЕРЕД ИСПОЛЬЗОВАНИЕМ:
-//
-//  1. Добавить в src/lib/types.ts → FormState:
-//       contractNumber: string;
-//       contractDate:   string;
-//
-//  2. В Supabase (SQL Editor):
-//       ALTER TABLE contracts
-//         ADD COLUMN IF NOT EXISTS contract_number text,
-//         ADD COLUMN IF NOT EXISTS contract_date   date;
-//
-//  3. В App.tsx при чтении строки из БД добавить:
-//       contractNumber: row.contract_number ?? "",
-//       contractDate:   row.contract_date   ?? "",
-//     При сохранении (INSERT / UPDATE):
-//       contract_number: form.contractNumber || null,
-//       contract_date:   form.contractDate   || null,
-//
-//  4. Начальное значение формы (resetForm / initialForm):
-//       contractNumber: "",
-//       contractDate:   "",
-//
-// ─────────────────────────────────────────────────────────────────────────────
-
 import React, { useEffect, useRef } from "react";
 import { FormState } from "../lib/types";
 
@@ -116,7 +89,7 @@ const SUMMARY_BORDER: Record<string, string> = {
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-export default function ContractForm({
+export function ContractForm({
   form,
   editId,
   vesselName,
