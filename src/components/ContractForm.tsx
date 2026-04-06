@@ -2,7 +2,17 @@ import React, { useEffect, useRef } from "react";
 import type { FormState } from "../lib/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+// Форматировать число с пробелами: 1880000 → "1 880 000"
+function formatThousands(v: string): string {
+  const digits = v.replace(/\D/g, "");
+  if (!digits) return "";
+  return parseInt(digits).toLocaleString("ru-RU");
+}
 
+// Убрать форматирование → чистые цифры для хранения в state
+function unformatThousands(v: string): string {
+  return v.replace(/\s/g, "").replace(/\D/g, "");
+}
 function toTitleCase(str: string): string {
   return str
     .toLowerCase()
@@ -41,7 +51,7 @@ function splitVesselName(full: string): { type: string; name: string } {
   for (const t of VESSEL_TYPES) {
     if (lower === t || lower.startsWith(t + " ")) {
       return {
-        type: t.toUpperCase(),
+        type: toTitleCase(t),
         name: toTitleCase(full.slice(t.length).trim()),
       };
     }
@@ -334,44 +344,49 @@ export function ContractForm({
           </div>
 
           {/* Ставка */}
-          <div>
-            <Label>Суточная ставка (₽)</Label>
-            <input
-              {...inp("rate")}
-              type="number"
-              value={form.rate}
-              onChange={e => set({ rate: e.target.value })}
-              placeholder="0"
-              min="0"
-            />
-          </div>
+<div>
+  <Label>Суточная ставка (₽)</Label>
+  <input
+    {...inp("rate")}
+    type="text"
+    inputMode="numeric"
+    value={formatThousands(form.rate)}
+    placeholder="0"
+    onFocus={() => setFocused("rate")}
+    onBlur={() => setFocused(null)}
+    onChange={e => set({ rate: unformatThousands(e.target.value) })}
+  />
+</div>
 
-          {/* Моб / Демоб */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <Label>Мобилизация (₽)</Label>
-              <input
-                {...inp("mob")}
-                type="number"
-                value={form.mob}
-                onChange={e => set({ mob: e.target.value })}
-                placeholder="0"
-                min="0"
-              />
-            </div>
-            <div>
-              <Label>Демобилизация (₽)</Label>
-              <input
-                {...inp("demob")}
-                type="number"
-                value={form.demob}
-                onChange={e => set({ demob: e.target.value })}
-                placeholder="0"
-                min="0"
-              />
-            </div>
-          </div>
-
+         {/* Моб / Демоб */}
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+  <div>
+    <Label>Мобилизация (₽)</Label>
+    <input
+      {...inp("mob")}
+      type="text"
+      inputMode="numeric"
+      value={formatThousands(form.mob)}
+      placeholder="0"
+      onFocus={() => setFocused("mob")}
+      onBlur={() => setFocused(null)}
+      onChange={e => set({ mob: unformatThousands(e.target.value) })}
+    />
+  </div>
+  <div>
+    <Label>Демобилизация (₽)</Label>
+    <input
+      {...inp("demob")}
+      type="text"
+      inputMode="numeric"
+      value={formatThousands(form.demob)}
+      placeholder="0"
+      onFocus={() => setFocused("demob")}
+      onBlur={() => setFocused(null)}
+      onChange={e => set({ demob: unformatThousands(e.target.value) })}
+    />
+  </div>
+</div>
           {/* Твёрдый / Опционы */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
