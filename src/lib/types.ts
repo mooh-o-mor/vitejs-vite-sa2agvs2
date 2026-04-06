@@ -33,6 +33,8 @@ export interface FormState {
   optionDays: string;
   priority: "contract" | "kp" | "plan";
   altGroup: string;
+  contractNumber: string;
+  contractDate: string
 }
 
 export interface DprSupply {
