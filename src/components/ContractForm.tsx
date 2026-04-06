@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { FormState } from "../lib/types";
+import type { FormState } from "../lib/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -51,18 +51,13 @@ function splitVesselName(full: string): { type: string; name: string } {
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
-// Расширяем FormState локально до добавления полей в types.ts
-interface ExtFormState extends FormState {
-  contractNumber?: string;
-  contractDate?: string;
-}
 
 interface Props {
-  form: ExtFormState;
+  form: FormState;
   editId: string | null;
   vesselName: string;
   readOnly: boolean;
-  onChange: (f: ExtFormState) => void;
+  onChange: (f: FormState) => void;
   onSave: () => void;
   onDelete: () => void;
   onClose: () => void;
@@ -109,7 +104,7 @@ export function ContractForm({
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
 
-  const set = (patch: Partial<ExtFormState>) => onChange({ ...form, ...patch });
+  const set = (patch: Partial<FormState>) => onChange({ ...form, ...patch });
 
   const inp = (id: string) => ({
     onFocus: () => setFocused(id),
