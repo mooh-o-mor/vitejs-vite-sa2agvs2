@@ -18,7 +18,8 @@ import { SummaryReport } from "./components/SummaryReport";
 const EMPTY_FORM: FormState = {
   counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`,
   rate:"", mob:"", demob:"", firmDays:"", optionDays:"",
-  priority:"contract", altGroup:""
+  priority:"contract", altGroup:"",
+  contractNumber:"", contractDate:""
 };
 
 export default function App() {
@@ -70,7 +71,10 @@ const loadData = useCallback(async () => {
     rate:c.rate, mob:c.mob, demob:c.demob,
     firmDays:c.firm_days||0, optionDays:c.option_days||0,
     priority:c.priority||"contract", altGroup:c.alt_group||null,
+    contractNumber:c.contract_number||"",  // ← добавить
+  contractDate:c.contract_date||""        // ← добавить
   })));
+  
   setLoading(false);
 }, []);
 
@@ -113,7 +117,9 @@ const loadData = useCallback(async () => {
       counterparty:contract.counterparty, start:contract.start, end:contract.end,
       rate:String(contract.rate), mob:String(contract.mob), demob:String(contract.demob),
       firmDays:String(contract.firmDays||""), optionDays:String(contract.optionDays||""),
-      priority:contract.priority||"contract", altGroup:String(contract.altGroup||"")
+      priority:contract.priority||"contract", altGroup:String(contract.altGroup||""),
+      contractNumber:contract.contractNumber||"",
+      contractDate:contract.contractDate||""
     });
     setActiveVesselId(contract.vesselId);
     setShowContractForm(true);
@@ -129,6 +135,8 @@ const loadData = useCallback(async () => {
       firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
       priority:contractForm.priority||"contract",
       alt_group:contractForm.altGroup?+contractForm.altGroup:null,
+      contract_number:contractForm.contractNumber||null,  // ← добавить
+      contract_date:contractForm.contractDate||null,       // ← добавить
     };
     if (editContractId) {
       const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
