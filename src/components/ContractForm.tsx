@@ -1,171 +1,577 @@
-import type { FormState } from "../lib/types";
-import { T, PRIORITY_LABELS } from "../lib/types";
-import { fmoney, fdate, formatInput, unformat, contractDays, addDays } from "../lib/utils";
+// ─────────────────────────────────────────────────────────────────────────────
+// ContractForm.tsx  —  Флот МСС  (morspas.vercel.app)
+//
+// ⚠️  ПЕРЕД ИСПОЛЬЗОВАНИЕМ:
+//
+//  1. Добавить в src/lib/types.ts → FormState:
+//       contractNumber: string;
+//       contractDate:   string;
+//
+//  2. В Supabase (SQL Editor):
+//       ALTER TABLE contracts
+//         ADD COLUMN IF NOT EXISTS contract_number text,
+//         ADD COLUMN IF NOT EXISTS contract_date   date;
+//
+//  3. В App.tsx при чтении строки из БД добавить:
+//       contractNumber: row.contract_number ?? "",
+//       contractDate:   row.contract_date   ?? "",
+//     При сохранении (INSERT / UPDATE):
+//       contract_number: form.contractNumber || null,
+//       contract_date:   form.contractDate   || null,
+//
+//  4. Начальное значение формы (resetForm / initialForm):
+//       contractNumber: "",
+//       contractDate:   "",
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+import React, { useEffect, useRef } from "react";
+import { FormState } from "../lib/types";
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+function parseNum(v: string | number): number {
+  const n = parseFloat(String(v).replace(/\s/g, "").replace(",", "."));
+  return isNaN(n) ? 0 : n;
+}
+
+function formatMoney(v: number): string {
+  if (v === 0) return "0 ₽";
+  return (
+    new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(v) + " ₽"
+  );
+}
+
+function daysBetween(start: string, end: string): number {
+  if (!start || !end) return 0;
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  return ms < 0 ? 0 : Math.round(ms / 86_400_000) + 1;
+}
+
+// Пытаемся выделить тип судна из полного имени
+// ("мфасс спасатель заборщиков" → type:"МФАСС", name:"Спасатель Заборщиков")
+const VESSEL_TYPES = [
+  "мфасс", "мспс", "мпасс", "исп", "спкр", "рб", "б/с", "бс",
+];
+
+function splitVesselName(full: string): { type: string; name: string } {
+  if (!full) return { type: "", name: "" };
+  const lower = full.toLowerCase().trim();
+  for (const t of VESSEL_TYPES) {
+    if (lower === t || lower.startsWith(t + " ")) {
+      return {
+        type: t.toUpperCase(),
+        name: toTitleCase(full.slice(t.length).trim()),
+      };
+    }
+  }
+  return { type: "", name: toTitleCase(full) };
+}
+
+// ── types ─────────────────────────────────────────────────────────────────────
+
+// Расширяем FormState локально до добавления полей в types.ts
+interface ExtFormState extends FormState {
+  contractNumber?: string;
+  contractDate?: string;
+}
 
 interface Props {
-  form: FormState;
-  editId: number | null;
+  form: ExtFormState;
+  editId: string | null;
   vesselName: string;
-  readOnly?: boolean;
-  onChange: (form: FormState) => void;
+  readOnly: boolean;
+  onChange: (f: ExtFormState) => void;
   onSave: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
-function Field({ label, value, type, placeholder, half, readOnly, onChange }: {
-  label: string; value: string; type: string;
-  placeholder?: string; half?: boolean; readOnly?: boolean; onChange: (v: string) => void;
-}) {
-  const isNumeric = type === "number";
+// ── style tokens ──────────────────────────────────────────────────────────────
+
+const COLOR = {
+  contract: "#2563eb",
+  kp:       "#7c3aed",
+  plan:     "#d97706",
+};
+
+const SUMMARY_BG: Record<string, string> = {
+  contract: "#f0fdf4",
+  kp:       "#f5f3ff",
+  plan:     "#fefce8",
+};
+const SUMMARY_BORDER: Record<string, string> = {
+  contract: "#86efac",
+  kp:       "#c4b5fd",
+  plan:     "#fde047",
+};
+
+// ── component ─────────────────────────────────────────────────────────────────
+
+export default function ContractForm({
+  form,
+  editId,
+  vesselName,
+  readOnly,
+  onChange,
+  onSave,
+  onDelete,
+  onClose,
+}: Props) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = React.useState<string | null>(null);
+
+  // Close on Escape
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  const set = (patch: Partial<ExtFormState>) => onChange({ ...form, ...patch });
+
+  const inp = (id: string) => ({
+    onFocus: () => setFocused(id),
+    onBlur:  () => setFocused(null),
+    style: {
+      width: "100%",
+      padding: "9px 12px",
+      border: `1.5px solid ${focused === id ? "#2563eb" : "#e2e8f0"}`,
+      borderRadius: "8px",
+      fontSize: "14px",
+      color: "#0f172a",
+      background: readOnly ? "#f8fafc" : "#fff",
+      outline: "none",
+      boxSizing: "border-box" as const,
+      transition: "border-color 0.15s",
+    } as React.CSSProperties,
+    disabled: readOnly,
+  });
+
+  // Calculations
+  const days    = daysBetween(form.start, form.end);
+  const firmN   = parseNum(form.firmDays);
+  const rateN   = parseNum(form.rate);
+  const mobN    = parseNum(form.mob);
+  const demobN  = parseNum(form.demob);
+  const revenue = firmN * rateN + mobN + demobN;
+
+  const { type: vType, name: vName } = splitVesselName(vesselName);
+  const showDocRow = form.priority === "contract" || form.priority === "kp";
+  const docLabel   = form.priority === "contract" ? "контракта" : "КП";
+
   return (
-    <div style={{ marginBottom:12, flex: half ? 1 : "unset" as any }}>
-      <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>{label}</div>
-      <input
-        type={isNumeric ? "text" : type}
-        value={isNumeric ? formatInput(value) : value}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        onChange={e => !readOnly && onChange(isNumeric ? unformat(e.target.value) : e.target.value)}
-        style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background: readOnly ? T.bg3 : T.bg2, color:T.text, fontSize:13, boxSizing:"border-box", cursor: readOnly ? "default" : "text" }}
-      />
+    <div
+      ref={overlayRef}
+      onClick={(e) => e.target === overlayRef.current && onClose()}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.55)",
+        backdropFilter: "blur(3px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: "16px",
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "16px",
+          width: "100%",
+          maxWidth: "480px",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "calc(100dvh - 32px)",
+          overflow: "hidden",
+        }}
+      >
+        {/* ── HEADER ── */}
+        <div
+          style={{
+            padding: "20px 24px 16px",
+            borderBottom: "1px solid #f1f5f9",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "12px",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            {vType && (
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  color: "#94a3b8",
+                }}
+              >
+                {vType}
+              </span>
+            )}
+            <span
+              style={{ fontSize: "17px", fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}
+            >
+              {vName || toTitleCase(vesselName)}
+            </span>
+            <span style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
+              {editId ? `Редактирование · #${editId}` : "Новый контракт"}
+            </span>
+          </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              flexShrink: 0,
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "none",
+              background: "#f1f5f9",
+              color: "#64748b",
+              cursor: "pointer",
+              fontSize: 18,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              lineHeight: 1,
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#e2e8f0")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#f1f5f9")}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* ── BODY ── */}
+        <div
+          style={{
+            padding: "20px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+            overflowY: "auto",
+          }}
+        >
+          {/* Контрагент */}
+          <div>
+            <Label>Контрагент</Label>
+            <input
+              {...inp("cpty")}
+              value={form.counterparty}
+              onChange={e => set({ counterparty: e.target.value })}
+              placeholder="Название организации"
+            />
+          </div>
+
+          {/* Тип / приоритет */}
+          <div>
+            <Label>Тип</Label>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: "5px",
+                background: "#f8fafc",
+                borderRadius: "10px",
+                padding: "4px",
+              }}
+            >
+              {(["contract", "kp", "plan"] as const).map((p) => {
+                const labels = { contract: "Контракт", kp: "КП", plan: "План" };
+                const active = form.priority === p;
+                return (
+                  <button
+                    key={p}
+                    disabled={readOnly}
+                    onClick={() => set({ priority: p })}
+                    style={{
+                      padding: "8px 0",
+                      border: "none",
+                      borderRadius: "7px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor: readOnly ? "default" : "pointer",
+                      background: active ? COLOR[p] : "transparent",
+                      color: active ? "#fff" : "#64748b",
+                      boxShadow: active ? "0 2px 8px rgba(0,0,0,0.13)" : "none",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {labels[p]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Номер и дата документа */}
+          {showDocRow && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <Label>Номер {docLabel}</Label>
+                <input
+                  {...inp("num")}
+                  value={form.contractNumber ?? ""}
+                  onChange={e => set({ contractNumber: e.target.value })}
+                  placeholder="МСС-000/2026"
+                />
+              </div>
+              <div>
+                <Label>Дата {docLabel}</Label>
+                <input
+                  {...inp("cdate")}
+                  type="date"
+                  value={form.contractDate ?? ""}
+                  onChange={e => set({ contractDate: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          <Divider />
+
+          {/* Период */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <Label>Начало</Label>
+              <input
+                {...inp("start")}
+                type="date"
+                value={form.start}
+                onChange={e => set({ start: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Конец</Label>
+              <input
+                {...inp("end")}
+                type="date"
+                value={form.end}
+                onChange={e => set({ end: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {/* Ставка */}
+          <div>
+            <Label>Суточная ставка (₽)</Label>
+            <input
+              {...inp("rate")}
+              type="number"
+              value={form.rate}
+              onChange={e => set({ rate: e.target.value })}
+              placeholder="0"
+              min="0"
+            />
+          </div>
+
+          {/* Моб / Демоб */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <Label>Мобилизация (₽)</Label>
+              <input
+                {...inp("mob")}
+                type="number"
+                value={form.mob}
+                onChange={e => set({ mob: e.target.value })}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+            <div>
+              <Label>Демобилизация (₽)</Label>
+              <input
+                {...inp("demob")}
+                type="number"
+                value={form.demob}
+                onChange={e => set({ demob: e.target.value })}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+          </div>
+
+          {/* Твёрдый / Опционы */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <Label>Твёрдый период (дн.)</Label>
+              <input
+                {...inp("firm")}
+                type="number"
+                value={form.firmDays}
+                onChange={e => set({ firmDays: e.target.value })}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+            <div>
+              <Label>Опционы (дн.)</Label>
+              <input
+                {...inp("opt")}
+                type="number"
+                value={form.optionDays}
+                onChange={e => set({ optionDays: e.target.value })}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+          </div>
+
+          {/* ── Итог ── */}
+          <div
+            style={{
+              background: SUMMARY_BG[form.priority],
+              border: `1.5px solid ${SUMMARY_BORDER[form.priority]}`,
+              borderRadius: "10px",
+              padding: "12px 16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            {/* Левая часть — дни */}
+            <div style={{ fontSize: "13px", color: "#475569" }}>
+              {days > 0 ? (
+                <>
+                  <span style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                    {days}
+                  </span>
+                  {" "}дн.
+                  {firmN > 0 && (
+                    <span style={{ color: "#94a3b8", marginLeft: 6 }}>
+                      твёрд. {firmN}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span style={{ color: "#94a3b8" }}>Период не задан</span>
+              )}
+            </div>
+
+            {/* Правая часть — выручка */}
+            <div style={{ textAlign: "right" }}>
+              {form.priority === "plan" ? (
+                <>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#92400e" }}>
+                    —
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#b45309", marginTop: 1 }}>
+                    выручка не учитывается
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                    {formatMoney(revenue)}
+                  </div>
+                  {form.priority === "kp" && (
+                    <div style={{ fontSize: "11px", color: "#7c3aed", marginTop: 1 }}>
+                      ~ ориентировочно
+                    </div>
+                  )}
+                  {form.priority === "contract" && revenue > 0 && rateN > 0 && (
+                    <div style={{ fontSize: "11px", color: "#64748b", marginTop: 1 }}>
+                      {firmN} дн. × {formatMoney(rateN)}
+                      {(mobN > 0 || demobN > 0) && " + моб/демоб"}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── FOOTER ── */}
+        {!readOnly && (
+          <div
+            style={{
+              padding: "14px 24px",
+              borderTop: "1px solid #f1f5f9",
+              display: "flex",
+              gap: "8px",
+            }}
+          >
+            {editId && (
+              <button
+                onClick={onDelete}
+                style={{
+                  padding: "10px 16px",
+                  background: "transparent",
+                  color: "#ef4444",
+                  border: "1.5px solid #fca5a5",
+                  borderRadius: "10px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#fef2f2")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              >
+                Удалить
+              </button>
+            )}
+            <button
+              onClick={onSave}
+              style={{
+                flex: 1,
+                padding: "10px 0",
+                background: "#2563eb",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#1d4ed8")}
+              onMouseLeave={e => (e.currentTarget.style.background = "#2563eb")}
+            >
+              {editId ? "Сохранить изменения" : "Добавить контракт"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-const PRIORITY_COLORS: Record<string, string> = {
-  contract: "#059669",
-  kp: "#d97706",
-  plan: "#6b7280",
-};
+// ── micro-components ──────────────────────────────────────────────────────────
 
-export function ContractForm({ form, editId, vesselName, readOnly, onChange, onSave, onDelete, onClose }: Props) {
-  const modal = { position:"fixed" as const, inset:0, background:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 };
-  const modalBox = { background:T.bg2, borderRadius:10, padding:22, border:`1px solid ${T.border}`, boxShadow:"0 8px 40px rgba(0,0,0,0.15)" };
-
-  const firmN = parseInt(form.firmDays)||0;
-  const optN = parseInt(form.optionDays)||0;
-  const days_ = form.start && form.end ? contractDays(form.start, form.end) : 0;
-  const preview = days_*(+form.rate||0)+(+form.mob||0)+(+form.demob||0);
-
-  function recalcEnd(start: string, firmDays: string, optionDays: string): string {
-    const firm = parseInt(firmDays)||0;
-    const option = parseInt(optionDays)||0;
-    const total = firm + option;
-    if (!start || total === 0) return form.end;
-    return addDays(start, total);
-  }
-
+function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div style={modal}>
-      <div style={{ ...modalBox, width:460 }}>
-        <div style={{ fontSize:15, fontWeight:700, color:T.accent, marginBottom:4 }}>
-          {readOnly ? "📋 Контракт" : editId ? "✏️ Редактировать контракт" : "➕ Новый контракт"}
-        </div>
-        {readOnly && (
-          <div style={{ fontSize:11, color:T.amber, marginBottom:8 }}>👁 Режим просмотра — редактирование недоступно</div>
-        )}
-        <div style={{ fontSize:11, color:T.text2, marginBottom:14 }}>{vesselName}</div>
-
-        <Field label="Контрагент" value={form.counterparty} type="text" readOnly={readOnly}
-          onChange={v => onChange({...form, counterparty:v})} />
-
-        {/* Priority + Alt Group */}
-        <div style={{ display:"flex", gap:10, marginBottom:12 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Тип</div>
-            <div style={{ display:"flex", gap:4 }}>
-              {(["contract", "kp", "plan"] as const).map(p => (
-                <button
-                  key={p}
-                  onClick={() => !readOnly && onChange({...form, priority:p})}
-                  style={{
-                    flex:1, padding:"6px 4px", borderRadius:6, fontSize:11, fontWeight:600, cursor: readOnly ? "default" : "pointer",
-                    border: `2px solid ${form.priority===p ? PRIORITY_COLORS[p] : T.border}`,
-                    background: form.priority===p ? PRIORITY_COLORS[p] + "18" : T.bg2,
-                    color: form.priority===p ? PRIORITY_COLORS[p] : T.text2,
-                  }}
-                >
-                  {PRIORITY_LABELS[p]}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ width:100 }}>
-            <div style={{ fontSize:11, color:T.text2, marginBottom:3 }}>Группа альт.</div>
-            <input
-              type="text"
-              value={form.altGroup}
-              placeholder="—"
-              readOnly={readOnly}
-              onChange={e => !readOnly && onChange({...form, altGroup:e.target.value.replace(/\D/g,"")})}
-              style={{ width:"100%", padding:"8px 10px", borderRadius:6, border:`1px solid ${T.border}`, background: readOnly ? T.bg3 : T.bg2, color:T.text, fontSize:13, boxSizing:"border-box", textAlign:"center", cursor: readOnly ? "default" : "text" }}
-            />
-          </div>
-        </div>
-
-        {form.altGroup && (
-          <div style={{ background:"#fef3c7", borderRadius:6, padding:"5px 10px", marginBottom:12, fontSize:11, color:"#92400e", border:"1px solid #fde68a" }}>
-            ⚡ Группа альтернатив #{form.altGroup} — контракты с одинаковым номером группы на одном судне считаются взаимоисключающими
-          </div>
-        )}
-
-        <div style={{ display:"flex", gap:10 }}>
-          <Field label="Начало" value={form.start} type="date" half readOnly={readOnly} onChange={v => {
-            const newEnd = recalcEnd(v, form.firmDays, form.optionDays);
-            onChange({...form, start:v, end:newEnd});
-          }} />
-          <Field label="Конец" value={form.end} type="date" half readOnly={readOnly} onChange={v => onChange({...form, end:v})} />
-        </div>
-
-        <div style={{ display:"flex", gap:10 }}>
-          <Field label="Твёрдый период (дней)" value={form.firmDays} type="number" placeholder="0" half readOnly={readOnly} onChange={v => {
-            const newEnd = recalcEnd(form.start, v, form.optionDays);
-            onChange({...form, firmDays:v, end:newEnd});
-          }} />
-          <Field label="Опционы (дней)" value={form.optionDays} type="number" placeholder="0" half readOnly={readOnly} onChange={v => {
-            const newEnd = recalcEnd(form.start, form.firmDays, v);
-            onChange({...form, optionDays:v, end:newEnd});
-          }} />
-        </div>
-
-        {(firmN>0 || optN>0) && (
-          <div style={{ background:T.bg3, borderRadius:6, padding:"6px 10px", marginBottom:12, fontSize:11, color:T.text2, border:`1px solid ${T.border2}` }}>
-            Твёрдый: <b>{firmN} дн.</b> · Опцион: <b>{optN} дн.</b> · Итого: <b>{firmN+optN} дн.</b> до <b>{fdate(form.end)}</b>
-          </div>
-        )}
-
-        <Field label="Суточная ставка (₽)" value={form.rate} type="number" placeholder="0" readOnly={readOnly}
-          onChange={v => onChange({...form, rate:v})} />
-
-        <div style={{ display:"flex", gap:10 }}>
-          <Field label="Мобилизация (₽)" value={form.mob} type="number" placeholder="0" half readOnly={readOnly} onChange={v => onChange({...form, mob:v})} />
-          <Field label="Демобилизация (₽)" value={form.demob} type="number" placeholder="0" half readOnly={readOnly} onChange={v => onChange({...form, demob:v})} />
-        </div>
-
-        {days_>0 && (
-          <div style={{ background:"#f0fdf4", borderRadius:6, padding:"7px 10px", marginBottom:12, fontSize:11, color:T.green, border:"1px solid #bbf7d0" }}>
-            {days_} дней · Выручка: <b>{fmoney(preview)}</b>
-            {form.priority !== "contract" && <span style={{ color:T.amber, marginLeft:8 }}>(не учитывается в итого — тип: {PRIORITY_LABELS[form.priority]})</span>}
-          </div>
-        )}
-
-        <div style={{ display:"flex", gap:8 }}>
-          {!readOnly && (
-            <>
-              <button onClick={onSave} style={{ flex:1, padding:9, borderRadius:6, border:"none", background:T.accent, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>
-                {editId ? "Сохранить" : "Добавить"}
-              </button>
-              {editId && (
-                <button onClick={onDelete} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.red}`, background:"transparent", color:T.red, cursor:"pointer" }}>Удалить</button>
-              )}
-            </>
-          )}
-          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text2, cursor:"pointer" }}>
-            {readOnly ? "Закрыть" : "✕"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <label
+      style={{
+        display: "block",
+        fontSize: "11px",
+        fontWeight: 600,
+        color: "#94a3b8",
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        marginBottom: "6px",
+      }}
+    >
+      {children}
+    </label>
   );
+}
+
+function Divider() {
+  return <div style={{ height: 1, background: "#f1f5f9", margin: "2px 0" }} />;
 }
