@@ -20,6 +20,8 @@ export interface Contract {
   optionDays: number;
   priority: "contract" | "kp" | "plan";
   altGroup: number | null;
+  contractNumber: string;   // ← добавить
+  contractDate: string;     // ← добавить
 }
 
 export interface FormState {
@@ -34,8 +36,8 @@ export interface FormState {
   priority: "contract" | "kp" | "plan";
   altGroup: string;
   contractNumber: string;
-  contractDate: string
-}
+  contractDate: string;
+  }
 
 export interface DprSupply {
   type: string;
