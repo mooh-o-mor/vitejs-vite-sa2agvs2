@@ -18,8 +18,7 @@ import { SummaryReport } from "./components/SummaryReport";
 const EMPTY_FORM: FormState = {
   counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`,
   rate:"", mob:"", demob:"", firmDays:"", optionDays:"",
-  priority:"contract", altGroup:"",
-  contractNumber:"", contractDate:""
+  priority:"contract", contractNumber:"", contractDate:""
 };
 
 export default function App() {
@@ -70,7 +69,7 @@ const loadData = useCallback(async () => {
     start:c.start_date, end:c.end_date,
     rate:c.rate, mob:c.mob, demob:c.demob,
     firmDays:c.firm_days||0, optionDays:c.option_days||0,
-    priority:c.priority||"contract", altGroup:c.alt_group||null,
+    priority:c.priority||"contract", 
     contractNumber:c.contract_number||"",  // ← добавить
   contractDate:c.contract_date||""        // ← добавить
   })));
@@ -117,7 +116,7 @@ const loadData = useCallback(async () => {
       counterparty:contract.counterparty, start:contract.start, end:contract.end,
       rate:String(contract.rate), mob:String(contract.mob), demob:String(contract.demob),
       firmDays:String(contract.firmDays||""), optionDays:String(contract.optionDays||""),
-      priority:contract.priority||"contract", altGroup:String(contract.altGroup||""),
+      priority:contract.priority||"contract", 
       contractNumber:contract.contractNumber||"",
       contractDate:contract.contractDate||""
     });
@@ -134,7 +133,6 @@ const loadData = useCallback(async () => {
       rate:+contractForm.rate||0, mob:+contractForm.mob||0, demob:+contractForm.demob||0,
       firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
       priority:contractForm.priority||"contract",
-     alt_group: (contractForm.altGroup || null) as any,
       contract_number:contractForm.contractNumber||null,  // ← добавить
       contract_date:contractForm.contractDate||null,       // ← добавить
     };
