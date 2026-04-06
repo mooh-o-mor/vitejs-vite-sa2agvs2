@@ -24,26 +24,27 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
     <div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
         <colgroup>
-         <col style={{ width: "22%" }} />
-<col style={{ width: "8%" }} />   {/* Номер */}
-<col style={{ width: "7%" }} />   {/* Дата */}
-<col style={{ width: "7%" }} />
-<col style={{ width: "7%" }} />
-<col style={{ width: "5%" }} />
-<col style={{ width: "6%" }} />
-<col style={{ width: "8%" }} />
-<col style={{ width: "8%" }} />
-<col style={{ width: "8%" }} />
-<col style={{ width: "8%" }} />
-<col style={{ width: "2%" }} />
+          <col style={{ width: "18%" }} /> {/* Контрагент */}
+          <col style={{ width: "9%" }} />  {/* № */}
+          <col style={{ width: "8%" }} />  {/* Дата */}
+          <col style={{ width: "7%" }} />  {/* Начало */}
+          <col style={{ width: "7%" }} />  {/* Конец */}
+          <col style={{ width: "6%" }} />  {/* Тв.дней */}
+          <col style={{ width: "6%" }} />  {/* Опц.дней */}
+          <col style={{ width: "5%" }} />  {/* Всего */}
+          <col style={{ width: "9%" }} />  {/* Ставка/сут */}
+          <col style={{ width: "9%" }} />  {/* Моб */}
+          <col style={{ width: "9%" }} />  {/* Демоб */}
+          <col style={{ width: "9%" }} />  {/* Выручка */}
+          <col style={{ width: "2%" }} />  {/* ✏️ */}
         </colgroup>
         <thead>
           <tr style={{ color: T.text2, borderBottom: `1px solid ${T.border}`, background: T.bg3, position: "sticky", top: 0, zIndex: 1 }}>
-            <th style={{ textAlign: "left", padding: "6px 6px" }}>Контрагент</th>
-<th style={{ textAlign: "left", padding: "6px 6px" }}>№</th>
-<th style={{ textAlign: "left", padding: "6px 6px" }}>Дата</th>
-<th style={{ textAlign: "left", padding: "6px 6px" }}>Начало</th>
-            <th style={{ textAlign: "left", padding: "6px 6px" }}>Конец</th>
+            <th style={{ textAlign: "left",  padding: "6px 6px" }}>Контрагент</th>
+            <th style={{ textAlign: "left",  padding: "6px 6px" }}>№</th>
+            <th style={{ textAlign: "left",  padding: "6px 6px" }}>Дата</th>
+            <th style={{ textAlign: "left",  padding: "6px 6px" }}>Начало</th>
+            <th style={{ textAlign: "left",  padding: "6px 6px" }}>Конец</th>
             <th style={{ textAlign: "right", padding: "6px 6px" }}>Тв.дней</th>
             <th style={{ textAlign: "right", padding: "6px 6px" }}>Опц.дней</th>
             <th style={{ textAlign: "right", padding: "6px 6px" }}>Всего</th>
@@ -72,9 +73,17 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
                 {/* Заголовок судна */}
                 <tr style={{ background: T.bg3, borderTop: `2px solid ${T.border}` }}>
                   <td colSpan={12} style={{ padding: "6px 8px", fontWeight: 700, fontSize: 12, color: T.accent }}>
-                    {vesselType && <span style={{ fontFamily: "monospace", fontWeight: 500, marginRight: 6 }}>{formattedType}</span>}
+                    {vesselType && (
+                      <span style={{ fontFamily: "monospace", fontWeight: 500, marginRight: 6 }}>
+                        {formattedType}
+                      </span>
+                    )}
                     {formattedName}
-                    {v.branch && <span style={{ color: T.amber, fontWeight: 400, fontSize: 11, marginLeft: 8 }}>{v.branch}</span>}
+                    {v.branch && (
+                      <span style={{ color: T.amber, fontWeight: 400, fontSize: 11, marginLeft: 8 }}>
+                        {v.branch}
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding: "6px 4px", textAlign: "right" }}>
                     <button
@@ -87,7 +96,7 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
 
                 {ec.length === 0 ? (
                   <tr>
-                    <td colSpan={11} style={{ padding: "4px 8px", color: T.text3, fontSize: 11 }}>Нет контрактов</td>
+                    <td colSpan={13} style={{ padding: "4px 8px", color: T.text3, fontSize: 11 }}>Нет контрактов</td>
                   </tr>
                 ) : (
                   <>
@@ -103,17 +112,12 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
                             <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: colorMap[shortKey] || "#888", marginRight: 4 }} />
                             {c.counterparty}
                           </td>
-                          <td style={{ padding: "4px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-  <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: colorMap[shortKey] || "#888", marginRight: 4 }} />
-  {c.counterparty}
-</td>
-<td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
-  {c.contractNumber || "—"}
-</td>
-<td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
-  {c.contractDate ? fdate(c.contractDate) : "—"}
-</td>
-<td style={{ padding: "4px 6px", color: T.text2 }}>{fdate(c.start)}</td>
+                          <td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
+                            {c.contractNumber || "—"}
+                          </td>
+                          <td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
+                            {c.contractDate ? fdate(c.contractDate) : "—"}
+                          </td>
                           <td style={{ padding: "4px 6px", color: T.text2 }}>{fdate(c.start)}</td>
                           <td style={{ padding: "4px 6px", color: T.text2 }}>{fdate(c.end)}</td>
                           <td style={{ padding: "4px 6px", textAlign: "right" }}>{c.firmDays || "—"}</td>
