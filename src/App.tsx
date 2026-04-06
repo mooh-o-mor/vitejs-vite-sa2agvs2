@@ -134,7 +134,7 @@ const loadData = useCallback(async () => {
       rate:+contractForm.rate||0, mob:+contractForm.mob||0, demob:+contractForm.demob||0,
       firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
       priority:contractForm.priority||"contract",
-     alt_group: contractForm.altGroup || null,
+     alt_group: (contractForm.altGroup || null) as any,
       contract_number:contractForm.contractNumber||null,  // ← добавить
       contract_date:contractForm.contractDate||null,       // ← добавить
     };
