@@ -62,11 +62,12 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
             const formattedName = formatVesselName(nameWithoutPrefix);
             const formattedType = formatVesselType(vesselType);
 
-            const ec = contracts.filter(c => c.vesselId === v.id && cpShortKey(c.counterparty) !== "Ремонт").map(c => {
+            const ec = contracts.filter(c => c.vesselId === v.id && cpShortKey(c.counterparty) !== "Ремонт" && cpShortKey(c.counterparty) !== "АСГ").map(c => {
               const days = contractDays(c.start, c.end);
               return { ...c, days, revenue: days * c.rate + c.mob + c.demob };
             });
             const tot = ec.reduce((s, c) => s + c.revenue, 0);
+if (ec.length === 0) return null;  // ← добавить
 
             return (
               <React.Fragment key={v.id}>
@@ -94,11 +95,7 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
                   </td>
                 </tr>
 
-                {ec.length === 0 ? (
-                  <tr>
-                    <td colSpan={13} style={{ padding: "4px 8px", color: T.text3, fontSize: 11 }}>Нет контрактов</td>
-                  </tr>
-                ) : (
+                {ec.length === 0 ? null : (
                   <>
                     {ec.map((c, i) => {
                       const shortKey = cpShortKey(c.counterparty);
