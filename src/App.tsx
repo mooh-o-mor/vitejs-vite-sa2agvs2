@@ -246,6 +246,7 @@ const filtered = useMemo(() => {
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
+  
 
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
