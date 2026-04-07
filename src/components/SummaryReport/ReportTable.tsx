@@ -29,10 +29,10 @@ const thStyle: React.CSSProperties = {
   borderBottom: "2px solid #90a4ae",
   borderRight: "1px solid #546E7A",
   whiteSpace: "nowrap",
-  position: "sticky",
-  top: 0,
-  background: "#37474F",
-  zIndex: 1,
+  //position: "sticky",
+  //top: 0,
+  //background: "#37474F",
+  //zIndex: 1,
 };
 
 const tdBase: React.CSSProperties = {
@@ -81,7 +81,7 @@ function ConsCell({ supplies }: { supplies: any[] }) {
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, specMap, onUpdateField }: Props) {
   return (
-    <div style={{ overflow: "auto", maxHeight: "calc(100vh - 280px)", border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
+ <div style={{ border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr>
