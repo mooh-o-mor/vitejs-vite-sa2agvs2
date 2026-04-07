@@ -16,12 +16,33 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
     cpKeys.map((cp, i) => [cp, SPECIAL_COLORS[cp] || COLORS[i % COLORS.length]])
   );
 
+  // Выручка только по заключённым контрактам, только за текущий год
+  const yr  = new Date().getFullYear();
+  const yrS = `${yr}-01-01`;
+  const yrE = `${yr}-12-31`;
+
   const totalRev = contracts
-    .filter(c => vessels.some(v => v.id === c.vesselId))
-    .reduce((s, c) => s + contractDays(c.start, c.end) * c.rate + c.mob + c.demob, 0);
+    .filter(c =>
+      vessels.some(v => v.id === c.vesselId) &&
+      c.priority === "contract" &&
+      cpShortKey(c.counterparty) !== "Ремонт" &&
+      cpShortKey(c.counterparty) !== "АСГ"
+    )
+    .reduce((s, c) => {
+      const cs = c.start < yrS ? yrS : c.start;
+      const ce = c.end   > yrE ? yrE : c.end;
+      return s + contractDays(cs, ce) * c.rate + c.mob + c.demob;
+    }, 0);
 
   return (
     <div>
+      {/* Итого вверху */}
+      {totalRev > 0 && (
+        <div style={{ background: T.accent, borderRadius: 8, padding: 12, textAlign: "center", fontSize: 16, fontWeight: 700, color: "#ffffff", marginBottom: 12 }}>
+          ИТОГО ПО ФЛОТУ: {fmoney(totalRev)}
+        </div>
+      )}
+
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
         <colgroup>
           <col style={{ width: "18%" }} /> {/* Контрагент */}
@@ -62,12 +83,25 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
             const formattedName = formatVesselName(nameWithoutPrefix);
             const formattedType = formatVesselType(vesselType);
 
-            const ec = contracts.filter(c => c.vesselId === v.id && cpShortKey(c.counterparty) !== "Ремонт" && cpShortKey(c.counterparty) !== "АСГ").map(c => {
-              const days = contractDays(c.start, c.end);
-              return { ...c, days, revenue: days * c.rate + c.mob + c.demob };
-            });
+            const ec = contracts
+              .filter(c =>
+                c.vesselId === v.id &&
+                cpShortKey(c.counterparty) !== "Ремонт" &&
+                cpShortKey(c.counterparty) !== "АСГ"
+              )
+              .map(c => {
+                const days = contractDays(c.start, c.end);
+                const isContract = c.priority === "contract";
+                const cs = c.start < yrS ? yrS : c.start;
+                const ce = c.end   > yrE ? yrE : c.end;
+                const billedDays = isContract ? contractDays(cs, ce) : 0;
+                const revenue = isContract ? billedDays * c.rate + c.mob + c.demob : 0;
+                return { ...c, days, revenue };
+              });
+
+            if (ec.length === 0) return null;
+
             const tot = ec.reduce((s, c) => s + c.revenue, 0);
-if (ec.length === 0) return null;  // ← добавить
 
             return (
               <React.Fragment key={v.id}>
@@ -95,57 +129,53 @@ if (ec.length === 0) return null;  // ← добавить
                   </td>
                 </tr>
 
-                {ec.length === 0 ? null : (
-                  <>
-                    {ec.map((c, i) => {
-                      const shortKey = cpShortKey(c.counterparty);
-                      return (
-                        <tr
-                          key={c.id}
-                          style={{ borderBottom: `1px solid ${T.border2}`, background: i % 2 === 0 ? T.bg2 : T.bg3, cursor: "pointer" }}
-                          onClick={() => onEditContract(c)}
-                        >
-                          <td style={{ padding: "4px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: colorMap[shortKey] || "#888", marginRight: 4 }} />
-                            {c.counterparty}
-                          </td>
-                          <td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
-                            {c.contractNumber || "—"}
-                          </td>
-                          <td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
-                            {c.contractDate ? fdate(c.contractDate) : "—"}
-                          </td>
-                          <td style={{ padding: "4px 6px", color: T.text2 }}>{fdate(c.start)}</td>
-                          <td style={{ padding: "4px 6px", color: T.text2 }}>{fdate(c.end)}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "right" }}>{c.firmDays || "—"}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "right" }}>{c.optionDays || "—"}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "right" }}>{c.days}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.rate)}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.mob)}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.demob)}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "right", color: T.green, fontWeight: 700 }}>{fmoney(c.revenue)}</td>
-                          <td style={{ padding: "4px 6px", textAlign: "center", color: T.text3, fontSize: 12 }}>✏️</td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ background: T.bg3 }}>
-                      <td colSpan={11} style={{ padding: "4px 6px", textAlign: "right", fontSize: 11, color: T.text2 }}>Итого:</td>
-                      <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 700, color: T.green }}>{fmoney(tot)}</td>
-                      <td />
+                {ec.map((c, i) => {
+                  const shortKey = cpShortKey(c.counterparty);
+                  return (
+                    <tr
+                      key={c.id}
+                      style={{ borderBottom: `1px solid ${T.border2}`, background: i % 2 === 0 ? T.bg2 : T.bg3, cursor: "pointer" }}
+                      onClick={() => onEditContract(c)}
+                    >
+                      <td style={{ padding: "4px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: colorMap[shortKey] || "#888", marginRight: 4 }} />
+                        <span style={{
+                          fontWeight: c.priority === "contract" ? 700 : 400,
+                          fontStyle:  c.priority === "plan"     ? "italic" : "normal",
+                        }}>
+                          {c.counterparty}
+                        </span>
+                      </td>
+                      <td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
+                        {c.contractNumber || "—"}
+                      </td>
+                      <td style={{ padding: "4px 6px", color: T.text2, whiteSpace: "nowrap" }}>
+                        {c.contractDate ? fdate(c.contractDate) : "—"}
+                      </td>
+                      <td style={{ padding: "4px 6px", color: T.text2 }}>{fdate(c.start)}</td>
+                      <td style={{ padding: "4px 6px", color: T.text2 }}>{fdate(c.end)}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "right" }}>{c.firmDays || "—"}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "right" }}>{c.optionDays || "—"}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "right" }}>{c.days}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.rate)}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.mob)}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "right" }}>{fmoney(c.demob)}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "right", color: T.green, fontWeight: 700 }}>{fmoney(c.revenue)}</td>
+                      <td style={{ padding: "4px 6px", textAlign: "center", color: T.text3, fontSize: 12 }}>✏️</td>
                     </tr>
-                  </>
-                )}
+                  );
+                })}
+
+                <tr style={{ background: T.bg3 }}>
+                  <td colSpan={11} style={{ padding: "4px 6px", textAlign: "right", fontSize: 11, color: T.text2 }}>Итого:</td>
+                  <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 700, color: T.green }}>{fmoney(tot)}</td>
+                  <td />
+                </tr>
               </React.Fragment>
             );
           })}
         </tbody>
       </table>
-
-      {totalRev > 0 && (
-        <div style={{ background: T.accent, borderRadius: 8, padding: 12, textAlign: "center", fontSize: 16, fontWeight: 700, color: "#ffffff", marginTop: 12 }}>
-          ИТОГО ПО ФЛОТУ: {fmoney(totalRev)}
-        </div>
-      )}
     </div>
   );
 }
