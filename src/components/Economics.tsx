@@ -16,34 +16,9 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
     cpKeys.map((cp, i) => [cp, SPECIAL_COLORS[cp] || COLORS[i % COLORS.length]])
   );
 
-  // Выручка только по заключённым контрактам, только за текущий год
-  const yr  = new Date().getFullYear();
-  const yrS = `${yr}-01-01`;
-  const yrE = `${yr}-12-31`;
-
-  const totalRev = contracts
-    .filter(c =>
-      vessels.some(v => v.id === c.vesselId) &&
-      c.priority === "contract" &&
-      cpShortKey(c.counterparty) !== "Ремонт" &&
-      cpShortKey(c.counterparty) !== "АСГ"
-    )
-    .reduce((s, c) => {
-      const cs = c.start < yrS ? yrS : c.start;
-      const ce = c.end   > yrE ? yrE : c.end;
-      return s + contractDays(cs, ce) * c.rate + c.mob + c.demob;
-    }, 0);
-
   return (
     <div>
-      {/* Итого вверху */}
-      {totalRev > 0 && (
-        <div style={{ background: T.accent, borderRadius: 8, padding: 12, textAlign: "center", fontSize: 16, fontWeight: 700, color: "#ffffff", marginBottom: 12 }}>
-          ИТОГО ПО ФЛОТУ: {fmoney(totalRev)}
-        </div>
-      )}
-
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
         <colgroup>
           <col style={{ width: "18%" }} /> {/* Контрагент */}
           <col style={{ width: "9%" }} />  {/* № */}
