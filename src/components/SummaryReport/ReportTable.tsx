@@ -29,10 +29,10 @@ const thStyle: React.CSSProperties = {
   borderBottom: "2px solid #90a4ae",
   borderRight: "1px solid #546E7A",
   whiteSpace: "nowrap",
-  //position: "sticky",
-  //top: 0,
+  position: "sticky",
+  top: 0,
   background: "#37474F",
-  //zIndex: 1,
+  zIndex: 1,
 };
 
 const tdBase: React.CSSProperties = {
