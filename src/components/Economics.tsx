@@ -67,10 +67,7 @@ export function Economics({ vessels, contracts, onAddContract, onEditContract }:
               .map(c => {
                 const days = contractDays(c.start, c.end);
                 const isContract = c.priority === "contract";
-                const cs = c.start < yrS ? yrS : c.start;
-                const ce = c.end   > yrE ? yrE : c.end;
-                const billedDays = isContract ? contractDays(cs, ce) : 0;
-                const revenue = isContract ? billedDays * c.rate + c.mob + c.demob : 0;
+                const revenue = c.priority === "contract" ? c.days * c.rate + c.mob + c.demob : 0;
                 return { ...c, days, revenue };
               });
 
