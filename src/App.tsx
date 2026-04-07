@@ -213,10 +213,22 @@ const filtered = useMemo(() => {
 }, [vessels, filterTypes, filterBranches, filterStatuses, getVesselStatus]);
 
   const totalRev = useMemo(() => {
-    return visibleContracts.filter(c => filtered.some(v => v.id===c.vesselId))
-      .reduce((s,c) => s+contractDays(c.start,c.end)*c.rate+c.mob+c.demob, 0);
-  }, [visibleContracts, filtered]);
-
+  const yr = new Date().getFullYear();
+  const yrS = `${yr}-01-01`;
+  const yrE = `${yr}-12-31`;
+  return visibleContracts
+    .filter(c =>
+      filtered.some(v => v.id === c.vesselId) &&
+      c.priority === "contract" &&
+      cpShortKey(c.counterparty) !== "Ремонт" &&
+      cpShortKey(c.counterparty) !== "АСГ"
+    )
+    .reduce((s, c) => {
+      const cs = c.start < yrS ? yrS : c.start;
+      const ce = c.end   > yrE ? yrE : c.end;
+      return s + contractDays(cs, ce) * c.rate + c.mob + c.demob;
+    }, 0);
+}, [visibleContracts, filtered]);
   const btnFilter = useCallback((active: boolean, amber?: boolean) => ({
     padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
     borderColor: active ? (amber ? T.amber : T.accent) : T.border,
