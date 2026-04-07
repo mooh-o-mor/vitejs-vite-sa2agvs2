@@ -31,7 +31,7 @@ const thStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
   //position: "sticky",
   //top: 0,
-  //background: "#37474F",
+  background: "#37474F",
   //zIndex: 1,
 };
 
