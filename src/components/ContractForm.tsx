@@ -2,17 +2,17 @@ import React, { useEffect, useRef } from "react";
 import type { FormState } from "../lib/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-// Форматировать число с пробелами: 1880000 → "1 880 000"
+
 function formatThousands(v: string): string {
   const digits = v.replace(/\D/g, "");
   if (!digits) return "";
   return parseInt(digits).toLocaleString("ru-RU");
 }
 
-// Убрать форматирование → чистые цифры для хранения в state
 function unformatThousands(v: string): string {
   return v.replace(/\s/g, "").replace(/\D/g, "");
 }
+
 function toTitleCase(str: string): string {
   return str
     .toLowerCase()
@@ -28,9 +28,7 @@ function parseNum(v: string | number): number {
 
 function formatMoney(v: number): string {
   if (v === 0) return "0 ₽";
-  return (
-    new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(v) + " ₽"
-  );
+  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(v) + " ₽";
 }
 
 function daysBetween(start: string, end: string): number {
@@ -39,10 +37,17 @@ function daysBetween(start: string, end: string): number {
   return ms < 0 ? 0 : Math.round(ms / 86_400_000) + 1;
 }
 
-// Пытаемся выделить тип судна из полного имени
-// ("мфасс спасатель заборщиков" → type:"МФАСС", name:"Спасатель Заборщиков")
+// Прибавить дни к дате (ISO строка)
+function addDays(date: string, days: number): string {
+  if (!date) return "";
+  const d = new Date(date);
+  d.setDate(d.getDate() + days - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 const VESSEL_TYPES = [
-  "мфасс", "мспс", "мпасс", "исп", "спкр", "рб", "б/с", "бс",
+  "мфасс", "мспс", "мпасс", "тбс", "ссн", "мбс", "мвс", "мб",
+  "асс", "нис", "скб", "исп", "спкр", "рб", "б/с", "бс",
 ];
 
 function splitVesselName(full: string): { type: string; name: string } {
@@ -51,8 +56,8 @@ function splitVesselName(full: string): { type: string; name: string } {
   for (const t of VESSEL_TYPES) {
     if (lower === t || lower.startsWith(t + " ")) {
       return {
-  type: t.toUpperCase(),
-  name: toTitleCase(full.slice(t.length).trim()),
+        type: t.toUpperCase(),
+        name: toTitleCase(full.slice(t.length).trim()),
       };
     }
   }
@@ -60,7 +65,6 @@ function splitVesselName(full: string): { type: string; name: string } {
 }
 
 // ── types ─────────────────────────────────────────────────────────────────────
-
 
 interface Props {
   form: FormState;
@@ -73,41 +77,23 @@ interface Props {
   onClose: () => void;
 }
 
-// ── style tokens ──────────────────────────────────────────────────────────────
-
-const COLOR = {
-  contract: "#2563eb",
-  kp:       "#7c3aed",
-  plan:     "#d97706",
-};
+const COLOR = { contract: "#2563eb", kp: "#7c3aed", plan: "#d97706" };
 
 const SUMMARY_BG: Record<string, string> = {
-  contract: "#f0fdf4",
-  kp:       "#f5f3ff",
-  plan:     "#fefce8",
+  contract: "#f0fdf4", kp: "#f5f3ff", plan: "#fefce8",
 };
 const SUMMARY_BORDER: Record<string, string> = {
-  contract: "#86efac",
-  kp:       "#c4b5fd",
-  plan:     "#fde047",
+  contract: "#86efac", kp: "#c4b5fd", plan: "#fde047",
 };
 
 // ── component ─────────────────────────────────────────────────────────────────
 
 export function ContractForm({
-  form,
-  editId,
-  vesselName,
-  readOnly,
-  onChange,
-  onSave,
-  onDelete,
-  onClose,
+  form, editId, vesselName, readOnly, onChange, onSave, onDelete, onClose,
 }: Props) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = React.useState<string | null>(null);
 
-  // Close on Escape
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", h);
@@ -116,7 +102,65 @@ export function ContractForm({
 
   const set = (patch: Partial<FormState>) => onChange({ ...form, ...patch });
 
-  const inp = (id: string) => ({
+  // ── логика дат ──────────────────────────────────────────────────────────────
+  const firmN   = parseNum(form.firmDays);
+  const optN    = parseNum(form.optionDays);
+  const hasPeriod = firmN > 0 || optN > 0;
+
+  // Вычисленная дата конца (если заданы дни)
+  const computedEnd = hasPeriod && form.start
+    ? addDays(form.start, firmN + optN)
+    : "";
+
+  // Дата конца для отображения
+  const displayEnd = hasPeriod ? computedEnd : form.end;
+
+  // При изменении твёрдого или опциона — пересчитываем end в форме
+  const setFirmDays = (v: string) => {
+    const firm = parseNum(v);
+    const opt  = parseNum(form.optionDays);
+    const newEnd = (firm > 0 || opt > 0) && form.start
+      ? addDays(form.start, firm + opt)
+      : form.end;
+    set({ firmDays: v, end: newEnd });
+  };
+
+  const setOptionDays = (v: string) => {
+    const firm = parseNum(form.firmDays);
+    const opt  = parseNum(v);
+    const newEnd = (firm > 0 || opt > 0) && form.start
+      ? addDays(form.start, firm + opt)
+      : form.end;
+    set({ optionDays: v, end: newEnd });
+  };
+
+  const setStart = (v: string) => {
+    if (hasPeriod) {
+      const newEnd = addDays(v, firmN + optN);
+      set({ start: v, end: newEnd });
+    } else {
+      set({ start: v });
+    }
+  };
+
+  // При ручном вводе конца — разница идёт в твёрдый период
+  const setEndManual = (v: string) => {
+    const diff = daysBetween(form.start, v);
+    set({ end: v, firmDays: diff > 0 ? String(diff) : "0", optionDays: "0" });
+  };
+
+  // ── calculations ────────────────────────────────────────────────────────────
+  const days   = daysBetween(form.start, displayEnd || form.end);
+  const rateN  = parseNum(form.rate);
+  const mobN   = parseNum(form.mob);
+  const demobN = parseNum(form.demob);
+  const revenue = firmN * rateN + mobN + demobN;
+
+  const { type: vType, name: vName } = splitVesselName(vesselName);
+  const showDocRow = form.priority === "contract" || form.priority === "kp";
+  const docLabel   = form.priority === "contract" ? "контракта" : "КП";
+
+  const inp = (id: string, disabled?: boolean) => ({
     onFocus: () => setFocused(id),
     onBlur:  () => setFocused(null),
     style: {
@@ -125,124 +169,71 @@ export function ContractForm({
       border: `1.5px solid ${focused === id ? "#2563eb" : "#e2e8f0"}`,
       borderRadius: "8px",
       fontSize: "14px",
-      color: "#0f172a",
-      background: readOnly ? "#f8fafc" : "#fff",
+      color: (readOnly || disabled) ? "#94a3b8" : "#0f172a",
+      background: (readOnly || disabled) ? "#f8fafc" : "#fff",
       outline: "none",
       boxSizing: "border-box" as const,
       transition: "border-color 0.15s",
     } as React.CSSProperties,
-    disabled: readOnly,
+    disabled: readOnly || !!disabled,
   });
-
-  // Calculations
-  const days    = daysBetween(form.start, form.end);
-  const firmN   = parseNum(form.firmDays);
-  const rateN   = parseNum(form.rate);
-  const mobN    = parseNum(form.mob);
-  const demobN  = parseNum(form.demob);
-  const revenue = firmN * rateN + mobN + demobN;
-
-  const { type: vType, name: vName } = splitVesselName(vesselName);
-  const showDocRow = form.priority === "contract" || form.priority === "kp";
-  const docLabel   = form.priority === "contract" ? "контракта" : "КП";
 
   return (
     <div
       ref={overlayRef}
       onClick={(e) => e.target === overlayRef.current && onClose()}
       style={{
-        position: "fixed",
-        inset: 0,
+        position: "fixed", inset: 0,
         background: "rgba(15,23,42,0.55)",
         backdropFilter: "blur(3px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-        padding: "16px",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000, padding: "16px",
       }}
     >
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: "16px",
-          width: "100%",
-          maxWidth: "480px",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
-          display: "flex",
-          flexDirection: "column",
-          maxHeight: "calc(100dvh - 32px)",
-          overflow: "hidden",
-        }}
-      >
+      <div style={{
+        background: "#fff", borderRadius: "16px", width: "100%", maxWidth: "480px",
+        boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+        display: "flex", flexDirection: "column",
+        maxHeight: "calc(100dvh - 32px)", overflow: "hidden",
+      }}>
+
         {/* ── HEADER ── */}
-        <div
-          style={{
-            padding: "20px 24px 16px",
-            borderBottom: "1px solid #f1f5f9",
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: "12px",
-          }}
-        >
+        <div style={{
+          padding: "20px 24px 16px", borderBottom: "1px solid #f1f5f9",
+          display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px",
+        }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             {vType && (
-              <span
-                style={{
-                  fontSize: "10px",
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  color: "#94a3b8",
-                }}
-              >
+              <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", color: "#94a3b8" }}>
                 {vType}
               </span>
             )}
-            <span
-              style={{ fontSize: "17px", fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}
-            >
+            <span style={{ fontSize: "17px", fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
               {vName || toTitleCase(vesselName)}
             </span>
             <span style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
               {editId ? `Редактирование · #${editId}` : "Новый контракт"}
             </span>
           </div>
-
           <button
             onClick={onClose}
             style={{
-              flexShrink: 0,
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: "none",
-              background: "#f1f5f9",
-              color: "#64748b",
-              cursor: "pointer",
-              fontSize: 18,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              lineHeight: 1,
+              flexShrink: 0, width: 32, height: 32, borderRadius: 8,
+              border: "none", background: "#f1f5f9", color: "#64748b",
+              cursor: "pointer", fontSize: 18,
+              display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
             }}
             onMouseEnter={e => (e.currentTarget.style.background = "#e2e8f0")}
             onMouseLeave={e => (e.currentTarget.style.background = "#f1f5f9")}
-          >
-            ×
-          </button>
+          >×</button>
         </div>
 
         {/* ── BODY ── */}
-        <div
-          style={{
-            padding: "20px 24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "14px",
-            overflowY: "auto",
-          }}
-        >
+        <div style={{
+          padding: "20px 24px", display: "flex", flexDirection: "column",
+          gap: "14px", overflowY: "auto",
+        }}>
+
           {/* Контрагент */}
           <div>
             <Label>Контрагент</Label>
@@ -254,19 +245,13 @@ export function ContractForm({
             />
           </div>
 
-          {/* Тип / приоритет */}
+          {/* Тип */}
           <div>
             <Label>Тип</Label>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: "5px",
-                background: "#f8fafc",
-                borderRadius: "10px",
-                padding: "4px",
-              }}
-            >
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "5px",
+              background: "#f8fafc", borderRadius: "10px", padding: "4px",
+            }}>
               {(["contract", "kp", "plan"] as const).map((p) => {
                 const labels = { contract: "Контракт", kp: "КП", plan: "План" };
                 const active = form.priority === p;
@@ -276,26 +261,21 @@ export function ContractForm({
                     disabled={readOnly}
                     onClick={() => set({ priority: p })}
                     style={{
-                      padding: "8px 0",
-                      border: "none",
-                      borderRadius: "7px",
-                      fontSize: "13px",
-                      fontWeight: 600,
+                      padding: "8px 0", border: "none", borderRadius: "7px",
+                      fontSize: "13px", fontWeight: 600,
                       cursor: readOnly ? "default" : "pointer",
                       background: active ? COLOR[p] : "transparent",
                       color: active ? "#fff" : "#64748b",
                       boxShadow: active ? "0 2px 8px rgba(0,0,0,0.13)" : "none",
                       transition: "all 0.15s",
                     }}
-                  >
-                    {labels[p]}
-                  </button>
+                  >{labels[p]}</button>
                 );
               })}
             </div>
           </div>
 
-          {/* Номер и дата документа */}
+          {/* Номер и дата */}
           {showDocRow && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
@@ -329,64 +309,27 @@ export function ContractForm({
                 {...inp("start")}
                 type="date"
                 value={form.start}
-                onChange={e => set({ start: e.target.value })}
+                onChange={e => setStart(e.target.value)}
               />
             </div>
             <div>
-              <Label>Конец</Label>
+              <Label>
+                Конец
+                {hasPeriod && (
+                  <span style={{ marginLeft: 6, fontSize: "10px", color: "#2563eb", fontWeight: 400, textTransform: "none" }}>
+                    (авто)
+                  </span>
+                )}
+              </Label>
               <input
-                {...inp("end")}
+                {...inp("end", hasPeriod)}
                 type="date"
-                value={form.end}
-                onChange={e => set({ end: e.target.value })}
+                value={displayEnd || form.end}
+                onChange={e => !hasPeriod && setEndManual(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Ставка */}
-<div>
-  <Label>Суточная ставка (₽)</Label>
-  <input
-    {...inp("rate")}
-    type="text"
-    inputMode="numeric"
-    value={formatThousands(form.rate)}
-    placeholder="0"
-    onFocus={() => setFocused("rate")}
-    onBlur={() => setFocused(null)}
-    onChange={e => set({ rate: unformatThousands(e.target.value) })}
-  />
-</div>
-
-         {/* Моб / Демоб */}
-<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-  <div>
-    <Label>Мобилизация (₽)</Label>
-    <input
-      {...inp("mob")}
-      type="text"
-      inputMode="numeric"
-      value={formatThousands(form.mob)}
-      placeholder="0"
-      onFocus={() => setFocused("mob")}
-      onBlur={() => setFocused(null)}
-      onChange={e => set({ mob: unformatThousands(e.target.value) })}
-    />
-  </div>
-  <div>
-    <Label>Демобилизация (₽)</Label>
-    <input
-      {...inp("demob")}
-      type="text"
-      inputMode="numeric"
-      value={formatThousands(form.demob)}
-      placeholder="0"
-      onFocus={() => setFocused("demob")}
-      onBlur={() => setFocused(null)}
-      onChange={e => set({ demob: unformatThousands(e.target.value) })}
-    />
-  </div>
-</div>
           {/* Твёрдый / Опционы */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
@@ -395,7 +338,7 @@ export function ContractForm({
                 {...inp("firm")}
                 type="number"
                 value={form.firmDays}
-                onChange={e => set({ firmDays: e.target.value })}
+                onChange={e => setFirmDays(e.target.value)}
                 placeholder="0"
                 min="0"
               />
@@ -406,65 +349,89 @@ export function ContractForm({
                 {...inp("opt")}
                 type="number"
                 value={form.optionDays}
-                onChange={e => set({ optionDays: e.target.value })}
+                onChange={e => setOptionDays(e.target.value)}
                 placeholder="0"
                 min="0"
               />
             </div>
           </div>
 
-          {/* ── Итог ── */}
-          <div
-            style={{
-              background: SUMMARY_BG[form.priority],
-              border: `1.5px solid ${SUMMARY_BORDER[form.priority]}`,
-              borderRadius: "10px",
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "12px",
-            }}
-          >
-            {/* Левая часть — дни */}
+          {/* Ставка */}
+          <div>
+            <Label>Суточная ставка (₽)</Label>
+            <input
+              {...inp("rate")}
+              type="text"
+              inputMode="numeric"
+              value={formatThousands(form.rate)}
+              placeholder="0"
+              onFocus={() => setFocused("rate")}
+              onBlur={() => setFocused(null)}
+              onChange={e => set({ rate: unformatThousands(e.target.value) })}
+            />
+          </div>
+
+          {/* Моб / Демоб */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <Label>Мобилизация (₽)</Label>
+              <input
+                {...inp("mob")}
+                type="text"
+                inputMode="numeric"
+                value={formatThousands(form.mob)}
+                placeholder="0"
+                onFocus={() => setFocused("mob")}
+                onBlur={() => setFocused(null)}
+                onChange={e => set({ mob: unformatThousands(e.target.value) })}
+              />
+            </div>
+            <div>
+              <Label>Демобилизация (₽)</Label>
+              <input
+                {...inp("demob")}
+                type="text"
+                inputMode="numeric"
+                value={formatThousands(form.demob)}
+                placeholder="0"
+                onFocus={() => setFocused("demob")}
+                onBlur={() => setFocused(null)}
+                onChange={e => set({ demob: unformatThousands(e.target.value) })}
+              />
+            </div>
+          </div>
+
+          {/* Итог */}
+          <div style={{
+            background: SUMMARY_BG[form.priority],
+            border: `1.5px solid ${SUMMARY_BORDER[form.priority]}`,
+            borderRadius: "10px", padding: "12px 16px",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+          }}>
             <div style={{ fontSize: "13px", color: "#475569" }}>
               {days > 0 ? (
                 <>
-                  <span style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
-                    {days}
-                  </span>
+                  <span style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>{days}</span>
                   {" "}дн.
                   {firmN > 0 && (
-                    <span style={{ color: "#94a3b8", marginLeft: 6 }}>
-                      твёрд. {firmN}
-                    </span>
+                    <span style={{ color: "#94a3b8", marginLeft: 6 }}>твёрд. {firmN}</span>
                   )}
                 </>
               ) : (
                 <span style={{ color: "#94a3b8" }}>Период не задан</span>
               )}
             </div>
-
-            {/* Правая часть — выручка */}
             <div style={{ textAlign: "right" }}>
               {form.priority === "plan" ? (
                 <>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#92400e" }}>
-                    —
-                  </div>
-                  <div style={{ fontSize: "11px", color: "#b45309", marginTop: 1 }}>
-                    выручка не учитывается
-                  </div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#92400e" }}>—</div>
+                  <div style={{ fontSize: "11px", color: "#b45309", marginTop: 1 }}>выручка не учитывается</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
-                    {formatMoney(revenue)}
-                  </div>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>{formatMoney(revenue)}</div>
                   {form.priority === "kp" && (
-                    <div style={{ fontSize: "11px", color: "#7c3aed", marginTop: 1 }}>
-                      ~ ориентировочно
-                    </div>
+                    <div style={{ fontSize: "11px", color: "#7c3aed", marginTop: 1 }}>~ ориентировочно</div>
                   )}
                   {form.priority === "contract" && revenue > 0 && rateN > 0 && (
                     <div style={{ fontSize: "11px", color: "#64748b", marginTop: 1 }}>
@@ -480,48 +447,29 @@ export function ContractForm({
 
         {/* ── FOOTER ── */}
         {!readOnly && (
-          <div
-            style={{
-              padding: "14px 24px",
-              borderTop: "1px solid #f1f5f9",
-              display: "flex",
-              gap: "8px",
-            }}
-          >
+          <div style={{
+            padding: "14px 24px", borderTop: "1px solid #f1f5f9",
+            display: "flex", gap: "8px",
+          }}>
             {editId && (
               <button
                 onClick={onDelete}
                 style={{
-                  padding: "10px 16px",
-                  background: "transparent",
-                  color: "#ef4444",
-                  border: "1.5px solid #fca5a5",
-                  borderRadius: "10px",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  transition: "background 0.15s",
+                  padding: "10px 16px", background: "transparent",
+                  color: "#ef4444", border: "1.5px solid #fca5a5",
+                  borderRadius: "10px", fontSize: "14px", fontWeight: 600,
+                  cursor: "pointer", whiteSpace: "nowrap", transition: "background 0.15s",
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = "#fef2f2")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-              >
-                Удалить
-              </button>
+              >Удалить</button>
             )}
             <button
               onClick={onSave}
               style={{
-                flex: 1,
-                padding: "10px 0",
-                background: "#2563eb",
-                color: "#fff",
-                border: "none",
-                borderRadius: "10px",
-                fontSize: "14px",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "background 0.15s",
+                flex: 1, padding: "10px 0", background: "#2563eb",
+                color: "#fff", border: "none", borderRadius: "10px",
+                fontSize: "14px", fontWeight: 600, cursor: "pointer", transition: "background 0.15s",
               }}
               onMouseEnter={e => (e.currentTarget.style.background = "#1d4ed8")}
               onMouseLeave={e => (e.currentTarget.style.background = "#2563eb")}
@@ -539,17 +487,11 @@ export function ContractForm({
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label
-      style={{
-        display: "block",
-        fontSize: "11px",
-        fontWeight: 600,
-        color: "#94a3b8",
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        marginBottom: "6px",
-      }}
-    >
+    <label style={{
+      display: "block", fontSize: "11px", fontWeight: 600,
+      color: "#94a3b8", letterSpacing: "0.06em",
+      textTransform: "uppercase", marginBottom: "6px",
+    }}>
       {children}
     </label>
   );
