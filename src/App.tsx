@@ -348,7 +348,7 @@ const filtered = useMemo(() => {
       </div>
 
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
-        {(activeTab === "gantt" || activeTab === "economics") && (
+        {(activeTab === "gantt") && (
           <FilterBar
             allTypes={allTypes}
             allBranches={allBranches}
