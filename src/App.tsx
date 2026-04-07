@@ -26,11 +26,9 @@ export default function App() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-
   const [access, setAccess] = useState<"guest"|"viewer"|"admin">("guest");
   const isAdmin = access === "admin";
   const canView = access === "admin" || access === "viewer";
-
   const [showLogin, setShowLogin] = useState(false);
   const [activeTab, setActiveTab] = useState("gantt");
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
@@ -39,14 +37,11 @@ export default function App() {
   const [filterCp, setFilterCp] = useState("Все");
   //const [sortBy, setSortBy] = useState<"type" | "name" | "branch">("type");
   const [showExportMenu, setShowExportMenu] = useState(false);
-
   const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
-
   const [showContractForm, setShowContractForm] = useState(false);
   const [editContractId, setEditContractId] = useState<number|null>(null);
   const [activeVesselId, setActiveVesselId] = useState<number|null>(null);
   const [contractForm, setContractForm] = useState<FormState>(EMPTY_FORM);
-
   const [showVesselForm, setShowVesselForm] = useState(false);
   const [editingVessel, setEditingVessel] = useState<Vessel|null>(null);
 
