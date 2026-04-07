@@ -348,24 +348,23 @@ const filtered = useMemo(() => {
       </div>
 
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
-        {(activeTab === "gantt") && (
-          <FilterBar
-            allTypes={allTypes}
-            allBranches={allBranches}
-            allCps={allCps}
-            filterTypes={filterTypes}
-            filterBranches={filterBranches}
-            filterCp={filterCp}
-            filterStatuses={filterStatuses}
-            //sortBy={sortBy}
-            canView={canView}
-            onToggleType={toggleType}
-            onToggleBranch={toggleBranch}
-            onFilterCp={setFilterCp}
-            onToggleStatus={toggleStatus}
-            //onSortBy={setSortBy}
-          />
-        )}
+  {(activeTab === "gantt" || activeTab === "economics") && (
+    <FilterBar
+      allTypes={allTypes}
+      allBranches={allBranches}
+      allCps={allCps}
+      filterTypes={filterTypes}
+      filterBranches={filterBranches}
+      filterCp={filterCp}
+      filterStatuses={filterStatuses}
+      canView={canView}
+      showStatusFilter={activeTab === "gantt"}
+      onToggleType={toggleType}
+      onToggleBranch={toggleBranch}
+      onFilterCp={setFilterCp}
+      onToggleStatus={toggleStatus}
+    />
+  )}
 
         {activeTab === "gantt" && (
           <GanttChart
