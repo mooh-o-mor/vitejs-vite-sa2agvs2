@@ -295,11 +295,11 @@ const filtered = useMemo(() => {
             </label>
           )}
           
-          {isAdmin && activeTab === "gantt" && (
-            <span style={{ fontSize: 12, color: "#bfdbfe" }}>
-              Выручка: <b style={{ color: "#86efac" }}>{fmoney(totalRev)}</b>
-            </span>
-          )}
+         {isAdmin && (activeTab === "gantt" || activeTab === "economics") && (
+  <span style={{ fontSize: 12, color: "#bfdbfe" }}>
+    Выручка: <b style={{ color: "#86efac" }}>{fmoney(totalRev)}</b>
+  </span>
+)}
           
           {access !== "guest" && (
             <span style={{ fontSize: 11, color: "#bfdbfe" }}>{accessLabel()}</span>
