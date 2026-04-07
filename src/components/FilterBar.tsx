@@ -9,6 +9,7 @@ interface Props {
   filterCp: string;
   filterStatuses: string[];
   canView: boolean;
+  showStatusFilter?: boolean;  // если false — строка статуса скрыта
   onToggleType: (v: string) => void;
   onToggleBranch: (v: string) => void;
   onFilterCp: (v: string) => void;
@@ -19,6 +20,7 @@ export function FilterBar({
   allTypes, allBranches, allCps,
   filterTypes, filterBranches, filterCp, filterStatuses,
   canView,
+  showStatusFilter = true,
   onToggleType, onToggleBranch, onFilterCp, onToggleStatus
 }: Props) {
   const btn = (active: boolean, amber?: boolean) => ({
@@ -40,7 +42,6 @@ export function FilterBar({
           return <button key={t} onClick={() => onToggleType(t)} style={btn(active)}>{t}</button>;
         })}
       </div>
-
       {allBranches.length > 1 && (
         <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 11, color: T.text3, minWidth: 80 }}>Филиал:</span>
@@ -50,17 +51,17 @@ export function FilterBar({
           })}
         </div>
       )}
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: 11, color: T.text3, minWidth: 80 }}>Статус:</span>
-        <button onClick={() => onToggleStatus("Все")} style={btn(filterStatuses.length === 0, true)}>Все</button>
-        {statusItems.map((label, idx) => (
-          <button key={label} onClick={() => onToggleStatus(label)} style={btn(filterStatuses.includes(statusKeys[idx]))}>
-            {label}
-          </button>
-        ))}
-      </div>
-
+      {showStatusFilter && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: T.text3, minWidth: 80 }}>Статус:</span>
+          <button onClick={() => onToggleStatus("Все")} style={btn(filterStatuses.length === 0, true)}>Все</button>
+          {statusItems.map((label, idx) => (
+            <button key={label} onClick={() => onToggleStatus(label)} style={btn(filterStatuses.includes(statusKeys[idx]))}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {canView && allCps.length > 1 && (
         <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: 11, color: T.text3, minWidth: 80 }}>Контрагент:</span>
