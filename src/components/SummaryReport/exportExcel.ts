@@ -30,7 +30,7 @@ export function exportToExcel(
 ) {
   const wb = XLSX.utils.book_new();
   const headers = ["№ п/п", "Тип", "Название судна", "Филиал", "Статус", "Контракт", "Период работ", "Местоположение судна", "Эл-е", "Примечание", "Топливо", "Расход"];
-  const colWidths = [5, 8, 30, 10, 8, 35, 35, 35, 6, 35, 14, 10];
+  const colWidths = [5, 8, 30, 10, 8, 35, 35, 35, 6, 35, 14, 8];
 
   const aoa: any[][] = [];
 
@@ -104,7 +104,7 @@ const consCell = [dtCons, ttHasAmt ? ttConsRaw : ""].filter(Boolean).join("\n") 
       { v: power, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: power === "БЭП" ? "1565C0" : power === "СЭП" ? "2E7D32" : "CCCCCC" }, bold: true } } },
       { v: v.note || "", t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
       { v: fuelCell, t: "s", s: { fill: rowFill, alignment: { ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" } } } },
-      { v: consCell, t: "s", s: { fill: rowFill, alignment: { horizontal: "right", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "C07800" } } } },
+      { v: consCell, t: "s", s: { fill: rowFill, alignment: { horizontal: "left", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "C07800" } } } },
     ]);
   });
 
