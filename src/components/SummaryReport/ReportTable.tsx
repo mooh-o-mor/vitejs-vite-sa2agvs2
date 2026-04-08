@@ -130,7 +130,17 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                   )}
                 </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
+                <td style={{ 
+                  ...tdBase, 
+                  background: STATUS_BG[sc], 
+                  color: STATUS_COLOR[sc], 
+                  fontWeight: 600, 
+                  fontSize: 11,
+                  textAlign: "center",
+                  verticalAlign: "middle"
+                }}>
+                  {statusDisplay}
+                </td>
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell value={v.contract_info || ""} vesselName={v.vessel_name} reportDate={selDate} field="contract_info" onUpdate={onUpdateField} editable={isAsd} placeholder="✎ добавить" />
