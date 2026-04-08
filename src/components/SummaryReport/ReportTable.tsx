@@ -88,11 +88,11 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
             <th style={{ ...thStyle, minWidth: 80 }}>Статус</th>
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Контракт</th>}
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Период работ</th>}
-            <th style={{ ...thStyle, textAlign: "right", minWidth: 140 }}>Местоположение</th>
+            <th style={{ ...thStyle, minWidth: 140 }}>Местоположение</th>
             {canView && <th style={{ ...thStyle, width: 50 }}>Эл-е</th>}
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
-            {canView && <th style={{ ...thStyle, width: 110 }}>Топливо</th>}
-            {canView && <th style={{ ...thStyle, width: 70 }}>Расход</th>}
+            {canView && <th style={{ ...thStyle, textAlign: "left", width: 110 }}>Топливо</th>}
+            {canView && <th style={{ ...thStyle, textAlign: "left", width: 70 }}>Расход</th>}
           </tr>
         </thead>
         <tbody>
