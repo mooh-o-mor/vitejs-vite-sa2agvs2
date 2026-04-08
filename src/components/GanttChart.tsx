@@ -241,9 +241,10 @@ function renderBar(
   const shortKey = cpShortKey(c.counterparty);
   const rawColor = colorMap[shortKey] || COLORS[0];
 
-  // Паблик-режим: АСГ остаётся штриховкой, всё остальное — зелёным
+  // Паблик-режим: АСГ и Ремонт остаются своим цветом, всё остальное — зелёным
   const isAsg = shortKey === "АСГ";
-  const color = !canView && !isAsg ? PUBLIC_CONTRACT_COLOR : rawColor;
+  const isRem = shortKey === "Ремонт" || shortKey === "РЕМ";
+  const color = !canView && !isAsg && !isRem ? PUBLIC_CONTRACT_COLOR : rawColor;
 
   const isKpOrPlan = c.priority === "kp" || c.priority === "plan";
 
