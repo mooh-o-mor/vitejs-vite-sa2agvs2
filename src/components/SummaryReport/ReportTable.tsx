@@ -85,7 +85,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
             <th style={{ ...thStyle, width: 50 }}>Тип</th>
             <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Название судна</th>
             <th style={thStyle}>Филиал</th>
-            <th style={{ ...thStyle, textAlign: "center", minWidth: 80 }}>Статус</th>
+            <th style={{ ...thStyle, textAlign: "right", minWidth: 80 }}>Статус</th>
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Контракт</th>}
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Период работ</th>}
             <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
