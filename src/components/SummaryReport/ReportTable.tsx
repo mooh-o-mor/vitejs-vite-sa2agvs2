@@ -37,7 +37,7 @@ const tdBase: React.CSSProperties = {
   fontSize: 12,
   borderBottom: "1px solid #cfd8dc",
   borderRight: "1px solid #e8eaed",
-  verticalAlign: "top",
+  verticalAlign: "middle",  // ← было "top"
 };
 
 function getSupplyAmt(supplies: any[], keyword: string): string {
