@@ -128,9 +128,17 @@ map.on('wheel', (e: any) => {
   e.originalEvent.preventDefault();
 });
   
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    attribution: "", subdomains: "abcd", maxZoom: 19,
-  }).addTo(map);
+  // ESRI Ocean Basemap
+  L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
+    { attribution: "", maxZoom: 13 }
+  ).addTo(map);
+
+  // OpenSeaMap навигационные знаки поверх
+  L.tileLayer(
+    "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
+    { attribution: "", maxZoom: 18, opacity: 0.8 }
+  ).addTo(map);
   
   L.control.zoom({ position: "topright" }).addTo(map);
 
@@ -366,7 +374,7 @@ map.on('wheel', (e: any) => {
   const showSidebar = isMobile ? sidebarOpen : true;
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 90px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
+    <div style={{ display: "flex", height: "calc(100dvh - 60px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
       {dragging && isAdmin && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(11,15,24,0.85)", border: "3px dashed #3b82f6", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, pointerEvents: "none" }}>
           <div style={{ fontSize: 52 }}>📂</div>
