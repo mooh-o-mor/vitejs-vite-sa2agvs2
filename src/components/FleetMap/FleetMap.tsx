@@ -185,7 +185,7 @@ let tapTimer: ReturnType<typeof setTimeout> | null = null;
 mapRef.current.addEventListener("touchend", (e) => {
   tapCount++;
   if (tapTimer) clearTimeout(tapTimer);
-  tapTimer = setTimeout(() => { tapCount = 0; }, 400);
+  tapTimer = setTimeout(() => { tapCount = 0; }, 500);
   if (tapCount >= 3) {
     tapCount = 0;
     if (tapTimer) clearTimeout(tapTimer);
