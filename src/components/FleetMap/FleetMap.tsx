@@ -137,7 +137,7 @@ L.tileLayer(
   // OpenSeaMap навигационные знаки поверх
 L.tileLayer(
   "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
-  { attribution: "", maxZoom: 6, opacity: 0.8 }
+  { attribution: "", maxZoom: 120, opacity: 0.3 }
 ).addTo(map);
   
   L.control.zoom({ position: "topright" }).addTo(map);
