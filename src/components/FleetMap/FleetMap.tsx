@@ -178,6 +178,17 @@ map.on('wheel', (e: any) => {
     map.setView([62, 90], 3, { animate: true });
   }
 });
+  
+  // Сброс зума по двойному тапу на мобильном
+let lastTap = 0;
+mapRef.current.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTap < 300) {
+    e.preventDefault();
+    map.setView([62, 90], 3, { animate: true });
+  }
+  lastTap = now;
+});
   return () => { map.remove(); mapObj.current = null; };
 }, []);
 
