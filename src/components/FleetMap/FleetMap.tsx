@@ -134,11 +134,11 @@ L.tileLayer(
 { attribution: "", subdomains: "abc", maxZoom: 19 }
 ).addTo(map);
 
-  {/*// OpenSeaMap навигационные знаки поверх
+  // OpenSeaMap навигационные знаки поверх
 L.tileLayer(
   "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
   { attribution: "", maxZoom: 18, opacity: 0.8 }
-).addTo(map);*/}
+).addTo(map);
   
   L.control.zoom({ position: "topright" }).addTo(map);
 
