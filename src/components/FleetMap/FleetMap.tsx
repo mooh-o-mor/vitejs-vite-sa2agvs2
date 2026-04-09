@@ -179,16 +179,14 @@ map.on('wheel', (e: any) => {
   }
 });
   
-let tapCount = 0;
-let tapTimer: ReturnType<typeof setTimeout> | null = null;
+let touchStartTime = 0;
+
+mapRef.current.addEventListener("touchstart", () => {
+  touchStartTime = Date.now();
+});
 
 mapRef.current.addEventListener("touchend", (e) => {
-  tapCount++;
-  if (tapTimer) clearTimeout(tapTimer);
-  tapTimer = setTimeout(() => { tapCount = 0; }, 500);
-  if (tapCount >= 3) {
-    tapCount = 0;
-    if (tapTimer) clearTimeout(tapTimer);
+  if (Date.now() - touchStartTime > 600) {
     e.preventDefault();
     map.setView([62, 90], 3, { animate: true });
   }
