@@ -138,7 +138,7 @@ map.on('wheel', (e: any) => {
     { attribution: "", maxZoom: 18, minZoom: 1, opacity: 0.3 }
   ).addTo(map);
   
-  L.control.zoom({ position: "topright" }).addTo(map);
+  //L.control.zoom({ position: "topright" }).addTo(map); //Кнопки масштаба
 
   markersRef.current = (L as any).markerClusterGroup({
     maxClusterRadius: 40,
