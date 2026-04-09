@@ -128,17 +128,17 @@ map.on('wheel', (e: any) => {
   e.originalEvent.preventDefault();
 });
   
-  // ESRI Ocean Basemap
-  L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
-    { attribution: "", maxZoom: 13 }
-  ).addTo(map);
+ // CartoDB Voyager — полное покрытие, чистый стиль
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+  { attribution: "", subdomains: "abcd", maxZoom: 19 }
+).addTo(map);
 
-  // OpenSeaMap навигационные знаки поверх
-  L.tileLayer(
-    "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
-    { attribution: "", maxZoom: 18, opacity: 0.8 }
-  ).addTo(map);
+// OpenSeaMap навигационные знаки поверх
+L.tileLayer(
+  "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
+  { attribution: "", maxZoom: 18, opacity: 0.8 }
+).addTo(map);
   
   L.control.zoom({ position: "topright" }).addTo(map);
 
