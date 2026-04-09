@@ -128,10 +128,13 @@ map.on('wheel', (e: any) => {
   e.originalEvent.preventDefault();
 });
   
-  L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { attribution: "", subdomains: "abc", maxZoom: 19 }
-  ).addTo(map);
+ L.tileLayer(
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { attribution: "", subdomains: "abc", maxZoom: 19 }
+).addTo(map);
+
+// Приглушаем яркость и насыщенность суши
+(map.getPanes().tilePane as HTMLElement).style.filter = "saturate(30%) brightness(92%)";
 
   L.tileLayer(
     "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
