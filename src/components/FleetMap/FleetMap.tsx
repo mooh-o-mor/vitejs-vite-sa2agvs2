@@ -1,443 +1,456 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "./lib/supabase";
-import type { Vessel, Contract, FormState } from "./lib/types";
-import { T, YEAR, typeOrder } from "./lib/types";
-import { getType, cpShortKey, contractDays } from "./lib/utils";
-import { exportToPPTX } from "./lib/exportPPTX";
-import { GanttChart } from "./components/GanttChart";
-import { Economics } from "./components/Economics";
-import { VesselList } from "./components/VesselList";
-import { ContractForm } from "./components/ContractForm";
-import { VesselForm } from "./components/VesselForm";
-import { LoginForm } from "./components/LoginForm";
-import { FilterBar } from "./components/FilterBar";
-import { FleetMap } from "./components/FleetMap";
-//import { YandexMap } from "./components/YandexMap";
-import { SummaryReport } from "./components/SummaryReport";
+import { useState, useEffect, useRef, useMemo } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import "leaflet.markercluster";
+import { supabase } from "../../lib/supabase";
+import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
+import { T, typeOrder } from "../../lib/types";
+import { getType, formatVesselName } from "../../lib/utils";
+import { mkIcon, mkPieIcon } from "./mapIcons";
+import { Sidebar } from "./Sidebar";
+import { VesselPopup } from "./VesselPopup";
 
-const EMPTY_FORM: FormState = {
-  counterparty:"", start:`${YEAR}-01-01`, end:`${YEAR}-12-31`,
-  rate:"", mob:"", demob:"", firmDays:"", optionDays:"",
-  priority:"contract", contractNumber:"", contractDate:""
-};
+function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
+  if (!stat) return "oth";
+  const s = stat.toUpperCase();
+  if (s.startsWith("АСГ")) return "asg";
+  if (s.startsWith("АСД")) return "asd";
+  if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
+  return "oth";
+}
 
-export default function App() {
-  const [vessels, setVessels] = useState<Vessel[]>([]);
-  const [contracts, setContracts] = useState<Contract[]>([]);
+export function FleetMap({
+  isAdmin,
+  canView,
+  externalFiles,
+  onExternalFilesConsumed,
+}: {
+  isAdmin: boolean;
+  canView: boolean;
+  externalFiles?: FileList | null;
+  onExternalFilesConsumed?: () => void;
+}) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapObj = useRef<L.Map | null>(null);
+  const markersRef = useRef<any>(null);
+
+  const [dates, setDates] = useState<string[]>([]);
+  const [selDate, setSelDate] = useState<string>("");
+  const [vessels, setVessels] = useState<DprRow[]>([]);
+  const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [access, setAccess] = useState<"guest"|"viewer"|"admin">("guest");
-  const isAdmin = access === "admin";
-  const canView = access === "admin" || access === "viewer";
-  const [showLogin, setShowLogin] = useState(false);
-  const [activeTab, setActiveTab] = useState("gantt");
-  const [filterTypes, setFilterTypes] = useState<string[]>([]);
-  const [filterBranches, setFilterBranches] = useState<string[]>([]);
-  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
-  const [filterCp, setFilterCp] = useState("Все");
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
-  const [showContractForm, setShowContractForm] = useState(false);
-  const [editContractId, setEditContractId] = useState<number|null>(null);
-  const [activeVesselId, setActiveVesselId] = useState<number|null>(null);
-  const [contractForm, setContractForm] = useState<FormState>(EMPTY_FORM);
-  const [showVesselForm, setShowVesselForm] = useState(false);
-  const [editingVessel, setEditingVessel] = useState<Vessel|null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    const [{ data: vData }, { data: cData }] = await Promise.all([
-      supabase.from("vessels").select("id,name,branch,imo,show_on_gantt").order("id"),
-      supabase.from("contracts").select("*").order("id"),
-    ]);
-    setVessels((vData||[]).map((v: any) => ({ 
-      id:v.id, 
-      name:v.name, 
-      branch:v.branch||"", 
-      imo:v.imo||"",
-      show_on_gantt: v.show_on_gantt !== false
-    })));
-    setContracts((cData||[]).map((c: any) => ({
-      id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
-      start:c.start_date, end:c.end_date,
-      rate:c.rate, mob:c.mob, demob:c.demob,
-      firmDays:c.firm_days||0, optionDays:c.option_days||0,
-      priority:c.priority||"contract", 
-      contractNumber:c.contract_number||"",
-      contractDate:c.contract_date||""
-    })));
-    setLoading(false);
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState<string>("Все");
+  const [filterBranch, setFilterBranch] = useState<string>("Все");
+  const [filterStatus, setFilterStatus] = useState<string>("Все");
+  const [selVessel, setSelVessel] = useState<DprRow | null>(null);
+
+  const [dragging, setDragging] = useState(false);
+  const dragCounter = useRef(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Load type maps from vessels table
+  useEffect(() => {
+    supabase.from("vessels").select("name").then(({ data }) => {
+      if (data) {
+        const t = new Map<string, string>();
+        data.forEach((v: any) => {
+          const full = v.name.toUpperCase().trim();
+          const typeStr = getType(v.name, typeOrder);
+          if (typeStr) {
+            t.set(full, typeStr);
+            const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
+            if (short !== full) t.set(short, typeStr);
+          }
+        });
+        setTypeMap(t);
+      }
+    });
   }, []);
 
   useEffect(() => {
-    loadData();
-    const s1 = supabase.channel("vessels-ch").on("postgres_changes", { event:"*", schema:"public", table:"vessels" }, () => loadData()).subscribe();
-    const s2 = supabase.channel("contracts-ch").on("postgres_changes", { event:"*", schema:"public", table:"contracts" }, () => loadData()).subscribe();
-    return () => { supabase.removeChannel(s1); supabase.removeChannel(s2); };
-  }, [loadData]);
-
-  const toggleType = useCallback((v: string) => {
-    if (v === "Все") { setFilterTypes([]); return; }
-    setFilterTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
-  }, []);
-
-  const toggleBranch = useCallback((v: string) => {
-    if (v === "Все") { setFilterBranches([]); return; }
-    setFilterBranches(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
-  }, []);
-
-  const toggleStatus = useCallback((value: string) => {
-    if (value === "Все") { setFilterStatuses([]); return; }
-    const statusKey = value === "АСГ" ? "asg" : value === "АСД" ? "asd" : "rem";
-    setFilterStatuses(prev => prev.includes(statusKey) ? prev.filter(v => v !== statusKey) : [...prev, statusKey]);
-  }, []);
-
-  const openAddContract = useCallback((vesselId: number) => {
-    setEditContractId(null);
-    setContractForm(EMPTY_FORM);
-    setActiveVesselId(vesselId);
-    setShowContractForm(true);
-  }, []);
-
-  const openEditContract = useCallback((contract: Contract) => {
-    setEditContractId(contract.id);
-    setContractForm({
-      counterparty:contract.counterparty, start:contract.start, end:contract.end,
-      rate:String(contract.rate), mob:String(contract.mob), demob:String(contract.demob),
-      firmDays:String(contract.firmDays||""), optionDays:String(contract.optionDays||""),
-      priority:contract.priority||"contract", 
-      contractNumber:contract.contractNumber||"",
-      contractDate:contract.contractDate||""
-    });
-    setActiveVesselId(contract.vesselId);
-    setShowContractForm(true);
-  }, []);
-
-  const saveContract = useCallback(async () => {
-    if (!contractForm.counterparty || !contractForm.start || !contractForm.end) return;
-    setSyncing(true);
-    const data = {
-      vessel_id:activeVesselId, counterparty:contractForm.counterparty,
-      start_date:contractForm.start, end_date:contractForm.end,
-      rate:+contractForm.rate||0, mob:+contractForm.mob||0, demob:+contractForm.demob||0,
-      firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
-      priority:contractForm.priority||"contract",
-      contract_number:contractForm.contractNumber||null,
-      contract_date: contractForm.contractDate || null,
-    };
-    if (editContractId) {
-      const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
-      if (error) alert("Ошибка: " + error.message);
-    } else {
-      const { error } = await supabase.from("contracts").insert(data);
-      if (error) alert("Ошибка: " + error.message);
+    if (externalFiles && externalFiles.length > 0 && isAdmin) {
+      handleUpload(externalFiles);
+      onExternalFilesConsumed?.();
     }
-    setSyncing(false); setShowContractForm(false); await loadData();
-  }, [contractForm, activeVesselId, editContractId, loadData]);
+  }, [externalFiles]);
 
-  const deleteContract = useCallback(async () => {
-    if (!editContractId) return;
-    setSyncing(true);
-    await supabase.from("contracts").delete().eq("id", editContractId);
-    setSyncing(false); setShowContractForm(false); await loadData();
-  }, [editContractId, loadData]);
+  useEffect(() => {
+    const onEnter = (e: DragEvent) => { e.preventDefault(); dragCounter.current++; setDragging(true); };
+    const onLeave = () => { dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setDragging(false); } };
+    const onOver = (e: DragEvent) => { e.preventDefault(); };
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault(); dragCounter.current = 0; setDragging(false);
+      if (e.dataTransfer?.files?.length && isAdmin) handleUpload(e.dataTransfer.files);
+    };
+    document.addEventListener("dragenter", onEnter);
+    document.addEventListener("dragleave", onLeave);
+    document.addEventListener("dragover", onOver);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("dragenter", onEnter);
+      document.removeEventListener("dragleave", onLeave);
+      document.removeEventListener("dragover", onOver);
+      document.removeEventListener("drop", onDrop);
+    };
+  }, [isAdmin]);
 
-  const addVessel = useCallback(async (name: string, branch: string, imo: string) => {
-    setSyncing(true);
-    const maxId = vessels.reduce((m, v) => Math.max(m, v.id), 0);
-    const { error } = await supabase.from("vessels").insert({ id:maxId+1, name, branch, imo, show_on_gantt: true });
-    if (error) alert("Ошибка: " + error.message);
-    setSyncing(false); await loadData();
-  }, [vessels, loadData]);
+useEffect(() => {
+  if (!mapRef.current || mapObj.current) return;
+  
+const map = L.map(mapRef.current, { 
+  center: [62, 90], 
+  zoom: 3, 
+  zoomControl: false, 
+  attributionControl: false,
+  zoomSnap: 1,
+  zoomDelta: 1,
+  wheelPxPerZoomLevel: 120,
+});
 
-  const saveVessel = useCallback(async (name: string, branch: string, imo: string, photoUrl: string) => {
-    if (!editingVessel) return;
-    setSyncing(true);
-    await supabase.from("vessels").update({ name, branch, imo, photo_url: photoUrl }).eq("id", editingVessel.id);
-    setSyncing(false); setShowVesselForm(false); await loadData();
-  }, [editingVessel, loadData]);
+// Принудительно отключаем сглаженный зум
+map.on('wheel', (e: any) => {
+  const delta = e.originalEvent.deltaY > 0 ? 1 : -1;
+  const newZoom = Math.max(0, Math.min(map.getMaxZoom(), map.getZoom() + delta));
+  map.setZoom(newZoom, { animate: false });
+  e.originalEvent.preventDefault();
+});
+  
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { attribution: "", subdomains: "abc", maxZoom: 19 }
+  ).addTo(map);
 
-  const deleteVessel = useCallback(async (id: number) => {
-    setSyncing(true);
-    await supabase.from("contracts").delete().eq("vessel_id", id);
-    await supabase.from("vessels").delete().eq("id", id);
-    setSyncing(false); await loadData();
-  }, [loadData]);
+  L.tileLayer(
+    "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
+    { attribution: "", maxZoom: 18, minZoom: 1, opacity: 0.3 }
+  ).addTo(map);
+  
+  L.control.zoom({ position: "topright" }).addTo(map);
 
-  const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpShortKey(c.counterparty)))], [contracts]);
-  const allTypes = useMemo(() => ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))], [vessels]);
-  const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
-  const allCps = useMemo(() => ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))], [cpKeys]);
+  });
 
-  const visibleContracts = useMemo(() => {
-    return filterCp==="Все" ? contracts : contracts.filter(c => cpShortKey(c.counterparty)===filterCp);
-  }, [contracts, filterCp]);
+  markersRef.current = (L as any).markerClusterGroup({
+    maxClusterRadius: 40,
+    spiderfyOnMaxZoom: false,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: false,
+    iconCreateFunction: (cluster: any) => {
+      const children = cluster.getAllChildMarkers();
+      const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
+      children.forEach((m: any) => {
+        if (m.options._status) counts[m.options._status as keyof typeof counts]++;
+      });
+      return mkPieIcon(counts, children.length);
+    },
+  }).addTo(map);
 
-  const getVesselStatus = useCallback((vesselId: number): string[] => {
-    const vesselContracts = visibleContracts.filter(c => c.vesselId === vesselId);
-    if (vesselContracts.length === 0) return [];
-    const statuses: string[] = [];
-    if (vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ")) statuses.push("asg");
-    if (vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт")) statuses.push("rem");
-    if (vesselContracts.some(c => { const key = cpShortKey(c.counterparty); return key !== "АСГ" && key !== "Ремонт"; })) statuses.push("asd");
-    return statuses;
-  }, [visibleContracts]);
+  markersRef.current.on("clusterclick", (e: any) => {
+    const cluster = e.layer;
+    const children = cluster.getAllChildMarkers();
+    const lats = new Set(children.map((m: any) => m.getLatLng().lat.toFixed(6)));
+    const lngs = new Set(children.map((m: any) => m.getLatLng().lng.toFixed(6)));
+    const allSameCoords = lats.size === 1 && lngs.size === 1;
+    if (allSameCoords) {
+      cluster.spiderfy();
+    } else {
+      cluster.zoomToBounds({ padding: [50, 50] });
+    }
+  });
+  
+  mapObj.current = map;
+  mapRef.current.addEventListener("mousedown", (e) => {
+  if (e.button === 1) {
+    e.preventDefault();
+    map.setView([62, 90], 3, { animate: true });
+  }
+});
+  return () => { map.remove(); mapObj.current = null; };
+}, []);
+
+  useEffect(() => { loadDates(); }, []);
+
+  async function loadDates() {
+    const { data } = await supabase.from("dpr_entries").select("report_date").order("report_date", { ascending: false });
+    if (data) {
+      const unique = [...new Set(data.map((r: any) => r.report_date))];
+      setDates(unique);
+      if (unique.length > 0 && !selDate) setSelDate(unique[0]);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    if (selDate) loadVessels(selDate);
+  }, [selDate]);
+
+  async function loadVessels(date: string) {
+    setLoading(true);
+    const { data } = await supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name");
+    setVessels(data || []);
+    setSelVessel(null);
+    setLoading(false);
+  }
+
+  const getVesselType = (vesselName: string): string => {
+    const normalized = vesselName.toUpperCase().trim();
+    let type = typeMap.get(normalized);
+    if (type) return type;
+    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
+    type = typeMap.get(withoutPrefix);
+    if (type) return type;
+    for (const [key, val] of typeMap.entries()) {
+      if (normalized.includes(key) || key.includes(normalized)) return val;
+    }
+    return "";
+  };
+
+  const allTypes = useMemo(() => {
+    const types = new Set<string>();
+    vessels.forEach(v => { const t = getVesselType(v.vessel_name); if (t) types.add(t); });
+    return ["Все", ...Array.from(types).sort()];
+  }, [vessels, getVesselType]);
+
+  const allBranches = useMemo(() => {
+    const branches = new Set<string>();
+    vessels.forEach(v => { if (v.branch) branches.add(v.branch); });
+    return ["Все", ...Array.from(branches).sort()];
+  }, [vessels]);
+
+  const allStatuses = ["Все", "АСГ", "АСД", "РЕМ"];
 
   const filtered = useMemo(() => {
     return vessels.filter(v => {
-      const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
-      const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
-      const ganttOk = v.show_on_gantt !== false;
-      const vesselStatuses = getVesselStatus(v.id);
-      const statusOk = filterStatuses.length === 0 || vesselStatuses.some(s => filterStatuses.includes(s));
-      return typeOk && branchOk && ganttOk && statusOk;
-    }).sort((a, b) =>
-      typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder))
-    );
-  }, [vessels, filterTypes, filterBranches, filterStatuses, getVesselStatus]);
+      const typeOk = filterType === "Все" || getVesselType(v.vessel_name) === filterType;
+      const branchOk = filterBranch === "Все" || v.branch === filterBranch;
+      const statusOk = filterStatus === "Все" || cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem");
+      return typeOk && branchOk && statusOk;
+    });
+  }, [vessels, filterType, filterBranch, filterStatus, getVesselType]);
 
-  const totalRev = useMemo(() => {
-    const yr = new Date().getFullYear();
-    const yrS = `${yr}-01-01`;
-    const yrE = `${yr}-12-31`;
-    return visibleContracts
-      .filter(c =>
-        filtered.some(v => v.id === c.vesselId) &&
-        c.priority === "contract" &&
-        cpShortKey(c.counterparty) !== "Ремонт" &&
-        cpShortKey(c.counterparty) !== "АСГ"
-      )
-      .reduce((s, c) => {
-        const cs = c.start < yrS ? yrS : c.start;
-        const ce = c.end   > yrE ? yrE : c.end;
-        return s + contractDays(cs, ce) * c.rate + c.mob + c.demob;
-      }, 0);
-  }, [visibleContracts, filtered]);
+  const searchFiltered = useMemo(() => {
+    return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
+  }, [filtered, search]);
 
-  const btnFilter = useCallback((active: boolean, amber?: boolean) => ({
-    padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
-    borderColor: active ? (amber ? T.amber : T.accent) : T.border,
-    background: active ? (amber ? T.amber : T.accent) : T.bg2,
-    color: active ? "#ffffff" : T.text2
-  } as React.CSSProperties), []);
+  useEffect(() => {
+    if (!mapObj.current || !markersRef.current) return;
+    markersRef.current.clearLayers();
+    const bounds: L.LatLng[] = [];
+    filtered.forEach((v) => {
+      if (v.lat == null || v.lng == null) return;
+      const c = cls(v.status);
+      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
+      const label = formatVesselName(v.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|скб)\s+/i, "").trim());
+      marker.bindTooltip(label, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
+      marker.on("click", (e: any) => {
+  L.DomEvent.stopPropagation(e);
+  const savedZoom = mapObj.current?.getZoom();
+  const savedCenter = mapObj.current?.getCenter();
+  setSelVessel(v);
+  if (isMobile) setSidebarOpen(false);
+  setTimeout(() => {
+    if (mapObj.current && savedZoom && savedCenter) {
+      mapObj.current.setView(savedCenter, savedZoom, { animate: false });
+    }
+  }, 50);
+});
+      markersRef.current!.addLayer(marker);
+      bounds.push(L.latLng(v.lat, v.lng));
+    });
+    const updateLabels = () => {
+      markersRef.current!.getLayers().forEach((m: any) => {
+        if (!m.getTooltip) return;
+        const parent = markersRef.current!.getVisibleParent(m);
+        if (parent === m) m.openTooltip(); else m.closeTooltip();
+      });
+    };
+    markersRef.current.on("animationend", updateLabels);
+    mapObj.current.on("zoomend", updateLabels);
+    setTimeout(updateLabels, 300);
+    return () => { if (mapObj.current) mapObj.current.off("zoomend", updateLabels); };
+  }, [filtered, isMobile]);
 
-  const fmoney = useCallback((n: number) => {
-    if (!n && n !== 0) return "—";
-    return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
-  }, []);
+  async function handleUpload(files: FileList) {
+    setUploading(true);
+    setUploadMsg("Обработка...");
+    try {
+      const { data: vesselList } = await supabase.from("vessels").select("name, branch");
+      const branchMap = new Map<string, string>();
+      (vesselList || []).forEach((v: any) => {
+        const original = v.name.trim();
+        const upper = original.toUpperCase();
+        branchMap.set(original, v.branch);
+        branchMap.set(upper, v.branch);
+        const withoutPrefix = original.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС)\s+/i, "");
+        if (withoutPrefix !== original) {
+          branchMap.set(withoutPrefix, v.branch);
+          branchMap.set(withoutPrefix.toUpperCase(), v.branch);
+        }
+      });
 
-  const accessLabel = useCallback(() => {
-    if (access === "admin") return "👤 Админ";
-    if (access === "viewer") return "👁 Просмотр";
-    return null;
-  }, [access]);
+      const { vessels: parsed, date } = await parseMsgFiles(Array.from(files), branchMap);
 
-  if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
-      <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
-      <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
-    </div>
-  );
+      if (!parsed.length) { setUploadMsg("⚠ Данные не найдены"); setUploading(false); return; }
+      if (!date) { setUploadMsg("⚠ Дата не определена"); setUploading(false); return; }
 
-  const tabs: [string, string][] = [
-    ["gantt", "📊 Расстановка"],
-    ...(isAdmin ? [["economics", "💰 Экономика"]] as [string, string][] : []),
-    ["map", "🗺 Карта флота"],
-    ["summary", "📋 Сводный отчёт"],
-    ...(isAdmin ? [["vessels", "🚢 Суда"]] as [string, string][] : []),
-  ];
+      const dateStr = date.toISOString().slice(0, 10);
+      setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
 
-  const tabStyle = (k: string): React.CSSProperties => ({
-    padding: "6px 14px",
-    border: "none",
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-    borderRadius: 6,
-    background: activeTab === k ? "#ffffff" : "rgba(255,255,255,0.15)",
-    color: activeTab === k ? T.accent : "#ffffff",
-    transition: "all 0.2s",
-  });
+      const { data: existing } = await supabase
+        .from("dpr_entries")
+        .select("vessel_name, contract_info, work_period")
+        .eq("report_date", dateStr);
+
+      let prevData = existing || [];
+      if (prevData.filter((r: any) => r.contract_info || r.work_period).length === 0) {
+        const { data: prevDates } = await supabase
+          .from("dpr_entries")
+          .select("report_date")
+          .lt("report_date", dateStr)
+          .order("report_date", { ascending: false })
+          .limit(1);
+        if (prevDates && prevDates.length > 0) {
+          const { data: prevRecords } = await supabase
+            .from("dpr_entries")
+            .select("vessel_name, contract_info, work_period")
+            .eq("report_date", prevDates[0].report_date);
+          prevData = prevRecords || [];
+        }
+      }
+
+      const existingMap = new Map(prevData.map((r: any) => [r.vessel_name, r]));
+
+      let ok = 0, fail = 0;
+      for (const v of parsed) {
+        const prev = existingMap.get(v.name);
+        const row = {
+          vessel_name: v.name,
+          branch: v.branch,
+          report_date: dateStr,
+          status: v.status,
+          coord_raw: v.coordRaw,
+          lat: v.lat,
+          lng: v.lng,
+          note: v.note,
+          supplies: v.supplies,
+          contract_info: prev?.contract_info || null,
+          work_period: prev?.work_period || null,
+        };
+        const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
+        if (error) { fail++; console.error(v.name, error); } else ok++;
+      }
+
+      setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
+      await loadDates();
+      setSelDate(dateStr);
+    } catch (e: any) {
+      setUploadMsg("Ошибка: " + (e?.message || e));
+    }
+    setUploading(false);
+  }
+
+  const cAsg = filtered.filter((v) => cls(v.status) === "asg").length;
+  const cAsd = filtered.filter((v) => cls(v.status) === "asd").length;
+  const cRem = filtered.filter((v) => cls(v.status) === "rem").length;
+  const noPos = filtered.filter((v) => v.lat == null).length;
+
+  const showSidebar = isMobile ? sidebarOpen : true;
 
   return (
-    <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
+    <div style={{ display: "flex", height: "calc(100dvh - 60px)", gap: 0, overflow: "hidden", position: "relative", zIndex: 0 }}>
+      {dragging && isAdmin && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9000, background: "rgba(11,15,24,0.85)", border: "3px dashed #3b82f6", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, pointerEvents: "none" }}>
+          <div style={{ fontSize: 52 }}>📂</div>
+          <div style={{ fontSize: 18, color: "#3b82f6", fontFamily: "monospace", fontWeight: 600 }}>Отпустите файлы ДПР</div>
+          <div style={{ fontSize: 13, color: "#9ca3af" }}>Поддерживаются .msg и .eml файлы от всех филиалов</div>
+        </div>
+      )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.header, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
-        {/* Левый блок: лого + вкладки + кнопка Войти/Выйти */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
-            <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="МСС" />
-            Флот МСС
-          </span>
+      {isMobile && !sidebarOpen && (
+        <button onClick={() => setSidebarOpen(true)} style={{ position: "absolute", top: 10, left: 10, zIndex: 800, width: 40, height: 40, borderRadius: 8, background: "#fff", border: `1px solid ${T.border}`, boxShadow: "0 2px 8px rgba(0,0,0,.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, cursor: "pointer", color: T.text }}>☰</button>
+      )}
 
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-            {tabs.map(([k, l]) => (
-              <button key={k} onClick={() => setActiveTab(k)} style={tabStyle(k)}>
-                {l}
-              </button>
-            ))}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} style={{ position: "absolute", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.3)" }} />
+      )}
 
-            {/* Кнопка Войти/Выйти — в одной строке с вкладками */}
-            {access !== "guest" ? (
-              <button
-                onClick={() => { setAccess("guest"); setActiveTab("gantt"); }}
-                style={tabStyle("__logout__")}
-              >
-                🔓 Выйти
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowLogin(true)}
-                style={tabStyle("__login__")}
-              >
-                🔒 Войти
-              </button>
-            )}
+      {showSidebar && (
+        <Sidebar
+          dates={dates}
+          selDate={selDate}
+          onDateChange={setSelDate}
+          filterType={filterType}
+          filterBranch={filterBranch}
+          filterStatus={filterStatus}
+          allTypes={allTypes}
+          allBranches={allBranches}
+          allStatuses={allStatuses}
+          onFilterTypeChange={setFilterType}
+          onFilterBranchChange={setFilterBranch}
+          onFilterStatusChange={setFilterStatus}
+          cAsg={cAsg}
+          cAsd={cAsd}
+          cRem={cRem}
+          total={filtered.length}
+          noPos={noPos}
+          uploadMsg={uploadMsg}
+          uploading={uploading}
+          search={search}
+          onSearchChange={setSearch}
+          filteredVessels={searchFiltered}
+          typeMap={typeMap}
+          selectedVessel={selVessel}
+          onSelectVessel={(v) => {
+            setSelVessel(v);
+            if (isMobile) setSidebarOpen(false);
+            if (v.lat != null && v.lng != null && mapObj.current) {
+              mapObj.current.setView([v.lat, v.lng], Math.max(mapObj.current.getZoom(), 7), { animate: true });
+            }
+          }}
+          isMobile={isMobile}
+          onCloseSidebar={() => setSidebarOpen(false)}
+          sidebarOpen={sidebarOpen}
+        />
+      )}
+
+      <div style={{ flex: 1, position: "relative" }}>
+        <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
+
+        {dates.length === 0 && !loading && (
+          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center", pointerEvents: "none", zIndex: 500 }}>
+            <div style={{ fontSize: 16, color: T.text2, fontWeight: 500, marginBottom: 6 }}>{isAdmin ? "Загрузите файлы ДПР" : "Данные ДПР не загружены"}</div>
+            {isAdmin && <div style={{ fontSize: 12, color: T.text2 }}>Используйте кнопку «Загрузить .msg» в шапке или перетащите файлы на страницу</div>}
           </div>
-        </div>
+        )}
 
-        {/* Правый блок: синхронизация, загрузка ДПР, выручка, роль, экспорт */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {syncing && <span style={{ fontSize: 11, color: "#93c5fd" }}>⟳ сохранение...</span>}
+        {selVessel && (
+          <VesselPopup
+            vessel={selVessel}
+            vesselType={getVesselType(selVessel.vessel_name)}
+            canView={canView}
+            onClose={() => setSelVessel(null)}
+          />
+        )}
 
-          {isAdmin && activeTab === "map" && (
-            <label style={{ cursor: "pointer", fontSize: 12, color: "#bfdbfe", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.1)" }}>
-              📂 Загрузить .msg
-              <input type="file" multiple accept=".msg,.eml" style={{ display: "none" }}
-                onChange={(e) => { if (e.target.files) setHeaderUploadFiles(e.target.files); }} />
-            </label>
-          )}
-
-          {isAdmin && (activeTab === "gantt" || activeTab === "economics") && (
-            <span style={{ fontSize: 12, color: "#bfdbfe" }}>
-              Выручка: <b style={{ color: "#86efac" }}>{fmoney(totalRev)}</b>
-            </span>
-          )}
-
-          {access !== "guest" && (
-            <span style={{ fontSize: 11, color: "#bfdbfe" }}>{accessLabel()}</span>
-          )}
-
-          {isAdmin && activeTab === "gantt" && (
-            <div style={{ position: "relative" }}>
-              <button onClick={() => setShowExportMenu(v => !v)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>⬇ Экспорт PPTX ▾</button>
-              {showExportMenu && (
-                <div style={{ position: "absolute", right: 0, top: "110%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 16, zIndex: 50, width: 300, boxShadow: "0 8px 32px rgba(0,0,0,.15)" }}>
-                  <div style={{ fontSize: 12, color: T.text2, marginBottom: 10 }}>Выберите что экспортировать:</div>
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Тип судна</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{allTypes.map(t => <button key={t} onClick={() => toggleType(t)} style={btnFilter(t === "Все" ? filterTypes.length === 0 : filterTypes.includes(t))}>{t}</button>)}</div>
-                  </div>
-                  {allBranches.length > 1 && (
-                    <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Филиал</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{allBranches.map(b => <button key={b} onClick={() => toggleBranch(b)} style={btnFilter(b === "Все" ? filterBranches.length === 0 : filterBranches.includes(b), true)}>{b || "Без филиала"}</button>)}</div>
-                    </div>
-                  )}
-                  {allCps.length > 1 && (
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Контрагент</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{allCps.map(cp => <button key={cp} onClick={() => setFilterCp(cp)} style={btnFilter(filterCp === cp)}>{cp}</button>)}</div>
-                    </div>
-                  )}
-                  <div style={{ fontSize: 11, color: T.text2, marginBottom: 8 }}>Будет экспортировано: <b style={{ color: T.text }}>{filtered.length} судов</b></div>
-                  <button onClick={() => { exportToPPTX(filtered, contracts, filterCp, isAdmin, filterBranches, filterTypes); setShowExportMenu(false); }} style={{ width: "100%", padding: 9, borderRadius: 6, border: "none", background: T.accent, color: "#ffffff", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>⬇ Скачать PPTX</button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
-      <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
-        {(activeTab === "gantt" || activeTab === "economics") && (
-          <FilterBar
-            allTypes={allTypes}
-            allBranches={allBranches}
-            allCps={allCps}
-            filterTypes={filterTypes}
-            filterBranches={filterBranches}
-            filterCp={filterCp}
-            filterStatuses={filterStatuses}
-            canView={canView}
-            showStatusFilter={activeTab === "gantt"}
-            onToggleType={toggleType}
-            onToggleBranch={toggleBranch}
-            onFilterCp={setFilterCp}
-            onToggleStatus={toggleStatus}
-          />
-        )}
-
-        {activeTab === "gantt" && (
-          <GanttChart
-            vessels={filtered}
-            contracts={visibleContracts}
-            isAdmin={isAdmin}
-            canView={canView}
-            onAddContract={openAddContract}
-            onEditContract={openEditContract}
-          />
-        )}
-        {activeTab === "map" && (
-          <FleetMap
-            isAdmin={isAdmin}
-            canView={canView}
-            externalFiles={headerUploadFiles}
-            onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
-          />
-        )}
-        {activeTab === "summary" && (
-          <SummaryReport isAdmin={isAdmin} canView={canView} />
-        )}
-        {activeTab === "economics" && isAdmin && (
-          <Economics
-            vessels={filtered}
-            contracts={visibleContracts}
-            onAddContract={openAddContract}
-            onEditContract={openEditContract}
-          />
-        )}
-        {activeTab === "vessels" && isAdmin && (
-          <VesselList
-            vessels={vessels}
-            contracts={contracts}
-            onAdd={addVessel}
-            onEdit={v => { setEditingVessel(v); setShowVesselForm(true); }}
-            onDelete={deleteVessel}
-            onVesselUpdate={loadData}
-          />
-        )}
-      </div>
-
-      {showLogin && (
-        <LoginForm
-          onLogin={level => { setAccess(level); setShowLogin(false); }}
-          onClose={() => setShowLogin(false)}
-        />
-      )}
-
-      {showContractForm && canView && (
-        <ContractForm
-          form={contractForm}
-          editId={editContractId}
-          vesselName={vessels.find(v => v.id === activeVesselId)?.name || ""}
-          readOnly={!isAdmin}
-          onChange={setContractForm}
-          onSave={saveContract}
-          onDelete={deleteContract}
-          onClose={() => setShowContractForm(false)}
-        />
-      )}
-
-      {showVesselForm && isAdmin && editingVessel && (
-        <VesselForm
-          vessel={editingVessel}
-          onSave={saveVessel}
-          onClose={() => setShowVesselForm(false)}
-        />
-      )}
-
-      {showExportMenu && <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setShowExportMenu(false)} />}
+      <style>{`
+        .vessel-label-map { background: white !important; border: 1px solid #d1dce8 !important; border-radius: 3px !important; padding: 2px 6px !important; font-size: 11px !important; font-weight: 500 !important; color: #1a2a3a !important; box-shadow: 0 1px 4px rgba(0,0,0,.15) !important; white-space: nowrap !important; }
+        .vessel-label-map::before { display: none !important; }
+        .leaflet-control-attribution { display: none !important; }
+      `}</style>
     </div>
   );
 }
