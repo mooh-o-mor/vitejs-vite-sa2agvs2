@@ -266,12 +266,12 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          flexWrap: "nowrap",
+          flexWrap: "wrap",
           gap: 8,
           background: STATUS_HEADER_BG[c],
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap", flex: 1, minWidth: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: "1 1 auto", minWidth: 0 }}>
           {vesselType && (
             <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, flexShrink: 0 }}>
               {formatVesselType(vesselType)}
@@ -279,11 +279,11 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
           )}
           {rsClassUrl ? (
             <a href={rsClassUrl} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 16, fontWeight: 700, color: T.accent, textDecoration: "underline", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+              style={{ fontSize: 16, fontWeight: 700, color: T.accent, textDecoration: "underline", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto", minWidth: 50 }}>
               {formattedName}
             </a>
           ) : (
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto", minWidth: 50 }}>
               {formattedName}
             </span>
           )}
@@ -303,13 +303,14 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
             fontSize: 22,
             lineHeight: 1, 
             flexShrink: 0,
-            padding: "0 4px",
-            minWidth: 32,
-            minHeight: 32,
+            padding: "4px 8px",
+            minWidth: 36,
+            minHeight: 36,
             borderRadius: 4,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center"
+            justifyContent: "center",
+            marginLeft: "auto"
           }}
         >
           ✕
@@ -491,10 +492,6 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                         </tbody>
                       </table>
                     )}
-
-                    <div style={{ marginTop: 6, textAlign: "right", fontSize: 9, color: T.text2, fontFamily: "monospace" }}>
-                      Open-Meteo
-                    </div>
                   </>
                 )}
               </div>
