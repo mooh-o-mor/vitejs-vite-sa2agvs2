@@ -226,12 +226,6 @@ export default function App() {
     return new Intl.NumberFormat("ru-RU").format(Math.round(n)) + " ₽";
   }, []);
 
-  const accessLabel = useCallback(() => {
-    if (access === "admin") return "👤 Админ";
-    if (access === "viewer") return "👁 Просмотр";
-    return null;
-  }, [access]);
-
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:T.bg, flexDirection:"column", gap:16 }}>
       <img src="/logoMSS.png" style={{ height:240, width:240, objectFit:"contain" }} alt="МСС" />
@@ -248,81 +242,94 @@ export default function App() {
   ];
 
   const tabStyle = (k: string): React.CSSProperties => ({
-    padding: "6px 14px",
+    padding: "6px 12px",
     border: "none",
     cursor: "pointer",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 600,
     borderRadius: 6,
     background: activeTab === k ? "#ffffff" : "rgba(255,255,255,0.15)",
     color: activeTab === k ? T.accent : "#ffffff",
     transition: "all 0.2s",
+    whiteSpace: "nowrap",
   });
 
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.header, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
-        {/* Левый блок: лого + вкладки + кнопка Войти/Выйти */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
-            <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="МСС" />
+      <div style={{ 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "space-between", 
+        background: T.header, 
+        padding: "6px 12px",
+        flexWrap: "nowrap",
+        gap: 8,
+        overflowX: "auto"
+      }}>
+        {/* Левый блок: лого + Флот МСС */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <img src="/logo.png" style={{ height: 26, width: 26, objectFit: "contain" }} alt="МСС" />
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", whiteSpace: "nowrap" }}>
             Флот МСС
           </span>
-
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-            {tabs.map(([k, l]) => (
-              <button key={k} onClick={() => setActiveTab(k)} style={tabStyle(k)}>
-                {l}
-              </button>
-            ))}
-
-            {/* Кнопка Войти/Выйти — в одной строке с вкладками */}
-            {access !== "guest" ? (
-              <button
-                onClick={() => { setAccess("guest"); setActiveTab("gantt"); }}
-                style={tabStyle("__logout__")}
-              >
-                🔓 Выйти
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowLogin(true)}
-                style={tabStyle("__login__")}
-              >
-                🔒 Войти
-              </button>
-            )}
-          </div>
         </div>
 
-        {/* Правый блок: синхронизация, загрузка ДПР, выручка, роль, экспорт */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {syncing && <span style={{ fontSize: 11, color: "#93c5fd" }}>⟳ сохранение...</span>}
+        {/* Вкладки и кнопка входа/выхода */}
+        <div style={{ display: "flex", gap: 4, alignItems: "center", overflowX: "auto", flex: "1 1 auto", minWidth: 0 }}>
+          {tabs.map(([k, l]) => (
+            <button key={k} onClick={() => setActiveTab(k)} style={tabStyle(k)}>
+              {l}
+            </button>
+          ))}
+          {access !== "guest" ? (
+            <button
+              onClick={() => { setAccess("guest"); setActiveTab("gantt"); }}
+              style={tabStyle("__logout__")}
+            >
+              🔓 Выйти
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowLogin(true)}
+              style={tabStyle("__login__")}
+            >
+              🔒 Войти
+            </button>
+          )}
+        </div>
+
+        {/* Правый блок */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {syncing && <span style={{ fontSize: 10, color: "#93c5fd", whiteSpace: "nowrap" }}>⟳</span>}
 
           {isAdmin && activeTab === "map" && (
-            <label style={{ cursor: "pointer", fontSize: 12, color: "#bfdbfe", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.1)" }}>
-              📂 Загрузить .msg
+            <label style={{ cursor: "pointer", fontSize: 10, color: "#bfdbfe", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+              📂 .msg/.eml
               <input type="file" multiple accept=".msg,.eml" style={{ display: "none" }}
                 onChange={(e) => { if (e.target.files) setHeaderUploadFiles(e.target.files); }} />
             </label>
           )}
 
           {isAdmin && (activeTab === "gantt" || activeTab === "economics") && (
-            <span style={{ fontSize: 12, color: "#bfdbfe" }}>
-              Выручка: <b style={{ color: "#86efac" }}>{fmoney(totalRev)}</b>
+            <span style={{ fontSize: 10, color: "#bfdbfe", whiteSpace: "nowrap" }}>
+              💰 {fmoney(totalRev)}
             </span>
           )}
 
           {access !== "guest" && (
-            <span style={{ fontSize: 11, color: "#bfdbfe" }}>{accessLabel()}</span>
+            <span style={{ fontSize: 10, color: "#bfdbfe", whiteSpace: "nowrap" }}>
+              {access === "admin" ? "👤 Админ" : "👁 Просмотр"}
+            </span>
           )}
 
           {isAdmin && activeTab === "gantt" && (
             <div style={{ position: "relative" }}>
-              <button onClick={() => setShowExportMenu(v => !v)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>⬇ Экспорт PPTX ▾</button>
+              <button onClick={() => setShowExportMenu(v => !v)} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 10, fontWeight: 600, whiteSpace: "nowrap" }}>
+                📊 PPTX
+              </button>
               {showExportMenu && (
-                <div style={{ position: "absolute", right: 0, top: "110%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 16, zIndex: 50, width: 300, boxShadow: "0 8px 32px rgba(0,0,0,.15)" }}>
+                <div style={{ position: "absolute", right: 0, top: "110%", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 16, zIndex: 50, width: 280, boxShadow: "0 8px 32px rgba(0,0,0,.15)" }}>
                   <div style={{ fontSize: 12, color: T.text2, marginBottom: 10 }}>Выберите что экспортировать:</div>
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ fontSize: 11, color: T.text3, marginBottom: 4 }}>Тип судна</div>
