@@ -249,12 +249,13 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
         bottom: 36,
         width: 420,
         maxWidth: "calc(100vw - 40px)",
+        maxHeight: "calc(100vh - 80px)",
         background: "#fff",
         border: `1px solid ${T.border}`,
         borderRadius: 8,
         zIndex: 900,
         boxShadow: "0 12px 48px rgba(0,0,0,.15)",
-        overflow: "hidden",
+        overflow: "auto",
       }}
     >
       {/* ── Заголовок ── */}
@@ -292,7 +293,27 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
             </span>
           )}
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: T.text2, cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
+        <button 
+          onClick={onClose} 
+          style={{ 
+            background: "none", 
+            border: "none", 
+            color: T.text2, 
+            cursor: "pointer", 
+            fontSize: 22,
+            lineHeight: 1, 
+            flexShrink: 0,
+            padding: "0 4px",
+            minWidth: 32,
+            minHeight: 32,
+            borderRadius: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          ✕
+        </button>
       </div>
 
       {/* ── Фото ── */}
@@ -378,7 +399,9 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                   <tbody>
                     {(vessel.supplies as DprSupply[]).map((s, i) => (
                       <tr key={i}>
-                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>{s.type}</td>
+                        <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}` }}>
+                          {s.type === "Топливо ДТ" ? "ДТ" : s.type === "Топливо ТТ" ? "ТТ" : s.type}
+                        </td>
                         <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace" }}>{s.amt}</td>
                         <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace" }}>
                           {(() => {
@@ -386,7 +409,7 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                             if (isNaN(p)) return "—";
                             return (p > 100 ? p / 1000 : p).toFixed(1) + "%";
                           })()}
-                        </td>
+                         </td>
                         <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace" }}>{s.cons}</td>
                         <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
                       </tr>
@@ -450,18 +473,18 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                             <tr key={row.label}>
                               <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace", color: T.text2, fontSize: 10 }}>
                                 {row.label}
-                              </td>
+                               </td>
                               <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace", textAlign: "right" }}>
                                 {row.temp > 0 ? "+" : ""}{Math.round(row.temp)}°
-                              </td>
+                               </td>
                               <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace", textAlign: "right" }}>
                                 <WindArrow deg={row.windDir} />&nbsp;{Math.round(row.wind)}&nbsp;
                                 <span style={{ fontSize: 9, color: T.text2 }}>{deg2dir(row.windDir)}</span>
-                              </td>
+                               </td>
                               {weather.current.wave !== null && (
                                 <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace", textAlign: "right", color: T.accent }}>
                                   {row.wave !== null ? `${row.wave.toFixed(1)}м` : "—"}
-                                </td>
+                                 </td>
                               )}
                             </tr>
                           ))}
