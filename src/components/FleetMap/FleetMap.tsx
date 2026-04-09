@@ -132,7 +132,7 @@ map.on('wheel', (e: any) => {
 L.tileLayer(
   //"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&v=21.06&x={x}&y={y}&z={z}&scale=1&lang=ru_RU"
-{ attribution: "", subdomains: "abc", maxZoom: 19 }
+//{ attribution: "", subdomains: "abc", maxZoom: 19 }
 ).addTo(map);
 
   // OpenSeaMap навигационные знаки поверх
