@@ -35,7 +35,6 @@ export default function App() {
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [filterCp, setFilterCp] = useState("Все");
-  //const [sortBy, setSortBy] = useState<"type" | "name" | "branch">("type");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [headerUploadFiles, setHeaderUploadFiles] = useState<FileList | null>(null);
   const [showContractForm, setShowContractForm] = useState(false);
@@ -45,32 +44,30 @@ export default function App() {
   const [showVesselForm, setShowVesselForm] = useState(false);
   const [editingVessel, setEditingVessel] = useState<Vessel|null>(null);
 
-  // Мемоизированная функция загрузки данных
-const loadData = useCallback(async () => {
-  setLoading(true);
-  const [{ data: vData }, { data: cData }] = await Promise.all([
-    supabase.from("vessels").select("id,name,branch,imo,show_on_gantt").order("id"),
-    supabase.from("contracts").select("*").order("id"),
-  ]);
-  setVessels((vData||[]).map((v: any) => ({ 
-    id:v.id, 
-    name:v.name, 
-    branch:v.branch||"", 
-    imo:v.imo||"",
-    show_on_gantt: v.show_on_gantt !== false
-  })));
-  setContracts((cData||[]).map((c: any) => ({
-    id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
-    start:c.start_date, end:c.end_date,
-    rate:c.rate, mob:c.mob, demob:c.demob,
-    firmDays:c.firm_days||0, optionDays:c.option_days||0,
-    priority:c.priority||"contract", 
-    contractNumber:c.contract_number||"",  // ← добавить
-  contractDate:c.contract_date||""        // ← добавить
-  })));
-  
-  setLoading(false);
-}, []);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const [{ data: vData }, { data: cData }] = await Promise.all([
+      supabase.from("vessels").select("id,name,branch,imo,show_on_gantt").order("id"),
+      supabase.from("contracts").select("*").order("id"),
+    ]);
+    setVessels((vData||[]).map((v: any) => ({ 
+      id:v.id, 
+      name:v.name, 
+      branch:v.branch||"", 
+      imo:v.imo||"",
+      show_on_gantt: v.show_on_gantt !== false
+    })));
+    setContracts((cData||[]).map((c: any) => ({
+      id:c.id, vesselId:c.vessel_id, counterparty:c.counterparty,
+      start:c.start_date, end:c.end_date,
+      rate:c.rate, mob:c.mob, demob:c.demob,
+      firmDays:c.firm_days||0, optionDays:c.option_days||0,
+      priority:c.priority||"contract", 
+      contractNumber:c.contract_number||"",
+      contractDate:c.contract_date||""
+    })));
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -90,10 +87,7 @@ const loadData = useCallback(async () => {
   }, []);
 
   const toggleStatus = useCallback((value: string) => {
-    if (value === "Все") {
-      setFilterStatuses([]);
-      return;
-    }
+    if (value === "Все") { setFilterStatuses([]); return; }
     const statusKey = value === "АСГ" ? "asg" : value === "АСД" ? "asd" : "rem";
     setFilterStatuses(prev => prev.includes(statusKey) ? prev.filter(v => v !== statusKey) : [...prev, statusKey]);
   }, []);
@@ -128,16 +122,16 @@ const loadData = useCallback(async () => {
       rate:+contractForm.rate||0, mob:+contractForm.mob||0, demob:+contractForm.demob||0,
       firm_days:+contractForm.firmDays||0, option_days:+contractForm.optionDays||0,
       priority:contractForm.priority||"contract",
-      contract_number:contractForm.contractNumber||null,  // ← добавить
+      contract_number:contractForm.contractNumber||null,
       contract_date: contractForm.contractDate || null,
     };
-   if (editContractId) {
-  const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
-  if (error) alert("Ошибка: " + error.message);
-} else {
-  const { error } = await supabase.from("contracts").insert(data);
-  if (error) alert("Ошибка: " + error.message);
-}
+    if (editContractId) {
+      const { error } = await supabase.from("contracts").update(data).eq("id", editContractId);
+      if (error) alert("Ошибка: " + error.message);
+    } else {
+      const { error } = await supabase.from("contracts").insert(data);
+      if (error) alert("Ошибка: " + error.message);
+    }
     setSyncing(false); setShowContractForm(false); await loadData();
   }, [contractForm, activeVesselId, editContractId, loadData]);
 
@@ -156,12 +150,12 @@ const loadData = useCallback(async () => {
     setSyncing(false); await loadData();
   }, [vessels, loadData]);
 
-const saveVessel = useCallback(async (name: string, branch: string, imo: string, photoUrl: string) => {
-  if (!editingVessel) return;
-  setSyncing(true);
-  await supabase.from("vessels").update({ name, branch, imo, photo_url: photoUrl }).eq("id", editingVessel.id);
-  setSyncing(false); setShowVesselForm(false); await loadData();
-}, [editingVessel, loadData]);
+  const saveVessel = useCallback(async (name: string, branch: string, imo: string, photoUrl: string) => {
+    if (!editingVessel) return;
+    setSyncing(true);
+    await supabase.from("vessels").update({ name, branch, imo, photo_url: photoUrl }).eq("id", editingVessel.id);
+    setSyncing(false); setShowVesselForm(false); await loadData();
+  }, [editingVessel, loadData]);
 
   const deleteVessel = useCallback(async (id: number) => {
     setSyncing(true);
@@ -170,7 +164,6 @@ const saveVessel = useCallback(async (name: string, branch: string, imo: string,
     setSyncing(false); await loadData();
   }, [loadData]);
 
-  // Мемоизированные вычисления
   const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpShortKey(c.counterparty)))], [contracts]);
   const allTypes = useMemo(() => ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))], [vessels]);
   const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
@@ -180,55 +173,47 @@ const saveVessel = useCallback(async (name: string, branch: string, imo: string,
     return filterCp==="Все" ? contracts : contracts.filter(c => cpShortKey(c.counterparty)===filterCp);
   }, [contracts, filterCp]);
 
-  // Определяем статус судна для фильтрации
-// Определяем статус судна для фильтрации
-const getVesselStatus = useCallback((vesselId: number): string[] => {
-  const vesselContracts = visibleContracts.filter(c => c.vesselId === vesselId);
-  if (vesselContracts.length === 0) return [];
+  const getVesselStatus = useCallback((vesselId: number): string[] => {
+    const vesselContracts = visibleContracts.filter(c => c.vesselId === vesselId);
+    if (vesselContracts.length === 0) return [];
+    const statuses: string[] = [];
+    if (vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ")) statuses.push("asg");
+    if (vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт")) statuses.push("rem");
+    if (vesselContracts.some(c => { const key = cpShortKey(c.counterparty); return key !== "АСГ" && key !== "Ремонт"; })) statuses.push("asd");
+    return statuses;
+  }, [visibleContracts]);
 
-  const statuses: string[] = [];
-  if (vesselContracts.some(c => cpShortKey(c.counterparty) === "АСГ"))
-    statuses.push("asg");
-  if (vesselContracts.some(c => cpShortKey(c.counterparty) === "Ремонт"))
-    statuses.push("rem");
-  if (vesselContracts.some(c => {
-    const key = cpShortKey(c.counterparty);
-    return key !== "АСГ" && key !== "Ремонт";
-  })) statuses.push("asd");
-
-  return statuses;
-}, [visibleContracts]);
-
-const filtered = useMemo(() => {
-  return vessels.filter(v => {
-    const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
-    const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
-    const ganttOk = v.show_on_gantt !== false;
-    const vesselStatuses = getVesselStatus(v.id);
-    const statusOk = filterStatuses.length === 0 || vesselStatuses.some(s => filterStatuses.includes(s));
-    return typeOk && branchOk && ganttOk && statusOk;
-  }).sort((a, b) =>
-    typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder))
-  );
-}, [vessels, filterTypes, filterBranches, filterStatuses, getVesselStatus]);
+  const filtered = useMemo(() => {
+    return vessels.filter(v => {
+      const typeOk = filterTypes.length === 0 || filterTypes.includes(getType(v.name, typeOrder));
+      const branchOk = filterBranches.length === 0 || filterBranches.includes(v.branch);
+      const ganttOk = v.show_on_gantt !== false;
+      const vesselStatuses = getVesselStatus(v.id);
+      const statusOk = filterStatuses.length === 0 || vesselStatuses.some(s => filterStatuses.includes(s));
+      return typeOk && branchOk && ganttOk && statusOk;
+    }).sort((a, b) =>
+      typeOrder.indexOf(getType(a.name, typeOrder)) - typeOrder.indexOf(getType(b.name, typeOrder))
+    );
+  }, [vessels, filterTypes, filterBranches, filterStatuses, getVesselStatus]);
 
   const totalRev = useMemo(() => {
-  const yr = new Date().getFullYear();
-  const yrS = `${yr}-01-01`;
-  const yrE = `${yr}-12-31`;
-  return visibleContracts
-    .filter(c =>
-      filtered.some(v => v.id === c.vesselId) &&
-      c.priority === "contract" &&
-      cpShortKey(c.counterparty) !== "Ремонт" &&
-      cpShortKey(c.counterparty) !== "АСГ"
-    )
-    .reduce((s, c) => {
-      const cs = c.start < yrS ? yrS : c.start;
-      const ce = c.end   > yrE ? yrE : c.end;
-      return s + contractDays(cs, ce) * c.rate + c.mob + c.demob;
-    }, 0);
-}, [visibleContracts, filtered]);
+    const yr = new Date().getFullYear();
+    const yrS = `${yr}-01-01`;
+    const yrE = `${yr}-12-31`;
+    return visibleContracts
+      .filter(c =>
+        filtered.some(v => v.id === c.vesselId) &&
+        c.priority === "contract" &&
+        cpShortKey(c.counterparty) !== "Ремонт" &&
+        cpShortKey(c.counterparty) !== "АСГ"
+      )
+      .reduce((s, c) => {
+        const cs = c.start < yrS ? yrS : c.start;
+        const ce = c.end   > yrE ? yrE : c.end;
+        return s + contractDays(cs, ce) * c.rate + c.mob + c.demob;
+      }, 0);
+  }, [visibleContracts, filtered]);
+
   const btnFilter = useCallback((active: boolean, amber?: boolean) => ({
     padding:"4px 12px", borderRadius:20, border:"1px solid", cursor:"pointer", fontSize:12, fontWeight:600,
     borderColor: active ? (amber ? T.amber : T.accent) : T.border,
@@ -253,7 +238,6 @@ const filtered = useMemo(() => {
       <div style={{ fontSize:16, color:T.text2 }}>Загрузка данных...</div>
     </div>
   );
-  
 
   const tabs: [string, string][] = [
     ["gantt", "📊 Расстановка"],
@@ -263,42 +247,59 @@ const filtered = useMemo(() => {
     ...(isAdmin ? [["vessels", "🚢 Суда"]] as [string, string][] : []),
   ];
 
+  const tabStyle = (k: string): React.CSSProperties => ({
+    padding: "6px 14px",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 600,
+    borderRadius: 6,
+    background: activeTab === k ? "#ffffff" : "rgba(255,255,255,0.15)",
+    color: activeTab === k ? T.accent : "#ffffff",
+    transition: "all 0.2s",
+  });
+
   return (
     <div style={{ fontFamily:"Arial,sans-serif", background:T.bg, minHeight:"100vh", color:T.text }}>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: T.header, padding: "8px 16px", flexWrap: "wrap", gap: 8 }}>
+        {/* Левый блок: лого + вкладки + кнопка Войти/Выйти */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
             <img src="/logo.png" style={{ height: 32, width: 32, objectFit: "contain" }} alt="МСС" />
             Флот МСС
           </span>
-          
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
             {tabs.map(([k, l]) => (
-              <button 
-                key={k} 
-                onClick={() => setActiveTab(k)} 
-                style={{ 
-                  padding: "6px 14px", 
-                  border: "none", 
-                  cursor: "pointer", 
-                  fontSize: 13, 
-                  fontWeight: 600, 
-                  borderRadius: 6,
-                  background: activeTab === k ? "#ffffff" : "rgba(255,255,255,0.15)",
-                  color: activeTab === k ? T.accent : "#ffffff",
-                  transition: "all 0.2s"
-                }}
-              >
+              <button key={k} onClick={() => setActiveTab(k)} style={tabStyle(k)}>
                 {l}
               </button>
             ))}
+
+            {/* Кнопка Войти/Выйти — в одной строке с вкладками */}
+            {access !== "guest" ? (
+              <button
+                onClick={() => { setAccess("guest"); setActiveTab("gantt"); }}
+                style={tabStyle("__logout__")}
+              >
+                🔓 Выйти
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowLogin(true)}
+                style={tabStyle("__login__")}
+              >
+                🔒 Войти
+              </button>
+            )}
           </div>
         </div>
-        
+
+        {/* Правый блок: синхронизация, загрузка ДПР, выручка, роль, экспорт */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {syncing && <span style={{ fontSize: 11, color: "#93c5fd" }}>⟳ сохранение...</span>}
-          
+
           {isAdmin && activeTab === "map" && (
             <label style={{ cursor: "pointer", fontSize: 12, color: "#bfdbfe", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.1)" }}>
               📂 Загрузить .msg
@@ -306,23 +307,17 @@ const filtered = useMemo(() => {
                 onChange={(e) => { if (e.target.files) setHeaderUploadFiles(e.target.files); }} />
             </label>
           )}
-          
-         {isAdmin && (activeTab === "gantt" || activeTab === "economics") && (
-  <span style={{ fontSize: 12, color: "#bfdbfe" }}>
-    Выручка: <b style={{ color: "#86efac" }}>{fmoney(totalRev)}</b>
-  </span>
-)}
-          
+
+          {isAdmin && (activeTab === "gantt" || activeTab === "economics") && (
+            <span style={{ fontSize: 12, color: "#bfdbfe" }}>
+              Выручка: <b style={{ color: "#86efac" }}>{fmoney(totalRev)}</b>
+            </span>
+          )}
+
           {access !== "guest" && (
             <span style={{ fontSize: 11, color: "#bfdbfe" }}>{accessLabel()}</span>
           )}
-          
-          {access !== "guest" ? (
-            <button onClick={() => { setAccess("guest"); setActiveTab("gantt"); }} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🔓 Выйти</button>
-          ) : (
-            <button onClick={() => setShowLogin(true)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🔒 Войти</button>
-          )}
-          
+
           {isAdmin && activeTab === "gantt" && (
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowExportMenu(v => !v)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #93c5fd", background: "rgba(255,255,255,0.15)", color: "#ffffff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>⬇ Экспорт PPTX ▾</button>
@@ -355,23 +350,23 @@ const filtered = useMemo(() => {
       </div>
 
       <div style={{ padding: activeTab === "map" ? "0" : "6px 6px" }}>
-  {(activeTab === "gantt" || activeTab === "economics") && (
-    <FilterBar
-      allTypes={allTypes}
-      allBranches={allBranches}
-      allCps={allCps}
-      filterTypes={filterTypes}
-      filterBranches={filterBranches}
-      filterCp={filterCp}
-      filterStatuses={filterStatuses}
-      canView={canView}
-      showStatusFilter={activeTab === "gantt"}
-      onToggleType={toggleType}
-      onToggleBranch={toggleBranch}
-      onFilterCp={setFilterCp}
-      onToggleStatus={toggleStatus}
-    />
-  )}
+        {(activeTab === "gantt" || activeTab === "economics") && (
+          <FilterBar
+            allTypes={allTypes}
+            allBranches={allBranches}
+            allCps={allCps}
+            filterTypes={filterTypes}
+            filterBranches={filterBranches}
+            filterCp={filterCp}
+            filterStatuses={filterStatuses}
+            canView={canView}
+            showStatusFilter={activeTab === "gantt"}
+            onToggleType={toggleType}
+            onToggleBranch={toggleBranch}
+            onFilterCp={setFilterCp}
+            onToggleStatus={toggleStatus}
+          />
+        )}
 
         {activeTab === "gantt" && (
           <GanttChart
@@ -384,35 +379,33 @@ const filtered = useMemo(() => {
           />
         )}
         {activeTab === "map" && (
-        <FleetMap
-        //<YandexMap
-    isAdmin={isAdmin}
-    canView={canView}
-    externalFiles={headerUploadFiles}
-    onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
-      />
+          <FleetMap
+            isAdmin={isAdmin}
+            canView={canView}
+            externalFiles={headerUploadFiles}
+            onExternalFilesConsumed={() => setHeaderUploadFiles(null)}
+          />
         )}
-     
         {activeTab === "summary" && (
           <SummaryReport isAdmin={isAdmin} canView={canView} />
         )}
         {activeTab === "economics" && isAdmin && (
-  <Economics
-    vessels={filtered}
-    contracts={visibleContracts}
-    onAddContract={openAddContract}
-    onEditContract={openEditContract}
-  />
-)}
+          <Economics
+            vessels={filtered}
+            contracts={visibleContracts}
+            onAddContract={openAddContract}
+            onEditContract={openEditContract}
+          />
+        )}
         {activeTab === "vessels" && isAdmin && (
-         <VesselList
-  vessels={vessels}
-  contracts={contracts}
-  onAdd={addVessel}
-  onEdit={v => { setEditingVessel(v); setShowVesselForm(true); }}
-  onDelete={deleteVessel}
-  onVesselUpdate={loadData}
-/>
+          <VesselList
+            vessels={vessels}
+            contracts={contracts}
+            onAdd={addVessel}
+            onEdit={v => { setEditingVessel(v); setShowVesselForm(true); }}
+            onDelete={deleteVessel}
+            onVesselUpdate={loadData}
+          />
         )}
       </div>
 
