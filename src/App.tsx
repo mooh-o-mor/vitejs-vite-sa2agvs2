@@ -165,7 +165,20 @@ export default function App() {
   }, [loadData]);
 
   const cpKeys = useMemo(() => [...new Set(contracts.map(c => cpShortKey(c.counterparty)))], [contracts]);
-  const allTypes = useMemo(() => ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))], [vessels]);
+ const allTypes = useMemo(() => {
+  if (activeTab === "economics") {
+    return ["Все", ...typeOrder.filter(t =>
+      vessels.some(v =>
+        getType(v.name, typeOrder) === t &&
+        contracts.some(c => c.vesselId === v.id &&
+          cpShortKey(c.counterparty) !== "Ремонт" &&
+          cpShortKey(c.counterparty) !== "АСГ"
+        )
+      )
+    )];
+  }
+  return ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))];
+}, [vessels, contracts, activeTab]);
   const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
   const allCps = useMemo(() => ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))], [cpKeys]);
 
