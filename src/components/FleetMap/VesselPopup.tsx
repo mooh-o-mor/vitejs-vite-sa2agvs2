@@ -244,9 +244,10 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
   return (
     <div
       style={{
-        position: "absolute",
+        position: "fixed",
+        top: 60,
         right: 14,
-        bottom: 36,
+        bottom: "auto",
         width: 420,
         maxWidth: "calc(100vw - 40px)",
         maxHeight: "calc(100vh - 80px)",
@@ -266,12 +267,11 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          flexWrap: "wrap",
           gap: 8,
           background: STATUS_HEADER_BG[c],
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: "1 1 auto", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1, minWidth: 0 }}>
           {vesselType && (
             <span style={{ fontSize: 11, color: T.text, fontFamily: "monospace", fontWeight: 500, flexShrink: 0 }}>
               {formatVesselType(vesselType)}
@@ -279,11 +279,11 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
           )}
           {rsClassUrl ? (
             <a href={rsClassUrl} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 16, fontWeight: 700, color: T.accent, textDecoration: "underline", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto", minWidth: 50 }}>
+              style={{ fontSize: 16, fontWeight: 700, color: T.accent, textDecoration: "underline", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
               {formattedName}
             </a>
           ) : (
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto", minWidth: 50 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
               {formattedName}
             </span>
           )}
@@ -309,8 +309,7 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
             borderRadius: 4,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            marginLeft: "auto"
+            justifyContent: "center"
           }}
         >
           ✕
