@@ -21,7 +21,6 @@ const EMPTY_FORM: FormState = {
   priority:"contract", contractNumber:"", contractDate:""
 };
 
-
 export default function App() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -283,24 +282,10 @@ export default function App() {
           </button>
         ))}
 
-        {/* Войти / Выйти */}
-        {access !== "guest" ? (
-          <button
-            onClick={() => { setAccess("guest"); setActiveTab("gantt"); }}
-            style={tabStyle("__logout__")}
-          >
-            🔓 Выйти
-          </button>
-        ) : (
-          <button
-            onClick={() => setShowLogin(true)}
-            style={tabStyle("__login__")}
-          >
-            🔒 Войти
-          </button>
-        )}
+        {/* Спейсер — толкает правые элементы вправо */}
+        <div style={{ flex: 1, minWidth: 8 }} />
 
-        {/* Правые элементы — тоже просто идут в поток */}
+        {/* Правые элементы */}
         {syncing && (
           <span style={{ fontSize: 10, color: "#93c5fd", whiteSpace: "nowrap" }}>⟳</span>
         )}
@@ -354,6 +339,23 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Войти / Выйти — всегда последний элемент */}
+        {access !== "guest" ? (
+          <button
+            onClick={() => { setAccess("guest"); setActiveTab("gantt"); }}
+            style={tabStyle("__logout__")}
+          >
+            🔓 Выйти
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowLogin(true)}
+            style={tabStyle("__login__")}
+          >
+            🔒 Войти
+          </button>
         )}
       </div>
 
