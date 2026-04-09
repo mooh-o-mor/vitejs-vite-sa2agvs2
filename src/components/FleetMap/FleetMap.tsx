@@ -130,8 +130,8 @@ map.on('wheel', (e: any) => {
   
  // CartoDB Voyager — полное покрытие, чистый стиль
 L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  { attribution: "", subdomains: "abcd", maxZoom: 19 }
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+{ attribution: "", subdomains: "abc", maxZoom: 19 }
 ).addTo(map);
 
   {/*// OpenSeaMap навигационные знаки поверх
