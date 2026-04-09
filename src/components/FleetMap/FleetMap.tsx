@@ -179,15 +179,19 @@ map.on('wheel', (e: any) => {
   }
 });
   
-  // Сброс зума по двойному тапу на мобильном
-let lastTap = 0;
+let tapCount = 0;
+let tapTimer: ReturnType<typeof setTimeout> | null = null;
+
 mapRef.current.addEventListener("touchend", (e) => {
-  const now = Date.now();
-  if (now - lastTap < 300) {
+  tapCount++;
+  if (tapTimer) clearTimeout(tapTimer);
+  tapTimer = setTimeout(() => { tapCount = 0; }, 400);
+  if (tapCount >= 3) {
+    tapCount = 0;
+    if (tapTimer) clearTimeout(tapTimer);
     e.preventDefault();
     map.setView([62, 90], 3, { animate: true });
   }
-  lastTap = now;
 });
   return () => { map.remove(); mapObj.current = null; };
 }, []);
