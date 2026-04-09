@@ -140,8 +140,6 @@ map.on('wheel', (e: any) => {
   
   L.control.zoom({ position: "topright" }).addTo(map);
 
-  });
-
   markersRef.current = (L as any).markerClusterGroup({
     maxClusterRadius: 40,
     spiderfyOnMaxZoom: false,
