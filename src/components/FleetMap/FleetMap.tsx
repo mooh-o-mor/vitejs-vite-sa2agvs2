@@ -54,6 +54,7 @@ export function FleetMap({
   const dragCounter = useRef(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [cursorCoords, setCursorCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -128,19 +129,22 @@ map.on('wheel', (e: any) => {
   e.originalEvent.preventDefault();
 });
   
- // CartoDB Voyager — полное покрытие, чистый стиль
-L.tileLayer(
-"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-{ attribution: "", subdomains: "abc", maxZoom: 19 }
-).addTo(map);
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { attribution: "", subdomains: "abc", maxZoom: 19 }
+  ).addTo(map);
 
-  // OpenSeaMap навигационные знаки поверх
-L.tileLayer(
-  "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
-  { attribution: "", maxZoom: 18, minZoom: 1, opacity: 0.3 }
-).addTo(map);
+  L.tileLayer(
+    "https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",
+    { attribution: "", maxZoom: 18, minZoom: 1, opacity: 0.3 }
+  ).addTo(map);
   
   L.control.zoom({ position: "topright" }).addTo(map);
+
+  map.on("mousemove", (e: L.LeafletMouseEvent) => {
+    setCursorCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+  });
+  map.on("mouseout", () => setCursorCoords(null));
 
   markersRef.current = (L as any).markerClusterGroup({
     maxClusterRadius: 40,
@@ -172,7 +176,7 @@ L.tileLayer(
   
   mapObj.current = map;
   mapRef.current.addEventListener("mousedown", (e) => {
-  if (e.button === 1) { // средняя кнопка мыши
+  if (e.button === 1) {
     e.preventDefault();
     map.setView([62, 90], 3, { animate: true });
   }
@@ -269,9 +273,6 @@ L.tileLayer(
       markersRef.current!.addLayer(marker);
       bounds.push(L.latLng(v.lat, v.lng));
     });
-    //if (bounds.length > 1) {
-      //mapObj.current.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], animate: true });
-    //}
     const updateLabels = () => {
       markersRef.current!.getLayers().forEach((m: any) => {
         if (!m.getTooltip) return;
@@ -311,13 +312,11 @@ L.tileLayer(
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
 
-      // Загружаем записи за ту же дату (если перезаливка)
       const { data: existing } = await supabase
         .from("dpr_entries")
         .select("vessel_name, contract_info, work_period")
         .eq("report_date", dateStr);
 
-      // Если для этой даты нет данных о контрактах — берём из последней предыдущей даты
       let prevData = existing || [];
       if (prevData.filter((r: any) => r.contract_info || r.work_period).length === 0) {
         const { data: prevDates } = await supabase
@@ -447,6 +446,19 @@ L.tileLayer(
             canView={canView}
             onClose={() => setSelVessel(null)}
           />
+        )}
+
+        {cursorCoords && (
+          <div style={{
+            position: "absolute", bottom: 8, right: 8, zIndex: 500,
+            background: "rgba(255,255,255,0.9)", border: "1px solid #d1dce8",
+            borderRadius: 4, padding: "3px 10px", fontSize: 12,
+            color: "#1a2a3a", fontFamily: "monospace", pointerEvents: "none",
+          }}>
+            {Math.abs(cursorCoords.lat).toFixed(5)}°&nbsp;{cursorCoords.lat >= 0 ? "N" : "S"}
+            &nbsp;&nbsp;
+            {Math.abs(cursorCoords.lng).toFixed(5)}°&nbsp;{cursorCoords.lng >= 0 ? "E" : "W"}
+          </div>
         )}
       </div>
 
