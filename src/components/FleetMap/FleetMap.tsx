@@ -158,15 +158,12 @@ const PLATFORMS = [
 
 const platformIcon = L.divIcon({
   className: "",
-  html: `<svg width="22" height="28" viewBox="0 0 22 28" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="11,2 2,14 20,14" fill="#1a2a3a" stroke="#fff" stroke-width="1"/>
-    <rect x="9" y="14" width="4" height="8" fill="#1a2a3a"/>
-    <line x1="4" y1="22" x2="18" y2="22" stroke="#1a2a3a" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="2" y1="26" x2="20" y2="26" stroke="#1a2a3a" stroke-width="2.5" stroke-linecap="round"/>
+  html: `<svg width="16" height="20" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 0 C8 0 0 10 0 13.5 A8 8 0 0 0 16 13.5 C16 10 8 0 8 0 Z" fill="#000" stroke="#fff" stroke-width="1.5"/>
   </svg>`,
-  iconSize: [22, 28],
-  iconAnchor: [11, 26],
-  tooltipAnchor: [0, -28],
+  iconSize: [16, 20],
+  iconAnchor: [8, 20],
+  tooltipAnchor: [0, -20],
 });
 
 PLATFORMS.forEach(p => {
