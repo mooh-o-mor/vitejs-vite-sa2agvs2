@@ -77,7 +77,7 @@ function ConsCell({ supplies }: { supplies: any[] }) {
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, specMap, onUpdateField }: Props) {
   return (
-   <div style={{ border: "1px solid #90a4ae", borderRadius: 4, background: "#fff", overflowX: "auto" }}>
+ <div style={{ border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr style={{ position: "sticky", top: 0, zIndex: 2 }}>
