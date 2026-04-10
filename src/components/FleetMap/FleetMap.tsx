@@ -158,7 +158,7 @@ const PLATFORMS = [
 
 const platformIcon = L.divIcon({
   className: "",
-  html: `<svg width="16" height="20" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+  html: `<svg width="8" height="10" viewBox="0 0 8 10" xmlns="http://www.w3.org/2000/svg">
     <path d="M8 0 C8 0 0 10 0 13.5 A8 8 0 0 0 16 13.5 C16 10 8 0 8 0 Z" fill="#000" stroke="#fff" stroke-width="1.5"/>
   </svg>`,
   iconSize: [16, 20],
