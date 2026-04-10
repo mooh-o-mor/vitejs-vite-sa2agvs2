@@ -130,15 +130,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                   )}
                 </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-                <td style={{ 
-                  ...tdBase, 
-                  background: STATUS_BG[sc], 
-                  color: STATUS_COLOR[sc], 
-                  fontWeight: 600, 
-                  fontSize: 11,
-                  textAlign: "center",
-                  verticalAlign: "middle"
-                }}>
+               <td style={{ ...tdBase, textAlign: "center", background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
                   {statusDisplay}
                 </td>
                 {canView && (
