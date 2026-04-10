@@ -164,6 +164,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
               ⬇ Экспорт в Excel
             </button>
           )}
+          </div>
         </div>
       </div>
 
