@@ -143,6 +143,42 @@ map.on('wheel', (e: any) => {
   
   //L.control.zoom({ position: "topright" }).addTo(map); //Кнопки масштаба
 
+// Буровые платформы
+const PLATFORMS = [
+  { name: "Невская (Д-33)",       lat: 55.52279,  lng: 20.14161  },
+  { name: "Филановского",         lat: 45.02549,  lng: 48.53279  },
+  { name: "Орлан",                lat: 52.4117,   lng: 143.3933  },
+  { name: "Пильтун-Астохская Б",  lat: 52.932965, lng: 143.497391},
+  { name: "Моликпак",             lat: 52.715942, lng: 143.566493},
+  { name: "Лунская А",            lat: 51.4150,   lng: 143.6613  },
+  { name: "Беркут",               lat: 52.4622,   lng: 143.6542  },
+  { name: "Варандей",             lat: 69.05369,  lng: 58.15005  },
+  { name: "Приразломная",         lat: 69.26611,  lng: 57.28615  },
+];
+
+const platformIcon = L.divIcon({
+  className: "",
+  html: `<svg width="22" height="28" viewBox="0 0 22 28" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="11,2 2,14 20,14" fill="#1a2a3a" stroke="#fff" stroke-width="1"/>
+    <rect x="9" y="14" width="4" height="8" fill="#1a2a3a"/>
+    <line x1="4" y1="22" x2="18" y2="22" stroke="#1a2a3a" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="2" y1="26" x2="20" y2="26" stroke="#1a2a3a" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>`,
+  iconSize: [22, 28],
+  iconAnchor: [11, 26],
+  tooltipAnchor: [0, -28],
+});
+
+PLATFORMS.forEach(p => {
+  const marker = L.marker([p.lat, p.lng], { icon: platformIcon });
+  marker.bindTooltip(p.name, {
+    permanent: false,
+    direction: "top",
+    className: "vessel-label-map",
+  });
+  marker.addTo(map);
+});
+  
   markersRef.current = (L as any).markerClusterGroup({
     maxClusterRadius: 40,
     spiderfyOnMaxZoom: false,
