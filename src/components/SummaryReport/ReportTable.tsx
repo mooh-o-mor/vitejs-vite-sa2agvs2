@@ -30,6 +30,9 @@ const thStyle: React.CSSProperties = {
   borderRight: "1px solid #546E7A",
   whiteSpace: "nowrap",
   background: "#37474F",
+  position: "sticky",
+  top: 0,
+  zIndex: 1,
 };
 
 const tdBase: React.CSSProperties = {
@@ -37,7 +40,7 @@ const tdBase: React.CSSProperties = {
   fontSize: 12,
   borderBottom: "1px solid #cfd8dc",
   borderRight: "1px solid #e8eaed",
-  verticalAlign: "middle",  // ← было "top"
+  verticalAlign: "middle",
 };
 
 function getSupplyAmt(supplies: any[], keyword: string): string {
@@ -68,7 +71,7 @@ function ConsCell({ supplies }: { supplies: any[] }) {
   const dt = getSupplyCons(supplies, "ДТ");
   const tt = getSupplyCons(supplies, "Мазут") || getSupplyCons(supplies, "ТТ");
   return (
-    <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, textAlign: "left" }}>
+    <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.6, textAlign: "right" }}>
       <div>{dt || "—"}</div>
       <div style={{ color: "#888" }}>{tt || "—"}</div>
     </div>
@@ -77,22 +80,22 @@ function ConsCell({ supplies }: { supplies: any[] }) {
 
 export function ReportTable({ vessels, selDate, canView, getVesselType, specMap, onUpdateField }: Props) {
   return (
- <div style={{ border: "1px solid #90a4ae", borderRadius: 4, background: "#fff" }}>
+    <div style={{ border: "1px solid #90a4ae", borderRadius: 4, background: "#fff", overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
-          <tr style={{ position: "sticky", top: 0, zIndex: 2 }}>
+          <tr>
             <th style={{ ...thStyle, width: 36 }}>№</th>
             <th style={{ ...thStyle, width: 50 }}>Тип</th>
             <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Название судна</th>
             <th style={thStyle}>Филиал</th>
-            <th style={{ ...thStyle, minWidth: 80 }}>Статус</th>
+            <th style={{ ...thStyle, textAlign: "left", minWidth: 80 }}>Статус</th>
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 180 }}>Контракт</th>}
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 160 }}>Период работ</th>}
-            <th style={{ ...thStyle, minWidth: 140 }}>Местоположение</th>
+            <th style={{ ...thStyle, textAlign: "left", minWidth: 140 }}>Местоположение</th>
             {canView && <th style={{ ...thStyle, width: 50 }}>Эл-е</th>}
             {canView && <th style={{ ...thStyle, textAlign: "left", minWidth: 200 }}>Примечание</th>}
-            {canView && <th style={{ ...thStyle, textAlign: "left", width: 110 }}>Топливо</th>}
-            {canView && <th style={{ ...thStyle, textAlign: "left", width: 70 }}>Расход</th>}
+            {canView && <th style={{ ...thStyle, width: 110 }}>Топливо</th>}
+            {canView && <th style={{ ...thStyle, width: 70 }}>Расход</th>}
           </tr>
         </thead>
         <tbody>
@@ -130,17 +133,7 @@ export function ReportTable({ vessels, selDate, canView, getVesselType, specMap,
                   )}
                 </td>
                 <td style={{ ...tdBase, textAlign: "center", fontWeight: 600, fontSize: 11, color: "#37474F" }}>{v.branch}</td>
-                <td style={{ 
-                  ...tdBase, 
-                  background: STATUS_BG[sc], 
-                  color: STATUS_COLOR[sc], 
-                  fontWeight: 600, 
-                  fontSize: 11,
-                  textAlign: "center",
-                  verticalAlign: "middle"
-                }}>
-                  {statusDisplay}
-                </td>
+                <td style={{ ...tdBase, background: STATUS_BG[sc], color: STATUS_COLOR[sc], fontWeight: 600, fontSize: 11 }}>{statusDisplay}</td>
                 {canView && (
                   <td style={{ ...tdBase, background: rowBg }}>
                     <EditableCell value={v.contract_info || ""} vesselName={v.vessel_name} reportDate={selDate} field="contract_info" onUpdate={onUpdateField} editable={isAsd} placeholder="✎ добавить" />
