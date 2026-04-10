@@ -143,7 +143,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   return (
     <div>
-      <div style={{ overflowX: "auto" }}>   {/* ← добавить сюда */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: "#1a2a3a" }}>Сводная таблица судов МСС</div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
@@ -164,7 +163,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
               ⬇ Экспорт в Excel
             </button>
           )}
-          </div>
         </div>
       </div>
 
