@@ -98,9 +98,6 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   }
 
   const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
-  // Специальные районы
-if (/р-н\s*чс/i.test(low)) return [45.075, 36.544];
-
 for (const [k, c] of Object.entries(PORTS)) {
   if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
 }
