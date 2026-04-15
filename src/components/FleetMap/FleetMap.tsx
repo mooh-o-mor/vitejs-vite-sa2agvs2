@@ -175,6 +175,33 @@ PLATFORMS.forEach(p => {
   });
   marker.addTo(map);
 });
+
+  const WRECKS = [
+  { name: "кофф.№1", lat: 45.0753, lng: 36.5312 },
+  { name: "кофф.№3",   lat: 45.0839, lng: 36.5406 },
+  { name: "кофф.№2", lat: 45.0664, lng: 36.5411 },
+];
+
+const wreckIcon = L.divIcon({
+  className: "",
+  html: `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <line x1="1" y1="1" x2="15" y2="15" stroke="#cc0000" stroke-width="3" stroke-linecap="round"/>
+    <line x1="15" y1="1" x2="1" y2="15" stroke="#cc0000" stroke-width="3" stroke-linecap="round"/>
+  </svg>`,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+  tooltipAnchor: [0, -10],
+});
+
+WRECKS.forEach(w => {
+  const marker = L.marker([w.lat, w.lng], { icon: wreckIcon });
+  marker.bindTooltip(w.name.replace("\\n", "<br>"), {
+    permanent: false,
+    direction: "top",
+    className: "vessel-label-map",
+  });
+  marker.addTo(map);
+});
   
   markersRef.current = (L as any).markerClusterGroup({
     maxClusterRadius: 40,
