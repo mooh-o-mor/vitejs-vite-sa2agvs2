@@ -69,6 +69,13 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
   if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
 
+  // Специальные районы
+if (/р-н\s*чс/i.test(low)) return [45.075, 36.544];
+
+for (const [k, c] of Object.entries(PORTS)) {
+  if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
+}
+
   const m1 = s.match(/(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m1) {
     const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
