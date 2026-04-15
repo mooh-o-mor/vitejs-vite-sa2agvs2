@@ -176,13 +176,12 @@ PLATFORMS.forEach(p => {
   marker.addTo(map);
 });
 
-  const WRECKS = [
+ const WRECKS = [
   { name: "кофф.№1", lat: 45.0753, lng: 36.5312 },
   { name: "кофф.№3",   lat: 45.0839, lng: 36.5406 },
   { name: "кофф.№2", lat: 45.0664, lng: 36.5411 },
 ];
 
-```ts
 const wreckIcon = L.divIcon({
   className: "",
   html: `<svg width="8" height="8" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
