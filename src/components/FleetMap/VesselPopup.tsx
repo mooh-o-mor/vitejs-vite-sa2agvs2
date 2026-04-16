@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void;
 }
 
+
 /* ── Статус → класс заголовка ── */
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
