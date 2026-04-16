@@ -176,6 +176,37 @@ PLATFORMS.forEach(p => {
   marker.addTo(map);
 });
 
+  // Границы зон SECA (IMO MARPOL Annex VI)
+const SECA_ZONES = [
+  {
+    name: "SECA — Балтийское море",
+    coords: [
+      [66.0, 12.0], [66.0, 30.0], [60.0, 30.0], [60.0, 25.0],
+      [55.0, 25.0], [55.0, 14.0], [57.5, 8.0], [57.5, 12.0],
+      [66.0, 12.0],
+    ] as [number, number][],
+  },
+  {
+    name: "SECA — Северное море",
+    coords: [
+      [48.5, -5.0], [48.5, 8.0], [57.0, 8.0], [57.0, 12.0],
+      [62.0, 12.0], [62.0, -5.0], [48.5, -5.0],
+    ] as [number, number][],
+  },
+];
+
+SECA_ZONES.forEach(zone => {
+  L.polygon(zone.coords, {
+    color: "#2563eb",
+    weight: 1.5,
+    opacity: 0.7,
+    fillColor: "#3b82f6",
+    fillOpacity: 0.07,
+    dashArray: "6 4",
+  })
+    .bindTooltip(zone.name, { sticky: true, className: "vessel-label-map" })
+    .addTo(map);
+});
  const WRECKS = [
   { name: "кофф.№1", lat: 45.0753, lng: 36.5312 },
   { name: "кофф.№3",   lat: 45.0839, lng: 36.5406 },
