@@ -127,9 +127,9 @@ map.on('wheel', (e: any) => {
   map.setZoom(newZoom, { animate: false });
   e.originalEvent.preventDefault();
 });
-  map.on("dblclick", (e: L.LeafletMouseEvent) => {
+ map.on("dblclick", (e: L.LeafletMouseEvent) => {
   e.originalEvent.preventDefault();
-  map.setZoom(map.getZoom() + 2, { animate: true });
+  map.setView(e.latlng, map.getZoom() + 2, { animate: true });
 });
   
  L.tileLayer(
