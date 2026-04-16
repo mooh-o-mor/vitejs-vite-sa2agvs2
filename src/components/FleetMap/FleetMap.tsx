@@ -267,6 +267,23 @@ WRECKS.forEach(w => {
   });
   marker.addTo(map);
 });
+
+  // Подписи номеров точек ECA
+ECA_ZONES.forEach(zone => {
+  zone.coords.forEach((coord, i) => {
+    if (i === zone.coords.length - 1) return; // пропускаем замыкающую точку
+    L.marker([coord[0], coord[1]], {
+      icon: L.divIcon({
+        className: "",
+        html: `<div style="font-size:10px;font-weight:700;color:#16a34a;background:rgba(255,255,255,0.85);border:1px solid #16a34a;border-radius:3px;padding:1px 4px;line-height:1.4">${i + 1}</div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      }),
+      interactive: false,
+    } as any).addTo(map);
+  });
+});
+
   
   markersRef.current = (L as any).markerClusterGroup({
     maxClusterRadius: 40,
