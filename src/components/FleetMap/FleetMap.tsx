@@ -127,6 +127,10 @@ map.on('wheel', (e: any) => {
   map.setZoom(newZoom, { animate: false });
   e.originalEvent.preventDefault();
 });
+  map.on("dblclick", (e: L.LeafletMouseEvent) => {
+  e.originalEvent.preventDefault();
+  map.setZoom(map.getZoom() + 2, { animate: true });
+});
   
  L.tileLayer(
   "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
