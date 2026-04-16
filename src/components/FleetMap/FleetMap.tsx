@@ -176,6 +176,23 @@ PLATFORMS.forEach(p => {
   marker.addTo(map);
 });
 
+  fetch("/norwegian_eca.geojson")
+  .then(r => r.json())
+  .then(data => {
+    L.geoJSON(data, {
+      style: {
+        color: "#16a34a",
+        weight: 1.5,
+        opacity: 0.7,
+        fillColor: "#22c55e",
+        fillOpacity: 0.07,
+        dashArray: "6 4",
+      },
+    })
+      .bindTooltip("ECA — Норвежское море (с 01.03.2026, SOx с 01.03.2027)", { sticky: true, className: "vessel-label-map" })
+      .addTo(map);
+  });
+  
   // Границы зон SECA (IMO MARPOL Annex VI)
 const SECA_ZONES = [
   {
@@ -207,7 +224,8 @@ SECA_ZONES.forEach(zone => {
     .bindTooltip(zone.name, { sticky: true, className: "vessel-label-map" })
     .addTo(map);
 });
- const WRECKS = [
+  
+  const WRECKS = [
   { name: "кофф.№1", lat: 45.0753, lng: 36.5312 },
   { name: "кофф.№3",   lat: 45.0839, lng: 36.5406 },
   { name: "кофф.№2", lat: 45.0664, lng: 36.5411 },
@@ -223,42 +241,8 @@ const wreckIcon = L.divIcon({
   iconAnchor: [4, 4],
   tooltipAnchor: [0, -6],
 });
-const ECA_ZONES = [
-  {
-    name: "ECA — Норвежское море (с 01.03.2026, SOx с 01.03.2027)",
-    coords: [
-      [62.0, -4.0],   // юго-западная граница (стыкуется с North Sea ECA)
-      [62.0, 5.0],    // точка 5 — юг
-      [62.0, 12.0],   // стык с SECA Северного моря
-      [65.0, 14.5],   // точка 8
-      [68.0, 16.0],   // точка 11
-      [70.0, 18.0],   // точка 12
-      [71.5, 24.0],   // точка 14
-      [74.0, 19.0],   // северная часть
-      [76.0, 20.0],
-      [80.0, 20.0],   // у Шпицбергена
-      [80.0, 35.0],   // на восток к российской границе
-      [71.0, 31.0],   // российская граница
-      [70.4, 31.0],   // Варангер-фьорд
-      [62.0, -4.0],
-    ] as [number, number][],
-  },
-];
 
-ECA_ZONES.forEach(zone => {
-  L.polygon(zone.coords, {
-    color: "#16a34a",
-    weight: 1.5,
-    opacity: 0.7,
-    fillColor: "#22c55e",
-    fillOpacity: 0.07,
-    dashArray: "6 4",
-  })
-    .bindTooltip(zone.name, { sticky: true, className: "vessel-label-map" })
-    .addTo(map);
-});
-
-WRECKS.forEach(w => {
+  WRECKS.forEach(w => {
   const marker = L.marker([w.lat, w.lng], { icon: wreckIcon });
   marker.bindTooltip(w.name.replace("\\n", "<br>"), {
     permanent: false,
@@ -268,23 +252,6 @@ WRECKS.forEach(w => {
   marker.addTo(map);
 });
 
-  // Подписи номеров точек ECA
-ECA_ZONES.forEach(zone => {
-  zone.coords.forEach((coord, i) => {
-    if (i === zone.coords.length - 1) return; // пропускаем замыкающую точку
-    L.marker([coord[0], coord[1]], {
-      icon: L.divIcon({
-        className: "",
-        html: `<div style="font-size:10px;font-weight:700;color:#16a34a;background:rgba(255,255,255,0.85);border:1px solid #16a34a;border-radius:3px;padding:1px 4px;line-height:1.4">${i + 1}</div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      }),
-      interactive: false,
-    } as any).addTo(map);
-  });
-});
-
-  
   markersRef.current = (L as any).markerClusterGroup({
     maxClusterRadius: 40,
     spiderfyOnMaxZoom: false,
