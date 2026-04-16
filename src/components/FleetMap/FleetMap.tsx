@@ -192,17 +192,26 @@ PLATFORMS.forEach(p => {
       .bindTooltip("ECA — Норвежское море (с 01.03.2026, SOx с 01.03.2027)", { sticky: true, className: "vessel-label-map" })
       .addTo(map);
   });
+
+  fetch("/baltic_seca.geojson")
+  .then(r => r.json())
+  .then(data => {
+    L.geoJSON(data, {
+      style: {
+        color: "#16a34a",
+        weight: 1.5,
+        opacity: 0.7,
+        fillColor: "#22c55e",
+        fillOpacity: 0.07,
+        dashArray: "6 4",
+      },
+    })
+      .bindTooltip("SECA — Балтийское море", { sticky: true, className: "vessel-label-map" })
+      .addTo(map);
+  });
   
   // Границы зон SECA (IMO MARPOL Annex VI)
 const SECA_ZONES = [
-  {
-    name: "SECA — Балтийское море",
-    coords: [
-      [66.0, 12.0], [66.0, 30.0], [60.0, 30.0], [60.0, 25.0],
-      [55.0, 25.0], [55.0, 14.0], [57.5, 8.0], [57.5, 12.0],
-      [66.0, 12.0],
-    ] as [number, number][],
-  },
   {
     name: "SECA — Северное море",
     coords: [
@@ -214,10 +223,10 @@ const SECA_ZONES = [
 
 SECA_ZONES.forEach(zone => {
   L.polygon(zone.coords, {
-    color: "#2563eb",
+    color: "#16a34a",
     weight: 1.5,
     opacity: 0.7,
-    fillColor: "#3b82f6",
+    fillColor: "#22c55e",
     fillOpacity: 0.07,
     dashArray: "6 4",
   })
