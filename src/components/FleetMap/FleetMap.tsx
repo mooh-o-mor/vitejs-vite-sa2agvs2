@@ -223,6 +223,31 @@ const wreckIcon = L.divIcon({
   iconAnchor: [4, 4],
   tooltipAnchor: [0, -6],
 });
+  // ECA — Норвежское море + Канадская Арктика (MEPC.392(82), вступает в силу 01.03.2027)
+const ECA_ZONES = [
+  {
+    name: "ECA — Норвежское море (с 01.03.2027)",
+    coords: [
+      [62.0, -1.0], [62.0, 5.0], [57.5, 8.0], [57.5, 12.0],
+      [66.0, 12.0], [71.0, 20.0], [74.0, 20.0], [74.0, 32.0],
+      [72.0, 32.0], [70.5, 28.0], [68.0, 18.0], [65.0, 14.0],
+      [62.0, 4.0], [60.0, -1.0], [62.0, -1.0],
+    ] as [number, number][],
+  },
+];
+
+ECA_ZONES.forEach(zone => {
+  L.polygon(zone.coords, {
+    color: "#16a34a",
+    weight: 1.5,
+    opacity: 0.7,
+    fillColor: "#22c55e",
+    fillOpacity: 0.07,
+    dashArray: "6 4",
+  })
+    .bindTooltip(zone.name, { sticky: true, className: "vessel-label-map" })
+    .addTo(map);
+});
 
 WRECKS.forEach(w => {
   const marker = L.marker([w.lat, w.lng], { icon: wreckIcon });
