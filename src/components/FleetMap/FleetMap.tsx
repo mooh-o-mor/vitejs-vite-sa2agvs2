@@ -209,6 +209,23 @@ PLATFORMS.forEach(p => {
       .bindTooltip("SECA — Балтийское море", { sticky: true, className: "vessel-label-map" })
       .addTo(map);
   });
+
+   fetch("navareaXIII.geojson")
+  .then(r => r.json())
+  .then(data => {
+    L.geoJSON(data, {
+      style: {
+        color: "#16a34a",
+        weight: 1.5,
+        opacity: 0.7,
+        fillColor: "#22c55e",
+        fillOpacity: 0.07,
+        dashArray: "6 4",
+      },
+    })
+      .bindTooltip("Navarea XIII", { sticky: true, className: "vessel-label-map" })
+      .addTo(map);
+  });
   
   // Границы зон SECA (IMO MARPOL Annex VI)
 const SECA_ZONES = [
