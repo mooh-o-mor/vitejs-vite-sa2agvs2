@@ -91,5 +91,5 @@ export function extractLocation(raw: string): string {
     s = s.replace(new RegExp(`\\b${abbr}\\b`, "gi"), abbr);
   }
 
-  return `${prefix} ${s}`;
+  return prefix === "п." ? s : `${prefix} ${s}`;
 }
