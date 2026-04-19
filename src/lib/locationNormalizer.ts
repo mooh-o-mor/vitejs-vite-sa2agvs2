@@ -34,7 +34,8 @@ export function extractLocation(raw: string): string {
     /\d{1,3}[-°\/]\d{1,2}[,.]?\d*\s*[NСнсCc°]/.test(s) ||
     /\d{1,3}\s+\d{1,2}[,.]?\d*\s*[NСнсNn]/.test(s) ||
     /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s) ||
-    /\d{1,3},\d{1,2}[,\d]*\s*(сев|вост|юж|зап)/i.test(s);
+    /\d{1,3},\d{1,2}[,\d]*\s*(сев|вост|юж|зап)/i.test(s) ||
+    /\d{1,3}\.\d{1,2}[NS]\s+\d{1,3}\.\d{1,2}[EW]/i.test(s); 
   if (isCoord) return s;
 
   // 3. Убираем "пос." в начале
