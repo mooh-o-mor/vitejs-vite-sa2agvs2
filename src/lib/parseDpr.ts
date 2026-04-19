@@ -97,6 +97,13 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
+  const m5 = s.match(/(\d{1,3})\.(\d{1,2})\s*[NСNнс]\s*(\d{1,3})\.(\d{1,2})\s*[EВЕEвеe]/i);
+if (m5) {
+  const lat = +m5[1] + +m5[2] / 60;
+  const lng = +m5[3] + +m5[4] / 60;
+  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+}
+  
   const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
 for (const [k, c] of Object.entries(PORTS)) {
   if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
