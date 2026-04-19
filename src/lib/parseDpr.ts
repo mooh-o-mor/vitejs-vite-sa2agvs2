@@ -61,53 +61,53 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
     status = firstPart;
   }
   const extra = [extraFromFirst, afterSep].filter(Boolean).join(" / ");
-   { status, extra };
+  return { status, extra };
 }
 
 /* ── Coordinate parser ── */
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
-  if (!raw || raw === "nan")  null;
+  if (!raw || raw === "nan") return null;
   const s = String(raw).trim();
 
   const m1 = s.match(/(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m1) {
     const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
     const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
   const m2 = s.match(/(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m2) {
     const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
     const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
   const m3 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m3) {
     const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
     const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
   const m4 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)[.\s]/i);
   if (m4) {
     const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
     const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
   const m5 = s.match(/(\d{1,3})\.(\d{1,2})\s*[NСNнс]\s*(\d{1,3})\.(\d{1,2})\s*[EВЕEвеe]/i);
-if (m5) {
-  const lat = +m5[1] + +m5[2] / 60;
-  const lng = +m5[3] + +m5[4] / 60;
-  if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
-}
-  
+  if (m5) {
+    const lat = +m5[1] + +m5[2] / 60;
+    const lng = +m5[3] + +m5[4] / 60;
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+  }
+
   const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
-for (const [k, c] of Object.entries(PORTS)) {
-  if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
-}
+  for (const [k, c] of Object.entries(PORTS)) {
+    if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
+  }
   return null;
 }
 
@@ -275,7 +275,7 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
 
     const supplies: DprSupply[] = [];
     const coordParts: string[] = [];
-    
+
     for (let j = 0; j < 5 && i + j < rows.length; j++) {
       const sr = rows[i + j];
       if (!sr) continue;
@@ -285,12 +285,8 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       }
       const ft = C.sup >= 0 ? sr[C.sup] : null;
       if (ft && String(ft).trim()) {
-        // Проверяем лимит конкретного запаса
         const supplyLim = C.lim >= 0 ? sr[C.lim] : null;
-        if (isStaleDate(supplyLim)) {
-          continue;
-        }
-        
+        if (isStaleDate(supplyLim)) continue;
         supplies.push({
           type: String(ft).trim(),
           amt: C.amt >= 0 && sr[C.amt] != null ? String(sr[C.amt]) : "—",
@@ -354,6 +350,7 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       vessels[k].status = prev === "АСД" ? "АСД" : "АСГ";
     }
   }
+
   return vessels;
 }
 
