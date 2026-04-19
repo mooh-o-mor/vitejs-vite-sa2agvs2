@@ -61,40 +61,40 @@ function normalizeStatus(raw: string): { status: string; extra: string } {
     status = firstPart;
   }
   const extra = [extraFromFirst, afterSep].filter(Boolean).join(" / ");
-  return { status, extra };
+   { status, extra };
 }
 
 /* ── Coordinate parser ── */
 export function parseCoord(raw: string | null | undefined): [number, number] | null {
-  if (!raw || raw === "nan") return null;
+  if (!raw || raw === "nan")  null;
   const s = String(raw).trim();
 
   const m1 = s.match(/(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})-(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m1) {
     const lat = +m1[1] + +m1[2].replace(",", ".") / 60;
     const lng = +m1[3] + +m1[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
   }
 
   const m2 = s.match(/(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*[\/]?\s*(\d{1,3})°(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m2) {
     const lat = +m2[1] + +m2[2].replace(",", ".") / 60;
     const lng = +m2[3] + +m2[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
   }
 
   const m3 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m3) {
     const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
     const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
   }
 
   const m4 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:сев|с)[.\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*(?:вост|в)[.\s]/i);
   if (m4) {
     const lat = +m4[1] + +m4[2].replace(",", ".") / 60;
     const lng = +m4[3] + +m4[4].replace(",", ".") / 60;
-    if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
+    if (lat > 0 && lat < 90 && lng > 0 && lng < 180)  [lat, lng];
   }
 
   const m5 = s.match(/(\d{1,3})\.(\d{1,2})\s*[NСNнс]\s*(\d{1,3})\.(\d{1,2})\s*[EВЕEвеe]/i);
@@ -346,6 +346,14 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
     i += 5;
   }
 
+  // Если статус не АСГ/АСД/РЕМ — берём предыдущий с правилом
+  for (let k = 1; k < vessels.length; k++) {
+    const s = vessels[k].status.toUpperCase();
+    if (!["АСГ", "АСД", "РЕМ"].includes(s)) {
+      const prev = vessels[k - 1].status.toUpperCase();
+      vessels[k].status = prev === "АСД" ? "АСД" : "АСГ";
+    }
+  }
   return vessels;
 }
 
