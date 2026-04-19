@@ -30,12 +30,12 @@ export function extractLocation(raw: string): string {
     .trim();
 
   // 2. Координаты не трогаем
-const isCoord =
-  /\d{1,3}[-°\/]\d{1,2}[,.]?\d*\s*[NСнсCc°]/.test(s) ||
-  /\d{1,3}\s+\d{1,2}[,.]?\d*\s*[NСнсNn]/.test(s) ||
-  /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s) ||
-  /\d{1,3},\d{1,2}[,\d]*\s*(сев|вост|юж|зап)/i.test(s) ||
-  /\d{1,3}\.\d{1,2}[NS]\s+\d{1,3}\.\d{1,2}[EW]/i.test(s);  // ← новый формат 43.01N 131.59E  if (isCoord) return s;
+  const isCoord =
+    /\d{1,3}[-°\/]\d{1,2}[,.]?\d*\s*[NСнсCc°]/.test(s) ||
+    /\d{1,3}\s+\d{1,2}[,.]?\d*\s*[NСнсNn]/.test(s) ||
+    /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s) ||
+    /\d{1,3},\d{1,2}[,\d]*\s*(сев|вост|юж|зап)/i.test(s);
+  if (isCoord) return s;
 
   // 3. Убираем "пос." в начале
   s = s.replace(/^пос\.\s*/i, "");
