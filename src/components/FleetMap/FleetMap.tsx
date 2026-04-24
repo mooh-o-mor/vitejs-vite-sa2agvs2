@@ -501,7 +501,13 @@ mapRef.current.addEventListener("touchend", (e) => {
           contract_info: prev?.contract_info || null,
           work_period: prev?.work_period || null,
         };
-        const { error } = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
+        let error = null;
+for (let attempt = 0; attempt < 3; attempt++) {
+  const res = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
+  error = res.error;
+  if (!error || !res.error?.message?.includes("Failed to fetch")) break;
+  await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+}
         if (error) { fail++; console.error(v.name, error); } else ok++;
       }
 
