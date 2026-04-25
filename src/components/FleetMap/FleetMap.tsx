@@ -485,10 +485,10 @@ mapRef.current.addEventListener("touchend", (e) => {
 
       const existingMap = new Map(prevData.map((r: any) => [r.vessel_name, r]));
 
-      let ok = 0, fail = 0;
-      for (const v of parsed) {
+      // Батчевый upsert — один запрос вместо N
+      const rows = parsed.map(v => {
         const prev = existingMap.get(v.name);
-        const row = {
+        return {
           vessel_name: v.name,
           branch: v.branch,
           report_date: dateStr,
@@ -501,17 +501,36 @@ mapRef.current.addEventListener("touchend", (e) => {
           contract_info: prev?.contract_info || null,
           work_period: prev?.work_period || null,
         };
-        let error = null;
-for (let attempt = 0; attempt < 3; attempt++) {
-  const res = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
-  error = res.error;
-  if (!error || !res.error?.message?.includes("Failed to fetch")) break;
-  await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-}
-        if (error) { fail++; console.error(v.name, error); } else ok++;
+      });
+
+      // Пробуем батч, при ошибке — fallback на поштучно с retry
+      let batchError = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await supabase.from("dpr_entries").upsert(rows, { onConflict: "vessel_name,report_date" });
+        batchError = res.error;
+        if (!batchError) break;
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
       }
 
-      setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
+      if (!batchError) {
+        setUploadMsg(`✓ Загружено: ${rows.length} судов`);
+      } else {
+        // Fallback: поштучно с retry
+        console.warn("Batch failed, falling back to individual upserts:", batchError);
+        let ok = 0, fail = 0;
+        for (const row of rows) {
+          let error = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await supabase.from("dpr_entries").upsert(row, { onConflict: "vessel_name,report_date" });
+            error = res.error;
+            if (!error) break;
+            await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          }
+          if (error) { fail++; console.error(row.vessel_name, error); } else ok++;
+        }
+        setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
+      }
+
       await loadDates();
       setSelDate(dateStr);
     } catch (e: any) {
