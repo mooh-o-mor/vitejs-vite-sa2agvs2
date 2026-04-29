@@ -196,7 +196,7 @@ PLATFORMS.forEach(p => {
       .bindTooltip("ECA — Норвежское море (с 01.03.2026, SOx с 01.03.2027)", { sticky: true, className: "vessel-label-map" })
       .addTo(map);
   }); */}
-  {/*
+ 
   fetch("/baltic_seca.geojson")
   .then(r => r.json())
   .then(data => {
@@ -213,8 +213,8 @@ PLATFORMS.forEach(p => {
       .bindTooltip("SECA — Балтийское море", { sticky: true, className: "vessel-label-map" })
       .addTo(map);
   });
-*/}
-   {/*
+
+  
    fetch("navareaXIII.geojson")
   .then(r => r.json())
   .then(data => {
