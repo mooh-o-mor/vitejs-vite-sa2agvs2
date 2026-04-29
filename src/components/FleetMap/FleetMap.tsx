@@ -179,7 +179,7 @@ PLATFORMS.forEach(p => {
   });
   marker.addTo(map);
 });
- {/*
+
   fetch("/norwegian_eca.geojson")
   .then(r => r.json())
   .then(data => {
@@ -255,7 +255,7 @@ SECA_ZONES.forEach(zone => {
     .bindTooltip(zone.name, { sticky: true, className: "vessel-label-map" })
     .addTo(map);
 });
-  */}
+ 
   const WRECKS = [
   { name: "кофф.№1", lat: 45.0753, lng: 36.5312 },
   { name: "кофф.№3",   lat: 45.0839, lng: 36.5406 },
