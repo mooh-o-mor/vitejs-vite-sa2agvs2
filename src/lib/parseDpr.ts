@@ -83,7 +83,7 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
-  const m3 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс]\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
+  const m3 = s.match(/(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[NСNнс][\/\s]*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*[EВЕEвеe]/i);
   if (m3) {
     const lat = +m3[1] + +m3[2].replace(",", ".") / 60;
     const lng = +m3[3] + +m3[4].replace(",", ".") / 60;
