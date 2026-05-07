@@ -34,7 +34,8 @@ jobs:
           ctx.verify_mode = ssl.CERT_NONE
 
           print(f"Подключаемся: {host}:{port} (STARTTLS)")
-          with IMAPClient(host, port=port, ssl=False, starttls=True, ssl_context=ctx) as c:
+          with IMAPClient(host, port=port, ssl=False) as c:
+              c.starttls(ssl_context=ctx)
               c.login(user, os.environ['IMAP_PASS'])
               print("✓ Авторизация успешна")
               print("\nПапки:")
