@@ -11,48 +11,36 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install exchangelib
-      - name: Test Exchange connection
+      - run: pip install imapclient
+      - name: Test IMAP connection
         env:
           IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ secrets.IMAP_PORT }}
           IMAP_USER: ${{ secrets.IMAP_USER }}
           IMAP_PASS: ${{ secrets.IMAP_PASS }}
           IMAP_FOLDER: ${{ secrets.IMAP_FOLDER }}
         run: |
           python - <<'EOF'
-          import os
-          from exchangelib import Credentials, Account, Configuration, DELEGATE
-          from exchangelib.protocol import BaseProtocol
-          import urllib3
-          urllib3.disable_warnings()
+          import os, ssl
+          from imapclient import IMAPClient
 
-          # Отключаем проверку сертификата (для корпоративных серверов)
-          BaseProtocol.HTTP_ADAPTER_CLS = \
-              type('', (BaseProtocol.HTTP_ADAPTER_CLS,), 
-                   {'send': lambda self, *a, **kw: (
-                       kw.__setitem__('verify', False) or 
-                       super(type(self), self).send(*a, **kw)
-                   )})
-
-          user   = os.environ['IMAP_USER']
-          passwd = os.environ['IMAP_PASS']
           host   = os.environ['IMAP_HOST']
+          port   = int(os.environ['IMAP_PORT'])
+          user   = os.environ['IMAP_USER']
           folder = os.environ['IMAP_FOLDER']
 
-          print(f"Подключаемся к {host} как {user}")
-          creds  = Credentials(user, passwd)
-          config = Configuration(
-              server=host,
-              credentials=creds,
-          )
-          account = Account(
-              user,
-              config=config,
-              access_type=DELEGATE,
-              autodiscover=False,
-          )
-          print(f"✓ Подключились")
-          print(f"\nПапки:")
-          for f in account.root.glob('**/*'):
-              print(f"  {f.absolute}")
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+
+          print(f"Подключаемся: {host}:{port} (STARTTLS)")
+          with IMAPClient(host, port=port, ssl=False, starttls=True, ssl_context=ctx) as c:
+              c.login(user, os.environ['IMAP_PASS'])
+              print("✓ Авторизация успешна")
+              print("\nПапки:")
+              for _, _, name in c.list_folders():
+                  print(f"  {name}")
+              c.select_folder(folder, readonly=True)
+              msgs = c.search(['UNSEEN'])
+              print(f"\n✓ Папка {folder!r}: {len(msgs)} непрочитанных")
           EOF
