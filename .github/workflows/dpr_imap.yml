@@ -1,0 +1,46 @@
+name: DPR IMAP Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install imapclient
+      - name: Test IMAP connection
+        env:
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ secrets.IMAP_PORT }}
+          IMAP_USER: ${{ secrets.IMAP_USER }}
+          IMAP_PASS: ${{ secrets.IMAP_PASS }}
+          IMAP_FOLDER: ${{ secrets.IMAP_FOLDER }}
+        run: |
+          python - <<'EOF'
+          import os, ssl
+          from imapclient import IMAPClient
+
+          host   = os.environ['IMAP_HOST']
+          port   = int(os.environ['IMAP_PORT'])
+          user   = os.environ['IMAP_USER']
+          folder = os.environ['IMAP_FOLDER']
+
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+
+          print(f"Подключаемся: {host}:{port}")
+          with IMAPClient(host, port=port, ssl=True, ssl_context=ctx) as c:
+              c.login(user, os.environ['IMAP_PASS'])
+              print("✓ Авторизация успешна")
+              print("\nПапки:")
+              for _, _, name in c.list_folders():
+                  print(f"  {name}")
+              c.select_folder(folder)
+              msgs = c.search(['UNSEEN'])
+              print(f"\n✓ Папка {folder!r}: {len(msgs)} непрочитанных")
+          EOF
