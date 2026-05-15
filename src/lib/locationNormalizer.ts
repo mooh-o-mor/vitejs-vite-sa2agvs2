@@ -1,3 +1,5 @@
+import { PORTS } from "./ports";
+
 /* ── Замены аббревиатур портов ── */
 const PORT_REPLACE: [RegExp, string][] = [
   [/(^|[\s,])СПб\.?($|[\s,])/gi, "$1Санкт-Петербург$2"],
@@ -33,9 +35,7 @@ export function extractLocation(raw: string): string {
   const isCoord =
     /\d{1,3}[-°\/]\d{1,2}[,.]?\d*\s*[NСнсCc°]/.test(s) ||
     /\d{1,3}\s+\d{1,2}[,.]?\d*\s*[NСнсNn]/.test(s) ||
-    /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s) ||
-    /\d{1,3},\d{1,2}[,\d]*\s*(сев|вост|юж|зап)/i.test(s) ||
-    /\d{1,3}\.\d{1,2}[NS]\s+\d{1,3}\.\d{1,2}[EW]/i.test(s); 
+    /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s);
   if (isCoord) return s;
 
   // 3. Убираем "пос." в начале
@@ -51,12 +51,11 @@ export function extractLocation(raw: string): string {
 
   // 6. Водные объекты — возвращаем без префикса
   if (WATER_BODY.test(s.trim())) {
-  // Добавляем запятую перед деталями типа "р-н", "з-д"
-  const parts = s.trim().split(/\s+/);
-  const di = parts.findIndex((p, i) => i > 0 && /^(р-н|з-д|район|завод)/i.test(p));
-  if (di > 0) return parts.slice(0, di).join(" ") + ", " + parts.slice(di).join(" ");
-  return s.trim();
-}
+    const parts = s.trim().split(/\s+/);
+    const di = parts.findIndex((p, i) => i > 0 && /^(р-н|з-д|район|завод)/i.test(p));
+    if (di > 0) return parts.slice(0, di).join(" ") + ", " + parts.slice(di).join(" ");
+    return s.trim();
+  }
 
   // 7. Сохраняем существующий префикс или добавляем "п."
   let prefix = "п.";
@@ -77,7 +76,6 @@ export function extractLocation(raw: string): string {
     .replace(/,\s*,+/g, ",");
 
   // 10. Расставляем запятую между портом и деталями
-  // Проверяем только первую часть строки (до цифр) — чтобы запятые в координатах не мешали
   const firstPart = s.split(/\s+\d/)[0];
   if (!firstPart.includes(",")) {
     const parts = s.split(/\s+/);
@@ -92,5 +90,45 @@ export function extractLocation(raw: string): string {
     s = s.replace(new RegExp(`\\b${abbr}\\b`, "gi"), abbr);
   }
 
-  return prefix === "п." ? s : `${prefix} ${s}`;
+  return `${prefix} ${s}`;
+}
+
+/**
+ * Ищет координаты для текстового местоположения из coord_raw.
+ *
+ * Алгоритм: разбиваем строку по " / " и "," (не по голому "/",
+ * чтобы сохранить ключи вида "я/точка №12"), затем ищем совпадение
+ * от специфичной части к общей — это позволяет "причал 94" выигрывать
+ * у "санкт-петербург" даже когда порт длиннее.
+ */
+export function findPortCoords(raw: string): [number, number] | null {
+  if (!raw) return null;
+
+  const clean = raw
+    .replace(/\s*(БЭП|СЭП|CЭП|Да|Нет)\s*$/i, "")
+    .trim()
+    .toLowerCase();
+
+  // Разбиваем по " / " (с пробелами) и "," — но НЕ по голому "/"
+  const parts = clean
+    .split(/ \/ |,/)
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  // Порядок поиска: с конца (специфичное) → вся строка (общее)
+  const searchOrder = [...parts].reverse().concat([clean]);
+
+  // Сортируем ключи по длине убывающей — один раз
+  const sortedKeys = (Object.keys(PORTS) as (keyof typeof PORTS)[])
+    .sort((a, b) => b.length - a.length);
+
+  for (const chunk of searchOrder) {
+    for (const key of sortedKeys) {
+      if (chunk.includes(key)) {
+        return PORTS[key];
+      }
+    }
+  }
+
+  return null;
 }
