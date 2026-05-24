@@ -101,12 +101,13 @@ def get_session():
 class XIMSSSession:
     def __init__(self, session_id, cookies, start_seq):
         self.cookies = cookies
-        # After Selenium login the browser's JS switches to WebSocket for XIMSS sync.
-        # Those WebSocket frames are NOT captured in Chrome HTTP performance logs, so
-        # start_seq (max reqSeq seen in HTTP) is lower than the server's actual last-seen
-        # counter.  We add a large buffer so our first HTTP call uses a reqSeq that is
-        # guaranteed to be above anything the browser's WebSocket session consumed.
-        self.seq     = start_seq + 10_000
+        # After Selenium login the browser's JS switches to WebSocket for XIMSS sync and
+        # uses millisecond-epoch timestamps as reqSeq (≈1748000000000).  The few HTTP
+        # requests captured in Chrome performance logs have small reqSeq (3-4), so any
+        # small start_seq would be rejected with "XIMSS request sequence error".
+        # We seed from current time in ms, guaranteed to be slightly ahead of the
+        # last WebSocket frame the browser sent (driver.quit() already happened).
+        self.seq     = int(time.time() * 1000)
         self.url     = f"{BASE}/Session/{session_id}/sync"
 
     def call(self, xml):
