@@ -83,16 +83,35 @@ def get_session():
     session_id, max_seq = None, 0
     for entry in logs:
         msg = json.loads(entry["message"])["message"]
-        if msg["method"] == "Network.requestWillBeSent":
+        method = msg["method"]
+        if method == "Network.requestWillBeSent":
             url = msg["params"]["request"].get("url", "")
+            if "morspas.ru" in url:
+                log.debug(f"  [HTTP ] {url[:140]}")
             if "/Session/" in url and not session_id:
                 session_id = url.split("/Session/")[1].split("/")[0]
             if "reqSeq=" in url:
-                max_seq = max(max_seq, int(url.split("reqSeq=")[1].split("&")[0]))
+                seq_val = int(url.split("reqSeq=")[1].split("&")[0])
+                max_seq = max(max_seq, seq_val)
+                log.debug(f"  [SEQ  ] HTTP reqSeq={seq_val}")
+        elif method == "Network.webSocketCreated":
+            ws_url = msg["params"].get("url", "")
+            log.debug(f"  [WS   ] created {ws_url[:140]}")
+        elif method in ("Network.webSocketFrameSent", "Network.webSocketFrameReceived"):
+            payload = (msg["params"].get("response") or msg["params"].get("request") or {})
+            data = payload.get("payloadData", "")[:200]
+            if data:
+                log.debug(f"  [WS {method[-4:]}] {data}")
+            # Try to extract reqSeq from WS XML payload
+            m = re.search(r'reqSeq="(\d+)"', data) or re.search(r'"reqSeq"\s*:\s*(\d+)', data)
+            if m:
+                seq_val = int(m.group(1))
+                max_seq = max(max_seq, seq_val)
+                log.debug(f"  [SEQ  ] WS reqSeq={seq_val}")
 
     if not session_id:
         raise RuntimeError("Не удалось получить session ID")
-    log.info(f"Сессия: {session_id}  reqSeq: {max_seq}")
+    log.info(f"Сессия: {session_id}  max_seq (HTTP+WS): {max_seq}")
     return session_id, cookies, max_seq
 
 
@@ -101,20 +120,23 @@ def get_session():
 class XIMSSSession:
     def __init__(self, session_id, cookies, start_seq):
         self.cookies = cookies
-        # After Selenium login the browser's JS switches to WebSocket for XIMSS sync and
-        # uses millisecond-epoch timestamps as reqSeq (≈1748000000000).  The few HTTP
-        # requests captured in Chrome performance logs have small reqSeq (3-4), so any
-        # small start_seq would be rejected with "XIMSS request sequence error".
-        # We seed from current time in ms, guaranteed to be slightly ahead of the
-        # last WebSocket frame the browser sent (driver.quit() already happened).
-        self.seq     = int(time.time() * 1000)
+        self.seq     = start_seq   # next call will use start_seq + 1
         self.url     = f"{BASE}/Session/{session_id}/sync"
 
     def call(self, xml):
         self.seq += 1
-        r = requests.post(f"{self.url}?reqSeq={self.seq}", data=xml,
+        seq = self.seq
+        # XIMSS protocol requires reqSeq BOTH in the URL query string AND as an
+        # attribute on the root <XIMSS> element.  Without it in the body the server
+        # treats the request as sequence-0 and raises "XIMSS request sequence error".
+        if "<XIMSS>" in xml:
+            xml = xml.replace("<XIMSS>", f'<XIMSS reqSeq="{seq}">', 1)
+        r = requests.post(f"{self.url}?reqSeq={seq}", data=xml,
                           cookies=self.cookies, headers={"Content-Type": "text/xml"},
                           verify=False, timeout=30)
+        log.debug(f"  → reqSeq={seq}  HTTP {r.status_code}")
+        if not r.ok:
+            log.error(f"  ← {r.status_code} {r.text[:300]}")
         r.raise_for_status()
         return ET.fromstring(r.text)
 
