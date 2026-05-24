@@ -1,3 +1,10 @@
+const BRANCH_NORMALIZATION: Record<string, string> = {
+  "СЕВФ": "СВРФ",
+  "БФ": "БЛТФ",
+  "ПРИМФ": "ПРМФ",
+  "САХФ": "СХЛФ",
+};
+
 export function getType(name: string, order: string[]): string {
   const upper = name.toUpperCase().trim();
   for (const t of order) {
@@ -8,6 +15,12 @@ export function getType(name: string, order: string[]): string {
   if (upper.includes("АСС")) return "АСС";
   if (upper.includes("СКБ")) return "СКБ";
   return "";
+}
+
+export function normalizeBranch(branch: string): string {
+  const value = String(branch || "").trim().toUpperCase();
+  if (!value) return "";
+  return BRANCH_NORMALIZATION[value] ?? value;
 }
 // Форматирует название судна: первая буква каждого слова заглавная
 export function formatVesselName(name: string): string {

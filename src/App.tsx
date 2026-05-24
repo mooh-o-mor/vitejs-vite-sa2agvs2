@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase";
 import type { Vessel, Contract, FormState } from "./lib/types";
 import { T, YEAR, typeOrder } from "./lib/types";
-import { getType, cpShortKey, contractDays } from "./lib/utils";
+import { getType, cpShortKey, contractDays, normalizeBranch } from "./lib/utils";
 import { exportToPPTX } from "./lib/exportPPTX";
 import { GanttChart } from "./components/GanttChart";
 import { Economics } from "./components/Economics";
@@ -53,7 +53,7 @@ export default function App() {
     setVessels((vData||[]).map((v: any) => ({ 
       id:v.id, 
       name:v.name, 
-      branch:v.branch||"", 
+      branch:normalizeBranch(v.branch||""), 
       imo:v.imo||"",
       show_on_gantt: v.show_on_gantt !== false
     })));
@@ -64,7 +64,8 @@ export default function App() {
       firmDays:c.firm_days||0, optionDays:c.option_days||0,
       priority:c.priority||"contract", 
       contractNumber:c.contract_number||"",
-      contractDate:c.contract_date||""
+      contractDate:c.contract_date||"",
+      altGroup:c.alt_group || ""
     })));
     setLoading(false);
   }, []);
@@ -145,7 +146,7 @@ export default function App() {
   const addVessel = useCallback(async (name: string, branch: string, imo: string) => {
     setSyncing(true);
     const maxId = vessels.reduce((m, v) => Math.max(m, v.id), 0);
-    const { error } = await supabase.from("vessels").insert({ id:maxId+1, name, branch, imo, show_on_gantt: true });
+    const { error } = await supabase.from("vessels").insert({ id:maxId+1, name, branch: normalizeBranch(branch), imo, show_on_gantt: true });
     if (error) alert("Ошибка: " + error.message);
     setSyncing(false); await loadData();
   }, [vessels, loadData]);
@@ -153,7 +154,7 @@ export default function App() {
   const saveVessel = useCallback(async (name: string, branch: string, imo: string, photoUrl: string) => {
     if (!editingVessel) return;
     setSyncing(true);
-    await supabase.from("vessels").update({ name, branch, imo, photo_url: photoUrl }).eq("id", editingVessel.id);
+    await supabase.from("vessels").update({ name, branch: normalizeBranch(branch), imo, photo_url: photoUrl }).eq("id", editingVessel.id);
     setSyncing(false); setShowVesselForm(false); await loadData();
   }, [editingVessel, loadData]);
 
@@ -179,7 +180,7 @@ export default function App() {
   }
   return ["Все", ...typeOrder.filter(t => vessels.some(v => getType(v.name, typeOrder)===t))];
 }, [vessels, contracts, activeTab]);
-  const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => v.branch).filter(Boolean)))], [vessels]);
+  const allBranches = useMemo(() => ["Все", ...Array.from(new Set(vessels.map(v => normalizeBranch(v.branch)).filter(Boolean)))], [vessels]);
   const allCps = useMemo(() => ["Все", ...cpKeys.filter(cp => !["Ремонт","АСГ"].includes(cp))], [cpKeys]);
 
   const visibleContracts = useMemo(() => {
