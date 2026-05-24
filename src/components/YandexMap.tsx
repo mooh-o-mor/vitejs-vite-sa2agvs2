@@ -494,6 +494,8 @@ export function YandexMap({
           isMobile={isMobile}
           onCloseSidebar={() => setSidebarOpen(false)}
           sidebarOpen={sidebarOpen}
+          dataSource="branches"
+          onDataSourceChange={() => {}}
         />
       )}
 
@@ -547,6 +549,7 @@ export function YandexMap({
             vessel={selVessel}
             vesselType={getVesselType(selVessel.vessel_name)}
             canView={canView}
+            dataSource="branches"
             onClose={() => setSelVessel(null)}
           />
         )}

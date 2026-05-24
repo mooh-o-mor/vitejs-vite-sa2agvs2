@@ -33,6 +33,8 @@ interface Props {
   isMobile: boolean;
   onCloseSidebar: () => void;
   sidebarOpen: boolean;
+  dataSource: "branches" | "vessels";
+  onDataSourceChange: (ds: "branches" | "vessels") => void;
 }
 
 const fmtDateRu = (d: string) => {
@@ -69,6 +71,8 @@ export function Sidebar({
   isMobile,
   onCloseSidebar,
   sidebarOpen,
+  dataSource,
+  onDataSourceChange,
 }: Props) {
   const showSidebar = isMobile ? sidebarOpen : true;
 
@@ -98,6 +102,49 @@ export function Sidebar({
           <button onClick={onCloseSidebar} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.text2 }}>✕</button>
         </div>
       )}
+
+      {/* ── Переключатель источника данных ── */}
+      <div style={{ padding, borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ display: "flex", gap: 0 }}>
+          <button
+            onClick={() => onDataSourceChange("branches")}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              border: `1px solid ${T.border}`,
+              borderRight: "none",
+              borderRadius: "6px 0 0 6px",
+              cursor: "pointer",
+              fontSize: isMobile ? 10 : 11,
+              fontWeight: 600,
+              background: dataSource === "branches" ? T.accent : T.bg3,
+              color: dataSource === "branches" ? "#ffffff" : T.text2,
+              whiteSpace: "nowrap",
+              transition: "all 0.15s",
+            }}
+          >
+            ДПР филиалов
+          </button>
+          <button
+            onClick={() => onDataSourceChange("vessels")}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              border: `1px solid ${T.border}`,
+              borderRadius: "0 6px 6px 0",
+              cursor: "pointer",
+              fontSize: isMobile ? 10 : 11,
+              fontWeight: 600,
+              background: dataSource === "vessels" ? T.accent : T.bg3,
+              color: dataSource === "vessels" ? "#ffffff" : T.text2,
+              whiteSpace: "nowrap",
+              transition: "all 0.15s",
+            }}
+          >
+            ДПР судов
+          </button>
+        </div>
+      </div>
 
       <div style={{ padding, borderBottom: `1px solid ${T.border}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>

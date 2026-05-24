@@ -10,6 +10,7 @@ interface Props {
   vessel: DprRow;
   vesselType: string;
   canView: boolean;
+  dataSource: "branches" | "vessels";
   onClose: () => void;
 }
 
@@ -127,7 +128,7 @@ async function fetchWeather(
 
 /* ══════════════════════════════════════════════════════════ */
 
-export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
+export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }: Props) {
   const c = cls(vessel.status);
   const powerMatch = /(БЭП|СЭП)/i.exec(vessel.coord_raw || "");
   const power = powerMatch ? powerMatch[1].toUpperCase() : null;
@@ -145,12 +146,14 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
     vessel.lng !== 0;
 
   const hasSupplies = !!(vessel.supplies && vessel.supplies.length > 0);
+  const hasFieldsJson = dataSource === "vessels" && !!(vessel.fields_json && Object.keys(vessel.fields_json).length > 0);
+  const hasDataTab = hasSupplies || hasFieldsJson;
 
-  /* Вкладки: только для canView + есть координаты */
-  const showTabs = canView && hasCoords;
+  /* Вкладки: только для canView + есть координаты + есть данные */
+  const showTabs = canView && hasCoords && hasDataTab;
 
-  const [activeTab, setActiveTab] = useState<"supplies" | "weather">(
-    hasSupplies ? "supplies" : "weather"
+  const [activeTab, setActiveTab] = useState<"data" | "weather">(
+    hasDataTab ? "data" : "weather"
   );
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -207,7 +210,7 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
 
   /* Сброс вкладки при смене судна */
   useEffect(() => {
-    setActiveTab(hasSupplies ? "supplies" : "weather");
+    setActiveTab(hasDataTab ? "data" : "weather");
   }, [vessel.vessel_name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rsClassUrl =
@@ -363,9 +366,9 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
             {/* ── Переключатель вкладок (только если есть координаты) ── */}
             {showTabs && (
               <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginTop: 10 }}>
-                {hasSupplies && (
-                  <button style={tabStyle(activeTab === "supplies")} onClick={() => setActiveTab("supplies")}>
-                    📦 ЗАПАСЫ
+                {hasDataTab && (
+                  <button style={tabStyle(activeTab === "data")} onClick={() => setActiveTab("data")}>
+                    {dataSource === "vessels" ? "📋 ПОЛЯ ДПР" : "📦 ЗАПАСЫ"}
                   </button>
                 )}
                 <button style={tabStyle(activeTab === "weather")} onClick={() => setActiveTab("weather")}>
@@ -374,8 +377,8 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
               </div>
             )}
 
-            {/* ── Содержимое: Запасы ── */}
-            {(!showTabs || activeTab === "supplies") && hasSupplies && (
+            {/* ── Содержимое: Запасы (для ДПР филиалов) ── */}
+            {(!showTabs || activeTab === "data") && hasSupplies && dataSource === "branches" && (
               <div style={{ marginTop: showTabs ? 8 : 0 }}>
                 {/* Заголовок секции — только когда нет вкладок */}
                 {!showTabs && (
@@ -415,6 +418,40 @@ export function VesselPopup({ vessel, vesselType, canView, onClose }: Props) {
                         <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, fontSize: 10, fontFamily: "monospace" }}>{s.lim || "—"}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── Содержимое: Поля ДПР (для ДПР судов) ── */}
+            {(!showTabs || activeTab === "data") && hasFieldsJson && dataSource === "vessels" && (
+              <div style={{ marginTop: showTabs ? 8 : 0 }}>
+                {!showTabs && (
+                  <div style={{ margin: "10px 0 4px" }}>
+                    <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>📋 ПОЛЯ ДПР</span>
+                  </div>
+                )}
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 48, color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Поле</th>
+                      <th style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Значение</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(vessel.fields_json!)
+                      .filter(([, v]) => v && v.trim())
+                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                      .map(([key, value]) => (
+                        <tr key={key}>
+                          <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace", fontSize: 10, verticalAlign: "top" }}>
+                            П.{key}
+                          </td>
+                          <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                            {value}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>

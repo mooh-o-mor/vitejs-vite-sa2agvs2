@@ -1,0 +1,49 @@
+name: DPR XIMSS — сбор ДПР с судов
+
+on:
+  schedule:
+    # Каждый час с 07:00 до 11:00 МСК = 04:00–08:00 UTC
+    - cron: '0 4,5,6,7,8 * * *'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install Python dependencies
+        run: |
+          pip install extract-msg olefile supabase selenium webdriver-manager requests
+
+      - name: Run DPR collector
+        env:
+          XIMSS_BASE: https://mail.morspas.ru
+          XIMSS_LOGIN: ${{ secrets.XIMSS_LOGIN }}
+          XIMSS_PASS: ${{ secrets.XIMSS_PASS }}
+          XIMSS_FOLDER_ID: '1694824'
+          XIMSS_FOLDER_NAME: INBOX/!ДИСП
+          SUPABASE_URL: https://otjiwxvszomwpqmwusqd.supabase.co
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python dpr_ximss.py 2>&1 | tee dpr.log
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpr-log-${{ github.run_id }}
+          path: dpr.log
+          retention-days: 7

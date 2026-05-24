@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
@@ -6,7 +6,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
-import { T, typeOrder } from "../../lib/types";
+import { T, typeOrder, type VesselDprRow } from "../../lib/types";
 import { getType, formatVesselName } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
@@ -49,6 +49,8 @@ export function FleetMap({
   const [filterBranch, setFilterBranch] = useState<string>("Все");
   const [filterStatus, setFilterStatus] = useState<string>("Все");
   const [selVessel, setSelVessel] = useState<DprRow | null>(null);
+
+  const [dataSource, setDataSource] = useState<"branches" | "vessels">("branches");
 
   const [dragging, setDragging] = useState(false);
   const dragCounter = useRef(0);
@@ -334,10 +336,12 @@ mapRef.current.addEventListener("touchend", (e) => {
   return () => { map.remove(); mapObj.current = null; };
 }, []);
 
-  useEffect(() => { loadDates(); }, []);
+  useEffect(() => { loadDates(); }, [dataSource]);
 
   async function loadDates() {
-    const { data } = await supabase.from("dpr_entries").select("report_date").order("report_date", { ascending: false });
+    setLoading(true);
+    const table = dataSource === "branches" ? "dpr_entries" : "vessel_dpr";
+    const { data } = await supabase.from(table).select("report_date").order("report_date", { ascending: false });
     if (data) {
       const unique = [...new Set(data.map((r: any) => r.report_date))];
       setDates(unique);
@@ -348,12 +352,33 @@ mapRef.current.addEventListener("touchend", (e) => {
 
   useEffect(() => {
     if (selDate) loadVessels(selDate);
-  }, [selDate]);
+  }, [selDate, dataSource]);
+
+  /** Маппинг VesselDprRow → DprRow для совместимости */
+  const mapVesselDprToDprRow = useCallback((v: VesselDprRow): DprRow => ({
+    vessel_name: v.vessel_name,
+    branch: v.branch,
+    report_date: v.report_date,
+    status: v.dpr_type,
+    coord_raw: v.coord_raw ?? "",
+    lat: v.lat,
+    lng: v.lng,
+    note: v.email_subject ?? "",
+    supplies: [],
+    contract_info: "",
+    work_period: "",
+    fields_json: v.fields_json,
+  }), []);
 
   async function loadVessels(date: string) {
     setLoading(true);
-    const { data } = await supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name");
-    setVessels(data || []);
+    if (dataSource === "branches") {
+      const { data } = await supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name");
+      setVessels(data || []);
+    } else {
+      const { data } = await supabase.from("vessel_dpr").select("*").eq("report_date", date).order("vessel_name");
+      setVessels((data || []).map((v: VesselDprRow) => mapVesselDprToDprRow(v)));
+    }
     setSelVessel(null);
     setLoading(false);
   }
@@ -383,16 +408,24 @@ mapRef.current.addEventListener("touchend", (e) => {
     return ["Все", ...Array.from(branches).sort()];
   }, [vessels]);
 
-  const allStatuses = ["Все", "АСГ", "АСД", "РЕМ"];
+  const allStatuses = useMemo(() => {
+    if (dataSource === "branches") return ["Все", "АСГ", "АСД", "РЕМ"];
+    const types = new Set(vessels.map(v => v.status).filter(Boolean));
+    return ["Все", ...Array.from(types).sort()];
+  }, [vessels, dataSource]);
 
   const filtered = useMemo(() => {
     return vessels.filter(v => {
       const typeOk = filterType === "Все" || getVesselType(v.vessel_name) === filterType;
       const branchOk = filterBranch === "Все" || v.branch === filterBranch;
-      const statusOk = filterStatus === "Все" || cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem");
+      const statusOk = filterStatus === "Все"
+        ? true
+        : dataSource === "branches"
+          ? cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem")
+          : v.status === filterStatus;
       return typeOk && branchOk && statusOk;
     });
-  }, [vessels, filterType, filterBranch, filterStatus, getVesselType]);
+  }, [vessels, filterType, filterBranch, filterStatus, getVesselType, dataSource]);
 
   const searchFiltered = useMemo(() => {
     return filtered.filter(v => !search || v.vessel_name.toLowerCase().includes(search.toLowerCase()));
@@ -601,6 +634,12 @@ mapRef.current.addEventListener("touchend", (e) => {
           isMobile={isMobile}
           onCloseSidebar={() => setSidebarOpen(false)}
           sidebarOpen={sidebarOpen}
+          dataSource={dataSource}
+          onDataSourceChange={(ds) => {
+            setDataSource(ds);
+            setSelDate("");
+            setFilterStatus("Все");
+          }}
         />
       )}
 
@@ -619,6 +658,7 @@ mapRef.current.addEventListener("touchend", (e) => {
             vessel={selVessel}
             vesselType={getVesselType(selVessel.vessel_name)}
             canView={canView}
+            dataSource={dataSource}
             onClose={() => setSelVessel(null)}
           />
         )}

@@ -38,6 +38,8 @@ export interface DprRow {
   supplies: DprSupply[];
   contract_info?: string;
   work_period?: string;
+  /** Сырые поля ДПР (только для источника vessel_dpr) */
+  fields_json?: Record<string, string> | null;
 }
 
 /* ── Status normalizer ── */

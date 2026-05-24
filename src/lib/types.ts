@@ -62,6 +62,22 @@ export interface DprRow {
   work_period?: string;
 }
 
+/** Строка из таблицы vessel_dpr — индивидуальные ДПР с судов */
+export interface VesselDprRow {
+  vessel_name: string;
+  branch: string;
+  dpr_type: string;
+  report_date: string;
+  report_time: string | null;
+  coord_raw: string | null;
+  lat: number | null;
+  lng: number | null;
+  fields_json: Record<string, string> | null;
+  email_subject: string | null;
+  email_from: string | null;
+  uploaded_at: string;
+}
+
 export const YEAR = 2026;
 export const yearStart = new Date(YEAR, 0, 1);
 export const yearEnd = new Date(YEAR, 11, 31);
