@@ -170,6 +170,10 @@ def extract_fields(body: str) -> dict[str, str]:
     i = 1
     while i + 1 < len(chunks):
         num = chunks[i].strip()
+        # Нормализуем ключ: "01" → "1", чтобы fields.get("1") работало
+        # независимо от того, пишет судно "01." или "1."
+        if num.isdigit():
+            num = str(int(num))
         val = _clean_value(chunks[i + 1]) if i + 1 < len(chunks) else ""
         if num and num not in result:
             result[num] = val
