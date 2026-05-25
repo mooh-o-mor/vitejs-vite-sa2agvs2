@@ -1,5 +1,4 @@
 import XLSX from "xlsx-js-style";
-import { PORTS } from "./ports";
 import { VESSEL_NAME_ALIASES } from "./fleetTypes";
 import { findPortCoords } from "./locationNormalizer";
 
