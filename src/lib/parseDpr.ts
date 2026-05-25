@@ -1,6 +1,7 @@
 import XLSX from "xlsx-js-style";
 import { PORTS } from "./ports";
 import { VESSEL_NAME_ALIASES } from "./fleetTypes";
+import { findPortCoords } from "./locationNormalizer";
 
 /* ── Types ── */
 export interface DprSupply {
@@ -115,11 +116,7 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (Math.abs(lat) < 90 && Math.abs(lng) < 180) return [lat, lng];
   }
 
-  const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
-  for (const [k, c] of Object.entries(PORTS)) {
-    if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
-  }
-  return null;
+  return findPortCoords(s);
 }
 
 /* ── Helpers ── */
