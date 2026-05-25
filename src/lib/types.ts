@@ -69,6 +69,8 @@ export interface VesselDprRow {
   dpr_type: string;
   report_date: string;
   report_time: string | null;
+  msg_time: string | null;
+  status: string | null;
   coord_raw: string | null;
   lat: number | null;
   lng: number | null;
@@ -76,6 +78,50 @@ export interface VesselDprRow {
   email_subject: string | null;
   email_from: string | null;
   uploaded_at: string;
+  parse_ok: boolean | null;
+  // Запасы
+  fuel_dt_amt: number | null;
+  fuel_dt_cons: number | null;
+  fuel_tt_amt: number | null;
+  fuel_tt_cons: number | null;
+  oil_amt: number | null;
+  oil_cons: number | null;
+  water_amt: number | null;
+  water_cons: number | null;
+  // МОРЕ
+  weather: string | null;
+  course: number | null;
+  speed_current: number | null;
+  distance_day: number | null;
+  eta_place: string | null;
+  eta_date: string | null;
+  // ПОРТ
+  power_source: string | null;
+  port_status: string | null;
+  // Общее
+  crew: string | null;
+}
+
+export interface VesselDprMapRow extends DprRow {
+  msg_time: string | null;
+  parse_ok: boolean | null;
+  weather: string | null;
+  course: number | null;
+  speed_current: number | null;
+  distance_day: number | null;
+  eta_place: string | null;
+  eta_date: string | null;
+  power_source: string | null;
+  port_status: string | null;
+  crew: string | null;
+  fuel_dt_amt: number | null;
+  fuel_dt_cons: number | null;
+  fuel_tt_amt: number | null;
+  fuel_tt_cons: number | null;
+  oil_amt: number | null;
+  oil_cons: number | null;
+  water_amt: number | null;
+  water_cons: number | null;
 }
 
 export const YEAR = 2026;

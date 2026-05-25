@@ -47,8 +47,12 @@ log = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(__file__))
 try:
     from dpr_parser import (
-        detect_report_type, extract_fields, extract_vessel_name,
-        parse_date_from_field3, build_coord_raw, parse_coords, detect_branch,
+        detect_report_type, extract_fields, extract_fields_doc_form,
+        extract_vessel_name, parse_date_from_field3, build_coord_raw,
+        parse_coords, detect_branch,
+        extract_all_text_from_msg, extract_msg_time,
+        parse_supplies_numeric, parse_weather, parse_course_speed,
+        parse_eta, parse_power_source, parse_port_status, parse_crew,
     )
 except ImportError as e:
     sys.exit(f"Не найден dpr_parser.py: {e}")
@@ -199,6 +203,40 @@ class XIMSSSession:
                 break
         return subject, sender, date_str, body
 
+    def download_raw_message(self, uid) -> Optional[bytes]:
+        """Скачивает сырое сообщение в формате source (MIME/MSG)."""
+        xml = f"""<XIMSS>
+  <folderRead mode="source" folder="{FOLDER_ID}" UID="{uid}"
+              totalSizeLimit="-1" id="21"/>
+</XIMSS>"""
+        try:
+            root = self.call(xml)
+            email = root.find(".//EMail")
+            if email is None:
+                return None
+            # Пробуем взять source/raw данные
+            source = email.findtext("source")
+            if source:
+                return source.encode("utf-8", errors="replace")
+            # Иногда тело содержит base64 MSG
+            for mime in email.findall(".//MIME"):
+                ctype = (mime.get("contentType") or "").lower()
+                if "ms-outlook" in ctype or "octet-stream" in ctype:
+                    text = (mime.text or "").strip()
+                    if text:
+                        import base64
+                        try:
+                            return base64.b64decode(text)
+                        except Exception:
+                            pass
+            # Фолбэк: берём text content как есть
+            text_content = email.text
+            if text_content:
+                return text_content.encode("utf-8", errors="replace")
+        except Exception as e:
+            log.debug(f"download_raw_message error: {e}")
+        return None
+
     def mark_seen(self, uid):
         self.call(f"""<XIMSS>
   <messageMark folder="{FOLDER_ID}" flags="Seen" id="30">
@@ -233,35 +271,79 @@ def _extract_time(f3):
     m = re.search(r"(\d{2}[:.]\d{2}\s*(?:МСК|UTC|мск)?)", f3)
     return m.group(1).strip() if m else ""
 
-def parse_to_vessel_dpr(subject, sender, body, uid):
+def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
+    """Парсит ДПР в формат vessel_dpr. Приоритет: вложения MSG → тело письма."""
+    if not body.strip() and not raw_msg:
+        log.warning("  Пустое тело и нет raw MSG — пропускаем")
+        return None
+
+    is_doc_form = False
+    dpr_type = ""
+    msg_time = None
+
+    # ── Попытка извлечь текст из MSG-вложений (CFB/OLE) ──
+    if raw_msg:
+        att_text, dpr_type, is_doc_form = extract_all_text_from_msg(
+            raw_msg, subject
+        )
+        if att_text.strip():
+            body = att_text
+            log.info(f"  Текст из MSG-вложения, тип={dpr_type}, form={is_doc_form}")
+        # msg_time из metadata
+        msg_time = extract_msg_time(raw_msg)
+
     if not body.strip():
         log.warning("  Пустое тело — пропускаем")
         return None
 
-    dpr_type = detect_report_type(subject, body[:300])
-    fields   = extract_fields(body)
+    # ── Тип ДПР ──
+    if not dpr_type:
+        dpr_type = detect_report_type(subject, body[:400])
+
+    # ── Парсинг полей ──
+    fields = extract_fields_doc_form(body) if is_doc_form else extract_fields(body)
     if not fields:
         log.warning("  Поля не найдены — пропускаем")
         return None
 
+    # ── Название судна ──
     vessel_name = _clean_name(extract_vessel_name(fields, sender, subject) or "")
     if not vessel_name:
         log.warning("  Название судна не определено — пропускаем")
         return None
 
-    f3          = fields.get("3", "")
+    # ── Дата ──
+    f3 = fields.get("3", "")
     report_date = parse_date_from_field3(f3) or date.today()
     report_time = _extract_time(f3)
-    coord_raw   = build_coord_raw(fields, dpr_type)
-    lat, lng    = parse_coords(fields.get("4", ""))
-    # Фолбэк: если координаты не распарсились — ищем в ports.ts
+
+    # ── Координаты ──
+    coord_raw = build_coord_raw(fields, dpr_type)
+    lat, lng = parse_coords(fields.get("4", ""))
     if lat is None and coord_raw:
         lat, lng = lookup_port(coord_raw, PORTS)
         if lat is None:
             log.warning(f"  Не найден порт: {coord_raw!r}")
-    branch      = detect_branch(vessel_name, sender, body[:500])
 
-    log.info(f"  Судно: {vessel_name!r}  Дата: {report_date}  Тип: {dpr_type}")
+    branch = detect_branch(vessel_name, sender, body[:500])
+
+    # ── parse_ok: есть имя, дата/время, позиция ──
+    has_name = bool(vessel_name)
+    has_date = bool(report_date)
+    has_pos  = bool(coord_raw or (lat is not None and lng is not None))
+    parse_ok = has_name and has_date and has_pos
+
+    # ── Новые колонки ──
+    supplies = parse_supplies_numeric(fields)
+    weather_val  = parse_weather(fields) if dpr_type == "МОРЕ" else None
+    course, speed, distance = parse_course_speed(fields) if dpr_type == "МОРЕ" else (None, None, None)
+    eta_place, eta_date = parse_eta(fields) if dpr_type == "МОРЕ" else (None, None)
+    power_source = parse_power_source(fields) if dpr_type == "ПОРТ" else None
+    port_status  = parse_port_status(fields) if dpr_type == "ПОРТ" else None
+    crew_val = parse_crew(fields)
+    status_raw = fields.get("2", "").strip()
+
+    log.info(f"  Судно: {vessel_name!r}  Дата: {report_date}  Тип: {dpr_type}  parse_ok={parse_ok}")
 
     return {
         "vessel_name":   vessel_name,
@@ -269,6 +351,8 @@ def parse_to_vessel_dpr(subject, sender, body, uid):
         "dpr_type":      dpr_type,
         "report_date":   report_date.isoformat(),
         "report_time":   report_time or None,
+        "msg_time":      msg_time,
+        "status":        status_raw or None,
         "coord_raw":     coord_raw or None,
         "lat":           lat,
         "lng":           lng,
@@ -277,6 +361,28 @@ def parse_to_vessel_dpr(subject, sender, body, uid):
         "email_subject": subject or None,
         "email_from":    sender or None,
         "uploaded_at":   datetime.now(timezone.utc).isoformat(),
+        "parse_ok":      parse_ok,
+        # Запасы
+        "fuel_dt_amt":   supplies.get("fuel_dt_amt"),
+        "fuel_dt_cons":  supplies.get("fuel_dt_cons"),
+        "fuel_tt_amt":   supplies.get("fuel_tt_amt"),
+        "fuel_tt_cons":  supplies.get("fuel_tt_cons"),
+        "oil_amt":       supplies.get("oil_amt"),
+        "oil_cons":      supplies.get("oil_cons"),
+        "water_amt":     supplies.get("water_amt"),
+        "water_cons":    supplies.get("water_cons"),
+        # МОРЕ
+        "weather":       weather_val,
+        "course":        course,
+        "speed_current": speed,
+        "distance_day":  distance,
+        "eta_place":     eta_place,
+        "eta_date":      eta_date,
+        # ПОРТ
+        "power_source":  power_source,
+        "port_status":   port_status,
+        # Общее
+        "crew":          crew_val,
     }
 
 
@@ -407,6 +513,21 @@ def main():
     ximss = XIMSSSession(session_id, cookies, last_seq)
     ximss.open_folder()
 
+    # ── Задача 4: перечень активных судов (за последние 90 дней) ──
+    active_vessel_count = 0
+    if sb and not args.dry_run:
+        try:
+            res = sb.table("vessel_dpr") \
+                .select("vessel_name", count="exact") \
+                .gte("report_date", (date.today() - __import__("datetime").timedelta(days=90)).isoformat()) \
+                .execute()
+            # Distinct by vessel_name
+            names = set(r["vessel_name"] for r in (res.data or []))
+            active_vessel_count = len(names)
+            log.info(f"Активных судов (≤90 дней): {active_vessel_count}")
+        except Exception as e:
+            log.warning(f"Ошибка запроса активных судов: {e}")
+
     uids = ximss.get_unseen_uids(limit=args.limit)
     if not uids:
         log.info("Новых писем нет")
@@ -417,10 +538,20 @@ def main():
         log.info(f"─── UID {uid} ───")
         try:
             subject, sender, _, body = ximss.read_message(uid)
+
+            # Скачиваем сырое сообщение для MSG-вложений
+            raw_msg = None
+            try:
+                raw_msg = ximss.download_raw_message(uid)
+                if raw_msg:
+                    log.info(f"  Raw MSG: {len(raw_msg)} байт")
+            except Exception as e:
+                log.debug(f"  Raw download failed: {e}")
+
             log.info(f"  От:   {sender}")
             log.info(f"  Тема: {subject!r}")
 
-            record = parse_to_vessel_dpr(subject, sender, body, uid)
+            record = parse_to_vessel_dpr(subject, sender, body, uid, raw_msg)
             if record is None:
                 skip += 1
                 ximss.mark_seen(uid)
@@ -440,6 +571,21 @@ def main():
             fail += 1
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Итог: {ok} записано, {skip} пропущено, {fail} ошибок")
+
+    # ── Задача 5: условие остановки ──
+    if sb and not args.dry_run and active_vessel_count > 0:
+        try:
+            res = sb.table("vessel_dpr") \
+                .select("*", count="exact") \
+                .eq("report_date", date.today().isoformat()) \
+                .eq("parse_ok", True) \
+                .execute()
+            reported_today = res.count if res.count is not None else len(res.data or [])
+            log.info(f"Отчитались сегодня (parse_ok=true): {reported_today} из {active_vessel_count}")
+            if reported_today >= active_vessel_count:
+                log.info(f"Все {active_vessel_count} судов отчитались, завершаю.")
+        except Exception as e:
+            log.warning(f"Ошибка проверки условия остановки: {e}")
 
 
 if __name__ == "__main__":

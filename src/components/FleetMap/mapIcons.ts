@@ -4,8 +4,8 @@ export const CLR = { asg: "#e53935", asd: "#2e7d32", rem: "#757575", oth: "#6b8a
 export const STATUS_BG = { asg: "#ffebee", asd: "#e8f5e9", rem: "#f5f5f5", oth: "#ffffff" };
 export const STATUS_HEADER_BG = { asg: "#ffcdd2", asd: "#c8e6c9", rem: "#e0e0e0", oth: "#f5f5f5" };
 
-export function mkIcon(c: string) {
-  const color = CLR[c as keyof typeof CLR] || CLR.oth;
+export function mkIcon(c: string, overrideColor?: string) {
+  const color = overrideColor || CLR[c as keyof typeof CLR] || CLR.oth;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="32" viewBox="0 0 26 32">
     <path d="M13 0C5.8 0 0 5.8 0 13c0 9 13 19 13 19s13-10 13-19C26 5.8 20.2 0 13 0z" fill="white"/>
     <path d="M13 1.5C6.6 1.5 1.5 6.6 1.5 13c0 8.3 11.5 17.5 11.5 17.5S24.5 21.3 24.5 13C24.5 6.6 19.4 1.5 13 1.5z" fill="${color}"/>

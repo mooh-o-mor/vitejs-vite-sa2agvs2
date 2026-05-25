@@ -6,7 +6,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
-import { T, type VesselDprRow } from "../../lib/types";
+import { T, type VesselDprRow, type VesselDprMapRow } from "../../lib/types";
 import { formatVesselName, getFleetType } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
@@ -335,8 +335,8 @@ mapRef.current.addEventListener("touchend", (e) => {
     if (selDate) loadVessels(selDate);
   }, [selDate, dataSource]);
 
-  /** Маппинг VesselDprRow → DprRow для совместимости */
-  const mapVesselDprToDprRow = useCallback((v: VesselDprRow): DprRow => ({
+  /** Маппинг VesselDprRow → DprRow + новые поля для vessel_dpr */
+  const mapVesselDprToDprRow = useCallback((v: VesselDprRow): VesselDprMapRow => ({
     vessel_name: v.vessel_name,
     branch: v.branch,
     report_date: v.report_date,
@@ -349,6 +349,25 @@ mapRef.current.addEventListener("touchend", (e) => {
     contract_info: "",
     work_period: "",
     fields_json: v.fields_json,
+    msg_time: v.msg_time ?? null,
+    parse_ok: v.parse_ok ?? null,
+    weather: v.weather ?? null,
+    course: v.course ?? null,
+    speed_current: v.speed_current ?? null,
+    distance_day: v.distance_day ?? null,
+    eta_place: v.eta_place ?? null,
+    eta_date: v.eta_date ?? null,
+    power_source: v.power_source ?? null,
+    port_status: v.port_status ?? null,
+    crew: v.crew ?? null,
+    fuel_dt_amt: v.fuel_dt_amt ?? null,
+    fuel_dt_cons: v.fuel_dt_cons ?? null,
+    fuel_tt_amt: v.fuel_tt_amt ?? null,
+    fuel_tt_cons: v.fuel_tt_cons ?? null,
+    oil_amt: v.oil_amt ?? null,
+    oil_cons: v.oil_cons ?? null,
+    water_amt: v.water_amt ?? null,
+    water_cons: v.water_cons ?? null,
   }), []);
 
   async function loadVessels(date: string) {
@@ -408,10 +427,29 @@ mapRef.current.addEventListener("touchend", (e) => {
     if (!mapObj.current || !markersRef.current) return;
     markersRef.current.clearLayers();
     const bounds: L.LatLng[] = [];
+
+    // Для vessel_dpr: цвет маркера зависит от parse_ok и времени суток
+    const now = new Date();
+    const mskHour = (now.getUTCHours() + 3) % 24;
+    const isToday = (d: string) => d === new Date().toISOString().slice(0, 10);
+
+    const getVesselMarkerStatus = (v: DprRow): "asg" | "asd" | "rem" | "oth" | "yellow" | "red" | "gray" => {
+      if (dataSource !== "vessels") return cls(v.status);
+      const vr = v as VesselDprMapRow;
+      if (isToday(v.report_date)) {
+        return vr.parse_ok ? cls(v.status) : "yellow";
+      }
+      return mskHour >= 8 ? "red" : "gray";
+    };
+
     filtered.forEach((v) => {
       if (v.lat == null || v.lng == null) return;
-      const c = cls(v.status);
-      const marker = L.marker([v.lat, v.lng], { icon: mkIcon(c), _status: c } as any);
+      const markerStatus = getVesselMarkerStatus(v);
+      const icon = markerStatus === "yellow" ? mkIcon("oth", "#eab308") :
+                    markerStatus === "red" ? mkIcon("oth", "#dc2626") :
+                    markerStatus === "gray" ? mkIcon("oth", "#9ca3af") :
+                    mkIcon(markerStatus as "asg" | "asd" | "rem" | "oth");
+      const marker = L.marker([v.lat, v.lng], { icon, _status: markerStatus } as any);
       const label = formatVesselName(v.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|скб)\s+/i, "").trim());
       marker.bindTooltip(label, { permanent: false, direction: "bottom", offset: [0, 4], className: "vessel-label-map" });
       marker.on("click", (e: any) => {

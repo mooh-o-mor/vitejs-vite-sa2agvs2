@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { T } from "../../lib/types";
+import { T, type VesselDprMapRow } from "../../lib/types";
 import type { DprSupply, DprRow } from "../../lib/parseDpr";
 import { STATUS_HEADER_BG } from "./mapIcons";
 import { extractLocation } from "../../lib/locationNormalizer";
@@ -362,6 +362,112 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
                 <span style={{ color: T.text, textAlign: "right", fontSize: 11, maxWidth: 250 }}>{vessel.note}</span>
               </div>
             )}
+
+            {/* ── vessel_dpr: время сообщения ── */}
+            {dataSource === "vessels" && (vessel as VesselDprMapRow).msg_time && (
+              <div style={rowStyle}>
+                <span style={{ color: T.text2 }}>Время сообщения</span>
+                <span style={{ color: T.text, textAlign: "right", fontFamily: "monospace", fontSize: 11 }}>
+                  {new Date((vessel as VesselDprMapRow).msg_time!).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}
+                </span>
+              </div>
+            )}
+
+            {/* ── vessel_dpr: запасы из новых колонок ── */}
+            {dataSource === "vessels" && (() => {
+              const vr = vessel as VesselDprMapRow;
+              const hasSupplies = vr.fuel_dt_amt != null || vr.fuel_tt_amt != null || vr.oil_amt != null || vr.water_amt != null;
+              if (!hasSupplies) return null;
+              return (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace", marginBottom: 4 }}>Запасы</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}></th>
+                        <th style={{ color: T.text2, fontWeight: "normal", textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Остаток</th>
+                        <th style={{ color: T.text2, fontWeight: "normal", textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Расход</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        ["ДТ", vr.fuel_dt_amt, vr.fuel_dt_cons],
+                        ["ТТ", vr.fuel_tt_amt, vr.fuel_tt_cons],
+                        ["Масло", vr.oil_amt, vr.oil_cons],
+                        ["Вода", vr.water_amt, vr.water_cons],
+                      ].filter(([, amt, cons]) => amt != null || cons != null).map(([label, amt, cons]) => (
+                        <tr key={label as string}>
+                          <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontFamily: "monospace", fontSize: 10 }}>{label as string}</td>
+                          <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace", textAlign: "right" }}>{amt != null ? amt : "—"}</td>
+                          <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace", textAlign: "right" }}>{cons != null ? cons : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+            {/* ── vessel_dpr: МОРЕ — курс, скорость, мили, ETA ── */}
+            {dataSource === "vessels" && vessel.status === "МОРЕ" && (() => {
+              const vr = vessel as VesselDprMapRow;
+              const hasNav = vr.course != null || vr.speed_current != null || vr.distance_day != null || vr.eta_place;
+              if (!hasNav) return null;
+              return (
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace", marginBottom: 4 }}>Навигация</div>
+                  {vr.course != null && (
+                    <div style={rowStyle}>
+                      <span style={{ color: T.text2 }}>Курс</span>
+                      <span style={{ color: T.text, fontFamily: "monospace", fontSize: 11 }}>{vr.course}°</span>
+                    </div>
+                  )}
+                  {vr.speed_current != null && (
+                    <div style={rowStyle}>
+                      <span style={{ color: T.text2 }}>Скорость</span>
+                      <span style={{ color: T.text, fontFamily: "monospace", fontSize: 11 }}>{vr.speed_current} уз</span>
+                    </div>
+                  )}
+                  {vr.distance_day != null && (
+                    <div style={rowStyle}>
+                      <span style={{ color: T.text2 }}>Миль за сутки</span>
+                      <span style={{ color: T.text, fontFamily: "monospace", fontSize: 11 }}>{vr.distance_day}</span>
+                    </div>
+                  )}
+                  {vr.eta_place && (
+                    <div style={rowStyle}>
+                      <span style={{ color: T.text2 }}>ETA</span>
+                      <span style={{ color: T.text, fontFamily: "monospace", fontSize: 11 }}>
+                        {vr.eta_place}{vr.eta_date ? ` (${vr.eta_date})` : ""}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── vessel_dpr: ПОРТ — питание, статус ── */}
+            {dataSource === "vessels" && vessel.status === "ПОРТ" && (() => {
+              const vr = vessel as VesselDprMapRow;
+              const hasPort = vr.power_source || vr.port_status;
+              if (!hasPort) return null;
+              return (
+                <div style={{ marginTop: 6 }}>
+                  {vr.power_source && (
+                    <div style={rowStyle}>
+                      <span style={{ color: T.text2 }}>Электропитание</span>
+                      <span style={{ color: T.text, fontFamily: "monospace", fontSize: 11 }}>{vr.power_source}</span>
+                    </div>
+                  )}
+                  {vr.port_status && (
+                    <div style={rowStyle}>
+                      <span style={{ color: T.text2 }}>Статус порта</span>
+                      <span style={{ color: T.text, fontSize: 11, maxWidth: 250 }}>{vr.port_status}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* ── Переключатель вкладок (только если есть координаты) ── */}
             {showTabs && (

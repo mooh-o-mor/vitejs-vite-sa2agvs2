@@ -26,7 +26,9 @@ import json
 import logging
 import os
 import re
+import struct
 import sys
+import zipfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -285,6 +287,377 @@ def extract_attachment_body(msg) -> tuple[str, bool]:
                 log.info(f"Вложение .doc{'(форма)' if is_form else ''}: {fname}")
                 return text, is_form
     return "", False
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  ПАРСИНГ MSG ЧЕРЕЗ CFB (OLE) — порт с TypeScript parseDpr.ts
+# ════════════════════════════════════════════════════════════════════════════
+
+def _decode_utf16le(raw: bytes) -> str:
+    """Декодирует UTF-16LE строку из MSG свойства, обрезая \x00."""
+    try:
+        return raw.decode("utf-16-le", errors="replace").replace("\x00", "").strip()
+    except Exception:
+        return ""
+
+def extract_msg_time(raw_msg: bytes) -> Optional[str]:
+    """
+    Извлекает PR_CLIENT_SUBMIT_TIME (0x0039, тип FILETIME 0x0040)
+    из __properties_version1.0 корневого storage MSG-файла.
+    Возвращает UTC ISO-строку или None.
+    """
+    try:
+        if not HAS_OLEFILE or raw_msg[:4] != b'\xd0\xcf\x11\xe0':
+            return None
+        ole = olefile.OleFileIO(io.BytesIO(raw_msg))
+        if not ole.exists("__properties_version1.0"):
+            ole.close()
+            return None
+        props = ole.openstream("__properties_version1.0").read()
+        ole.close()
+
+        # Свойства начинаются с offset 32, каждое по 16 байт
+        pos = 32
+        while pos + 16 <= len(props):
+            tag_type = struct.unpack_from("<H", props, pos)[0]       # bytes 0-1
+            tag_id   = struct.unpack_from("<H", props, pos + 2)[0]   # bytes 2-3
+            if tag_id == 0x0039 and tag_type == 0x0040:              # PR_CLIENT_SUBMIT_TIME, FILETIME
+                filetime = struct.unpack_from("<Q", props, pos + 8)[0]  # bytes 8-15
+                # FILETIME → Unix ms: (filetime / 10000) - 11644473600000
+                unix_ms = int(filetime / 10000) - 11644473600000
+                if unix_ms > 0:
+                    return datetime.fromtimestamp(unix_ms / 1000, tz=timezone.utc).isoformat()
+            pos += 16
+        return None
+    except Exception as e:
+        log.debug(f"extract_msg_time error: {e}")
+        return None
+
+def _read_msg_attachments_cfb(raw_msg: bytes) -> list[tuple[str, bytes]]:
+    """
+    Извлекает вложения из MSG (OLE/CFB) через olefile.
+    Возвращает список (имя_файла, бинарные_данные).
+    """
+    attachments: list[tuple[str, bytes]] = []
+    if not HAS_OLEFILE or raw_msg[:4] != b'\xd0\xcf\x11\xe0':
+        return attachments
+    try:
+        ole = olefile.OleFileIO(io.BytesIO(raw_msg))
+        dirs = ole.listdir()
+        # Группируем по директории вложения
+        attach_dirs: dict[str, dict[str, bytes]] = {}
+        for entry in dirs:
+            path = "/".join(entry)
+            if "__attach_version1.0" in path:
+                dir_name = entry[0]  # e.g. "__attach_version1.0_#00000000"
+                prop_name = entry[-1]
+                if dir_name not in attach_dirs:
+                    attach_dirs[dir_name] = {}
+                try:
+                    attach_dirs[dir_name][prop_name] = ole.openstream(entry).read()
+                except Exception:
+                    pass
+
+        for dir_name, props in attach_dirs.items():
+            data = props.get("__substg1.0_37010102")
+            if data is None:
+                continue
+            # Имя файла
+            name = ""
+            raw_name = props.get("__substg1.0_3707001F")
+            if raw_name:
+                name = _decode_utf16le(raw_name)
+            if not name:
+                raw_ext = props.get("__substg1.0_3704001F")
+                if raw_ext:
+                    name = _decode_utf16le(raw_ext)
+            if not name:
+                name = f"attachment_{dir_name[-8:]}.bin"
+            attachments.append((name, data))
+
+        ole.close()
+    except Exception as e:
+        log.debug(f"_read_msg_attachments_cfb error: {e}")
+    return attachments
+
+def _read_docx_from_bytes(data: bytes) -> str:
+    """Извлекает текст из .docx (ZIP/XML) без python-docx."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            if "word/document.xml" not in zf.namelist():
+                return ""
+            xml_bytes = zf.read("word/document.xml")
+        xml_text = xml_bytes.decode("utf-8", errors="replace")
+        # Извлекаем параграфы
+        paragraphs = re.findall(r"<w:p[^>]*>(.*?)</w:p>", xml_text, re.DOTALL)
+        lines = []
+        for p in paragraphs:
+            texts = re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)
+            line = "".join(texts)
+            # Декодируем XML entities
+            line = line.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+            line = line.replace("&apos;", "'").replace("&quot;", "\"")
+            line = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), line)
+            line = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), line)
+            line = line.strip()
+            if line:
+                lines.append(line)
+        return "\n".join(lines)
+    except Exception as e:
+        log.debug(f"_read_docx_from_bytes error: {e}")
+        return ""
+
+def _has_numbered_lines(text: str) -> bool:
+    """Проверяет наличие нумерованных строк ДПР в тексте."""
+    return bool(re.search(r"(?:^|\n)\s*\d+\s*[.)]", text, re.MULTILINE))
+
+def _read_text_attachment(data: bytes) -> str:
+    """Пытается прочитать вложение как текст (UTF-8 или UTF-16LE)."""
+    # UTF-8
+    try:
+        text = data.decode("utf-8", errors="replace")
+        if _has_numbered_lines(text):
+            return text
+    except Exception:
+        pass
+    # UTF-16LE
+    try:
+        text = data.decode("utf-16-le", errors="replace")
+        if _has_numbered_lines(text):
+            return text
+    except Exception:
+        pass
+    return ""
+
+def extract_all_text_from_msg(raw_msg: bytes, subject: str = "") -> tuple[str, str, bool]:
+    """
+    Извлекает текст ДПР из MSG-файла (CFB/OLE).
+    Приоритет: вложения (.docx/.doc/.dat/.txt) → тело письма.
+    Возвращает (текст, тип_ДПР, is_doc_form).
+    """
+    text = ""
+    is_form = False
+
+    # 1. Вложения
+    attachments = _read_msg_attachments_cfb(raw_msg)
+    for fname, data in attachments:
+        fname_lower = fname.lower()
+        if fname_lower.endswith(".docx"):
+            t = _read_docx_from_bytes(data)
+            if t.strip():
+                log.info(f"CFB вложение .docx: {fname}")
+                text, is_form = t, False
+                break
+        elif fname_lower.endswith(".doc"):
+            t, form = read_doc_attachment(data)
+            if t.strip():
+                log.info(f"CFB вложение .doc: {fname}")
+                text, is_form = t, form
+                break
+        elif fname_lower.endswith(".txt") or fname_lower.endswith(".dat"):
+            t = _read_text_attachment(data)
+            if t.strip():
+                log.info(f"CFB вложение text: {fname}")
+                text, is_form = t, False
+                break
+        else:
+            # Неизвестное расширение — пробуем как текст
+            t = _read_text_attachment(data)
+            if t.strip():
+                log.info(f"CFB вложение (generic): {fname}")
+                text, is_form = t, False
+                break
+
+    # 2. Фолбэк: тело письма
+    if not text.strip():
+        try:
+            ole = olefile.OleFileIO(io.BytesIO(raw_msg))
+            if ole.exists("__substg1.0_1000001F"):
+                body_raw = ole.openstream("__substg1.0_1000001F").read()
+                body_text = _decode_utf16le(body_raw)
+                if body_text.strip():
+                    log.info("CFB тело письма (1000001F)")
+                    text = body_text
+            ole.close()
+        except Exception:
+            pass
+
+    # 3. Определяем тип ДПР
+    dpr_type = detect_report_type(subject, text[:400]) if text.strip() else ""
+
+    return text, dpr_type, is_form
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  НОВЫЕ КОЛОНКИ vessel_dpr — парсинг запасов, погоды, курса, ETA
+# ════════════════════════════════════════════════════════════════════════════
+
+def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]:
+    """
+    Извлекает числовые значения запасов из поля 5.
+    Паттерн: ДТ|IFO|DT 123.4 – 5.6  и аналогично для ТТ/MGO, М, В.
+    Алиасы: IFO=ДТ, MGO=ТТ.
+    Конвертация кг→т: если остаток > 2000 или расход > 50 → /1000.
+    Возвращает словарь с ключами: fuel_dt_amt, fuel_dt_cons, fuel_tt_amt, ...
+    """
+    result: dict[str, Optional[float]] = {
+        "fuel_dt_amt": None, "fuel_dt_cons": None,
+        "fuel_tt_amt": None, "fuel_tt_cons": None,
+        "oil_amt": None, "oil_cons": None,
+        "water_amt": None, "water_cons": None,
+    }
+    raw = fields.get("5", "").strip()
+    if not raw:
+        return result
+
+    # Склеиваем переносы строк (Inmarsat)
+    raw = re.sub(r"\s*\n\s*", "", raw)
+
+    type_map: dict[str, tuple[str, str]] = {
+        "ДТ": ("fuel_dt_amt", "fuel_dt_cons"),
+        "ТТ": ("fuel_tt_amt", "fuel_tt_cons"),
+        "М":  ("oil_amt", "oil_cons"),
+        "В":  ("water_amt", "water_cons"),
+    }
+    aliases = {"IFO": "ДТ", "DT": "ДТ", "MGO": "ТТ", "TT": "ТТ"}
+
+    # Разбиваем по /
+    tokens = re.split(r"\s*/\s*", raw)
+    for token in tokens:
+        token = token.strip()
+        if not token or re.match(r"^(нет|net|-)$", token, re.I):
+            continue
+
+        # Определяем тип
+        supply_type = ""
+        for prefix in ["ДТ", "ТТ", "М", "В", "IFO", "DT", "MGO", "TT"]:
+            if re.match(rf"^{prefix}\b", token, re.I):
+                supply_type = aliases.get(prefix.upper(), prefix.upper())
+                break
+        if not supply_type:
+            continue
+
+        cols = type_map.get(supply_type)
+        if not cols:
+            continue
+
+        # Извлекаем числа
+        nums = re.findall(r"(\d[\d\s]*[\d,.]*)", token)
+        nums_clean = [float(n.replace(" ", "").replace(",", ".")) for n in nums if n.strip()]
+
+        if nums_clean:
+            amt = nums_clean[0]
+            # кг→т конвертация
+            if supply_type in ("ДТ", "ТТ") and amt > 2000:
+                amt /= 1000
+            elif supply_type in ("М", "В") and amt > 2000:
+                amt /= 1000
+            result[cols[0]] = round(amt, 2)
+
+        # Расход: после тире/дефиса
+        dash_m = re.search(r"[-–—]\s*(\d[\d\s]*[\d,.]*)", token)
+        if dash_m:
+            cons_val = float(dash_m.group(1).replace(" ", "").replace(",", "."))
+            if supply_type in ("ДТ", "ТТ") and cons_val > 50:
+                cons_val /= 1000
+            elif supply_type in ("М", "В") and cons_val > 50:
+                cons_val /= 1000
+            # Нормализация OO → 0
+            if re.match(r"^OO$", dash_m.group(1).strip(), re.I):
+                cons_val = 0.0
+            result[cols[1]] = round(cons_val, 2)
+        elif len(nums_clean) > 1:
+            cons_val = nums_clean[1]
+            if supply_type in ("ДТ", "ТТ") and cons_val > 50:
+                cons_val /= 1000
+            elif supply_type in ("М", "В") and cons_val > 50:
+                cons_val /= 1000
+            result[cols[1]] = round(cons_val, 2)
+
+    return result
+
+def parse_weather(fields: dict[str, str]) -> Optional[str]:
+    """Поле 6 — погода (только МОРЕ)."""
+    return fields.get("6", "").strip() or None
+
+def parse_course_speed(fields: dict[str, str]) -> tuple[Optional[float], Optional[float], Optional[float]]:
+    """
+    Поле 7 — курс/скорость (только МОРЕ).
+    Возвращает (course, speed_current, distance_day).
+    Токены: курс / скорость / средняя / миль за сутки / ...
+    """
+    raw = fields.get("7", "").strip()
+    if not raw:
+        return None, None, None
+    tokens = re.split(r"\s*/\s*", raw)
+    course = speed = distance = None
+
+    # Курс (токен 0)
+    if len(tokens) > 0:
+        t0 = tokens[0].strip()
+        if t0.lower() in ("пер", "переход", "дп", "dp", "нет", ""):
+            course = None
+        else:
+            try:
+                course = float(t0.replace(",", "."))
+                if not (0 <= course <= 360):
+                    course = None
+            except ValueError:
+                course = None
+
+    # Скорость текущая (токен 1)
+    if len(tokens) > 1:
+        try:
+            speed = float(tokens[1].strip().replace(",", "."))
+        except ValueError:
+            speed = None
+
+    # Миль за сутки (токен 3, если есть)
+    if len(tokens) > 3:
+        try:
+            distance = float(tokens[3].strip().replace(",", "."))
+        except ValueError:
+            distance = None
+
+    return course, speed, distance
+
+def parse_eta(fields: dict[str, str]) -> tuple[Optional[str], Optional[str]]:
+    """
+    Поле 11 — ETA (только МОРЕ).
+    Возвращает (eta_place, eta_date).
+    eta_place — текст до первой даты DD.MM или DD/MM.
+    """
+    raw = fields.get("11", "").strip()
+    if not raw:
+        return None, None
+
+    # Ищем дату
+    date_m = re.search(r"(\d{2}[./]\d{2}(?:[./]\d{2,4})?)", raw)
+    if date_m:
+        place = raw[:date_m.start()].strip().rstrip("/- ")
+        date_str = date_m.group(1)
+        return (place or None), date_str
+    return raw.strip() or None, None
+
+def parse_power_source(fields: dict[str, str]) -> Optional[str]:
+    """Поле 7 — электропитание СЭП/БЭП (только ПОРТ)."""
+    raw = fields.get("7", "").strip().upper()
+    if "СЭП" in raw or "SEP" in raw:
+        return "СЭП"
+    if "БЭП" in raw or "BEP" in raw:
+        return "БЭП"
+    return raw if raw else None
+
+def parse_port_status(fields: dict[str, str]) -> Optional[str]:
+    """Поля 8+9 — статус порта (только ПОРТ)."""
+    f8 = fields.get("8", "").strip()
+    f9 = fields.get("9", "").strip()
+    parts = [p for p in (f8, f9) if p and not re.match(r"^(нет|[-–—])$", p, re.I)]
+    return " | ".join(parts) if parts else None
+
+def parse_crew(fields: dict[str, str]) -> Optional[str]:
+    """Поле 10 — количество экипажа."""
+    return fields.get("10", "").strip() or None
 
 
 # ════════════════════════════════════════════════════════════════════════════
