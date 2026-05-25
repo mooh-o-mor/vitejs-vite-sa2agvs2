@@ -12,7 +12,6 @@ import { VesselForm } from "./components/VesselForm";
 import { LoginForm } from "./components/LoginForm";
 import { FilterBar } from "./components/FilterBar";
 import { FleetMap } from "./components/FleetMap";
-//import { YandexMap } from "./components/YandexMap";
 import { SummaryReport } from "./components/SummaryReport";
 
 const EMPTY_FORM: FormState = {

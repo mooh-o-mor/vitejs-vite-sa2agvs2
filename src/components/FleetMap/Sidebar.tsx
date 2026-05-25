@@ -28,7 +28,6 @@ interface Props {
   search: string;
   onSearchChange: (v: string) => void;
   filteredVessels: DprRow[];
-  typeMap: Map<string, string>;
   selectedVessel: DprRow | null;
   onSelectVessel: (vessel: DprRow) => void;
   isMobile: boolean;
@@ -66,7 +65,6 @@ export function Sidebar({
   search,
   onSearchChange,
   filteredVessels,
-  typeMap,
   selectedVessel,
   onSelectVessel,
   isMobile,
@@ -81,19 +79,7 @@ export function Sidebar({
 
   const getVesselType = (vesselName: string): string => {
     const fleetType = getFleetType(vesselName);
-    if (fleetType) return fleetType.toUpperCase();
-    const normalized = vesselName.toUpperCase().trim();
-    let type = typeMap.get(normalized);
-    if (type) return type;
-    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
-    type = typeMap.get(withoutPrefix);
-    if (type) return type;
-    for (const [key, val] of typeMap.entries()) {
-      if (normalized.includes(key) || key.includes(normalized)) {
-        return val;
-      }
-    }
-    return "";
+    return fleetType ? fleetType.toUpperCase() : "";
   };
 
   const padding = isMobile ? 8 : 10;

@@ -14,7 +14,6 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
-  const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [specMap, setSpecMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   
@@ -42,28 +41,10 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
 
   async function loadVessels(date: string) {
     setLoading(true);
-    const [{ data }, { data: vData }, { data: specData }] = await Promise.all([
+    const [{ data }, { data: specData }] = await Promise.all([
       supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name"),
-      supabase.from("vessels").select("name"),
       supabase.from("vessel_specs").select("vessel_name, project, spec_url"),
     ]);
-    
-    // typeMap
-    const t = new Map<string, string>();
-    (vData || []).forEach((v: any) => {
-      const originalName = v.name;
-      const upperName = originalName.toUpperCase().trim();
-      const typeMatch = upperName.match(/^(МФАСС|ТБС|ССН|АСС|НИС|МБС|МВС|МБ|СКБ|ВСП|Баржа)\s+/);
-      const typeStr = typeMatch ? typeMatch[1] : "";
-      if (typeStr) {
-        t.set(originalName, typeStr);
-        t.set(upperName, typeStr);
-        const withoutPrefix = upperName.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
-        if (withoutPrefix !== upperName) t.set(withoutPrefix, typeStr);
-        t.set(originalName.toLowerCase(), typeStr);
-      }
-    });
-    setTypeMap(t);
 
     // specMap
     const sm = new Map<string, string>();
@@ -89,21 +70,9 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   };
 
   const getVesselType = useCallback((vesselName: string): string => {
-    // 1. Приоритет — реестровый тип из fleet.xlsx (uppercase для отображения)
     const fleetType = getFleetType(vesselName);
-    if (fleetType) return fleetType.toUpperCase();
-    // 2. Фолбэк — тип из таблицы vessels (для судов не в fleet.xlsx)
-    const normalized = vesselName.toUpperCase().trim();
-    let type = typeMap.get(normalized);
-    if (type) return type;
-    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
-    type = typeMap.get(withoutPrefix);
-    if (type) return type;
-    for (const [key, val] of typeMap.entries()) {
-      if (normalized.includes(key) || key.includes(normalized)) return val;
-    }
-    return "";
-  }, [typeMap]);
+    return fleetType ? fleetType.toUpperCase() : "";
+  }, []);
 
   const allTypes = useMemo(() => {
     const types = new Set<string>();

@@ -6,8 +6,8 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
-import { T, typeOrder, type VesselDprRow } from "../../lib/types";
-import { getType, formatVesselName, getFleetType } from "../../lib/utils";
+import { T, type VesselDprRow } from "../../lib/types";
+import { formatVesselName, getFleetType } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
@@ -39,7 +39,6 @@ export function FleetMap({
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
-  const [typeMap, setTypeMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
@@ -61,25 +60,6 @@ export function FleetMap({
     const onResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  // Load type maps from vessels table
-  useEffect(() => {
-    supabase.from("vessels").select("name").then(({ data }) => {
-      if (data) {
-        const t = new Map<string, string>();
-        data.forEach((v: any) => {
-          const full = v.name.toUpperCase().trim();
-          const typeStr = getType(v.name, typeOrder);
-          if (typeStr) {
-            t.set(full, typeStr);
-            const short = full.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
-            if (short !== full) t.set(short, typeStr);
-          }
-        });
-        setTypeMap(t);
-      }
-    });
   }, []);
 
   useEffect(() => {
@@ -385,17 +365,7 @@ mapRef.current.addEventListener("touchend", (e) => {
 
   const getVesselType = (vesselName: string): string => {
     const fleetType = getFleetType(vesselName);
-    if (fleetType) return fleetType.toUpperCase();
-    const normalized = vesselName.toUpperCase().trim();
-    let type = typeMap.get(normalized);
-    if (type) return type;
-    const withoutPrefix = normalized.replace(/^(МФАСС|ТБС|ССН|МБС|МВС|МБ|НИС|АСС|СКБ)\s+/i, "").trim();
-    type = typeMap.get(withoutPrefix);
-    if (type) return type;
-    for (const [key, val] of typeMap.entries()) {
-      if (normalized.includes(key) || key.includes(normalized)) return val;
-    }
-    return "";
+    return fleetType ? fleetType.toUpperCase() : "";
   };
 
   const allTypes = useMemo(() => {
@@ -624,7 +594,6 @@ mapRef.current.addEventListener("touchend", (e) => {
           search={search}
           onSearchChange={setSearch}
           filteredVessels={searchFiltered}
-          typeMap={typeMap}
           selectedVessel={selVessel}
           onSelectVessel={(v) => {
             setSelVessel(v);
