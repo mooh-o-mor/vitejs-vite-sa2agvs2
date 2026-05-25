@@ -107,6 +107,14 @@ export function parseCoord(raw: string | null | undefined): [number, number] | n
     if (lat > 0 && lat < 90 && lng > 0 && lng < 180) return [lat, lng];
   }
 
+  // Ш=55 31,6С Д=20 08,7В
+  const m6 = s.match(/Ш\s*=\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*([СЮ])\s+Д\s*=\s*(\d{1,3})\s+(\d{1,2}[,.]?\d*)\s*([ВЗ])/i);
+  if (m6) {
+    const lat = (+m6[1] + +m6[2].replace(",", ".") / 60) * (m6[3].toUpperCase() === "Ю" ? -1 : 1);
+    const lng = (+m6[4] + +m6[5].replace(",", ".") / 60) * (m6[6].toUpperCase() === "З" ? -1 : 1);
+    if (Math.abs(lat) < 90 && Math.abs(lng) < 180) return [lat, lng];
+  }
+
   const low = s.toLowerCase().replace(/^(п\.|порт|рейд|б\.|бухта|пр\.|причал|якорная стоянка|рейд)\s*/gi, "").trim();
   for (const [k, c] of Object.entries(PORTS)) {
     if (low.startsWith(k) || s.toLowerCase().includes(k)) return c;
