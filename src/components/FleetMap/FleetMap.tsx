@@ -39,7 +39,7 @@ export function FleetMap({
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string>("");
   const [vessels, setVessels] = useState<DprRow[]>([]);
-  const [cursorCoords, setCursorCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const coordDisplayRef = useRef<HTMLSpanElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState("");
@@ -296,11 +296,22 @@ const wreckIcon = L.divIcon({
   
   mapObj.current = map;
 
-  // Отслеживание координат курсора (десктоп)
+  // Отслеживание координат курсора (десктоп) — через DOM ref, без React re-render
   map.on("mousemove", (e: L.LeafletMouseEvent) => {
-    setCursorCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+    if (!coordDisplayRef.current) return;
+    const { lat, lng } = e.latlng;
+    const alat = Math.abs(lat), alng = Math.abs(lng);
+    const latD = Math.floor(alat), lngD = Math.floor(alng);
+    const latM = ((alat - latD) * 60).toFixed(1).padStart(4, "0");
+    const lngM = ((alng - lngD) * 60).toFixed(1).padStart(4, "0");
+    const ns = lat >= 0 ? "N" : "S", ew = lng >= 0 ? "E" : "W";
+    coordDisplayRef.current.textContent =
+      `${String(latD).padStart(2,"0")}° ${latM}' ${ns}  ${String(lngD).padStart(3,"0")}° ${lngM}' ${ew}`;
+    coordDisplayRef.current.style.display = "inline";
   });
-  map.on("mouseout", () => setCursorCoords(null));
+  map.on("mouseout", () => {
+    if (coordDisplayRef.current) coordDisplayRef.current.style.display = "none";
+  });
 
   mapRef.current.addEventListener("mousedown", (e) => {
   if (e.button === 1) {
@@ -625,28 +636,17 @@ mapRef.current.addEventListener("touchend", (e) => {
       <div style={{ flex: 1, position: "relative" }}>
         <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
 
-        {/* Координаты курсора (десктоп) */}
-        {!isMobile && cursorCoords && (
+        {/* Координаты курсора (десктоп) — ref, без re-render */}
+        {!isMobile && (
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 500,
             display: "flex", justifyContent: "flex-end", pointerEvents: "none",
           }}>
-            <span style={{
+            <span ref={coordDisplayRef} style={{
+              display: "none",
               background: "rgba(0,0,0,0.65)", color: "#fff", padding: "2px 8px",
               fontSize: 11, fontFamily: "monospace", borderRadius: "3px 0 0 0",
-            }}>
-              {(() => {
-                const alat = Math.abs(cursorCoords.lat);
-                const latD = Math.floor(alat);
-                const latM = ((alat - latD) * 60).toFixed(1);
-                const alng = Math.abs(cursorCoords.lng);
-                const lngD = Math.floor(alng);
-                const lngM = ((alng - lngD) * 60).toFixed(1);
-                const ns = cursorCoords.lat >= 0 ? "N" : "S";
-                const ew = cursorCoords.lng >= 0 ? "E" : "W";
-                return `${String(latD).padStart(2,"0")}° ${String(latM).padStart(4,"0")}' ${ns}  ${String(lngD).padStart(3,"0")}° ${String(lngM).padStart(4,"0")}' ${ew}`;
-              })()}
-            </span>
+            }} />
           </div>
         )}
 

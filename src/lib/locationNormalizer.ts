@@ -38,11 +38,11 @@ export function extractLocation(raw: string): string {
     /\d{2,3}\s+\d{2}[,.]?\d*\s*(сев|в\.)/i.test(s);
   if (isCoord) return s;
 
-  // 3. Убираем "пос." в начале
-  s = s.replace(/^пос\.\s*/i, "");
+  // 3. Убираем "пос." / "пос " в начале
+  s = s.replace(/^пос\.?\s*/i, "");
 
   // 4. Убираем повторный "п. П." в начале
-  s = s.replace(/^п\.\s+П\.\s*/i, "");
+  s = s.replace(/^п\.?\s+П\.?\s*/i, "");
 
   // 5. Заменяем аббревиатуры портов
   for (const [re, replacement] of PORT_REPLACE) {
@@ -65,8 +65,8 @@ export function extractLocation(raw: string): string {
     s = s.slice(pm[0].length).trim();
   }
 
-  // 8. Убираем повторный "п." в начале остатка
-  s = s.replace(/^[пП]\.\s+/, "");
+  // 8. Убираем повторный "п." / "п " в начале остатка
+  s = s.replace(/^[пП]\.?\s+/, "");
 
   // 9. Убираем лишнее в конце, двойные пробелы и двойные запятые
   s = s
@@ -89,6 +89,9 @@ export function extractLocation(raw: string): string {
   for (const abbr of UPPER_ABBR) {
     s = s.replace(new RegExp(`\\b${abbr}\\b`, "gi"), abbr);
   }
+
+  // 12. Если вся строка — это "деталь" без названия порта (КТПБ, Район ЧС и т.п.) — без "п."
+  if (DETAIL_START.test(s)) return s;
 
   return `${prefix} ${s}`;
 }
