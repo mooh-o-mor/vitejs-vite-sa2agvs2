@@ -34,3 +34,5 @@ free-claude-code/
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env*

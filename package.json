@@ -9,14 +9,15 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
-    "dependencies": {
+  "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
     "pptxgenjs": "^3.12.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "xlsx-js-style": "^1.2.0",
-    "leaflet.markercluster": "^1.5.3"
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.3",
@@ -29,6 +30,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "playwright": "^1.60.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1"

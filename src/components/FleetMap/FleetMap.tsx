@@ -468,6 +468,8 @@ mapRef.current.addEventListener("touchend", (e) => {
       const dateStr = date.toISOString().slice(0, 10);
       setUploadMsg(`Найдено ${parsed.length} судов за ${dateStr}, сохраняю...`);
 
+      // All parsed vessels (both XLSX and text-DPR) go to dpr_entries.
+      // Text-DPR vessels use the parsed status/supplies/coords.
       const { data: existing } = await supabase
         .from("dpr_entries")
         .select("vessel_name, contract_info, work_period")
@@ -492,12 +494,13 @@ mapRef.current.addEventListener("touchend", (e) => {
 
       const existingMap = new Map(prevData.map((r: any) => [r.vessel_name, r]));
 
-      // Батчевый upsert — один запрос вместо N
       const rows = parsed.map(v => {
         const prev = existingMap.get(v.name);
+        // For text-DPR vessels, look up branch from branchMap (name is lowercased)
+        const branch = v.branch || branchMap.get(v.name.toUpperCase()) || branchMap.get(v.name) || "";
         return {
           vessel_name: v.name,
-          branch: v.branch,
+          branch,
           report_date: dateStr,
           status: v.status,
           coord_raw: v.coordRaw,
@@ -510,7 +513,7 @@ mapRef.current.addEventListener("touchend", (e) => {
         };
       });
 
-      // Пробуем батч, при ошибке — fallback на поштучно с retry
+      // Батчевый upsert — один запрос вместо N
       let batchError = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         const res = await supabase.from("dpr_entries").upsert(rows, { onConflict: "vessel_name,report_date" });
@@ -536,6 +539,12 @@ mapRef.current.addEventListener("touchend", (e) => {
           if (error) { fail++; console.error(row.vessel_name, error); } else ok++;
         }
         setUploadMsg(`✓ Загружено: ${ok} судов${fail ? `, ошибок: ${fail}` : ""}`);
+      }
+
+      // If we uploaded text-DPR vessel files, switch to "ДПР филиалов" where they are stored
+      const hasTextDpr = parsed.some(v => v.isTextDpr);
+      if (hasTextDpr && dataSource !== "branches") {
+        setDataSource("branches");
       }
 
       await loadDates();
