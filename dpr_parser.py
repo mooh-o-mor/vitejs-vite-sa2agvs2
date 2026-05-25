@@ -768,10 +768,15 @@ def normalize_vessel_name(raw: str) -> str:
     s = re.sub(r"[«»\u201c\u201d\u2018\u2019]", "", s)  # кавычки
     return re.sub(r"\s{2,}", " ", s).strip().lower()
 
+_PERSON_NAME_RE = re.compile(
+    r"^(капитан|кап[.]|км[.]?|к-н|master|km)\s+[А-ЯЁа-яёA-Za-z]",
+    re.I,
+)
+
 def extract_vessel_name(fields: dict[str, str], sender: str, subject: str) -> str:
     # П.1 — главный источник
     f1 = re.sub(r"[«»\u201c\u201d]", "", fields.get("1", "")).strip()
-    if f1 and len(f1) > 2:
+    if f1 and len(f1) > 2 and not _PERSON_NAME_RE.match(f1):
         return normalize_vessel_name(f1)
     # sh.vessel_name@morspas.ru
     em = re.search(r"sh\.([^@]+)@morspas\.ru", sender, re.I)
