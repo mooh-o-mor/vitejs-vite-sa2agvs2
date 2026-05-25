@@ -17,6 +17,13 @@ dist
 dist-ssr
 *.local
 
+# Python
+__pycache__/
+*.pyc
+
+# Nested repos
+free-claude-code/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
