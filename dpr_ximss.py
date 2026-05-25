@@ -53,6 +53,17 @@ try:
 except ImportError as e:
     sys.exit(f"Не найден dpr_parser.py: {e}")
 
+from ports_lookup import load_ports, lookup_port
+
+# Загружаем порты один раз при старте
+_PORTS_TS = os.path.join(os.path.dirname(__file__), "src", "lib", "ports.ts")
+_PORTS_EXTRA = os.path.join(os.path.dirname(__file__), "ports_extra.json")
+PORTS = load_ports(_PORTS_TS, _PORTS_EXTRA) if os.path.exists(_PORTS_TS) else {}
+if PORTS:
+    log.info(f"Загружено портов: {len(PORTS)}")
+else:
+    log.warning("ports.ts не найден — координаты портов недоступны")
+
 
 # ── Selenium логин ───────────────────────────────────────────────────────────
 
@@ -198,8 +209,22 @@ class XIMSSSession:
 
 # ── Парсинг → vessel_dpr ─────────────────────────────────────────────────────
 
-def _clean_name(name):
-    s = re.sub(r'[«»""\']+', "", name)
+VESSEL_TYPE_PREFIXES = {
+    "мвс", "ппб", "сбс", "рвк", "б/с", "с/б", "ас", "вс",
+    "асптр", "мсс", "пкс", "мтб", "гс", "кп",
+}
+
+
+def _clean_name(raw: str) -> str:
+    """Очищает имя судна от типа-префикса и email-мусора из reply-писем."""
+    # 1. Убрать email + " wrote:" из reply-писем
+    s = re.sub(r"<[^>]+@[^>]+>\s*(wrote:?)?", "", raw, flags=re.IGNORECASE)
+    # 2. Убрать тип судна в начале строки (одно слово/аббревиатура из списка)
+    tokens = s.strip().split()
+    while tokens and tokens[0].lower().rstrip(".") in VESSEL_TYPE_PREFIXES:
+        tokens.pop(0)
+    # 3. Привести к нижнему регистру, убрать лишние пробелы и кавычки
+    s = re.sub(r'[«»""\']+', "", " ".join(tokens))
     return re.sub(r"\s{2,}", " ", s).strip().lower()
 
 def _extract_time(f3):
@@ -227,6 +252,11 @@ def parse_to_vessel_dpr(subject, sender, body, uid):
     report_time = _extract_time(f3)
     coord_raw   = build_coord_raw(fields, dpr_type)
     lat, lng    = parse_coords(fields.get("4", ""))
+    # Фолбэк: если координаты не распарсились — ищем в ports.ts
+    if lat is None and coord_raw:
+        lat, lng = lookup_port(coord_raw, PORTS)
+        if lat is None:
+            log.warning(f"  Не найден порт: {coord_raw!r}")
     branch      = detect_branch(vessel_name, sender, body[:500])
 
     log.info(f"  Судно: {vessel_name!r}  Дата: {report_date}  Тип: {dpr_type}")
@@ -262,6 +292,87 @@ def upsert_vessel_dpr(sb, record):
         return False
 
 
+# ── Интерактивное добавление портов ────────────────────────────────────────────
+
+def add_ports_interactive() -> None:
+    """Находит записи без координат и позволяет ввести их вручную."""
+    if not SUPABASE_KEY:
+        sys.exit("Укажите SUPABASE_KEY в .env или переменных окружения")
+    from supabase import create_client
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    # Берём все уникальные coord_raw без lat
+    res = (
+        sb.table("vessel_dpr")
+        .select("coord_raw")
+        .is_("lat", "null")
+        .neq("coord_raw", None)
+        .neq("coord_raw", "")
+        .execute()
+    )
+    if not res.data:
+        print("Все записи уже имеют координаты.")
+        return
+
+    unique_raw = sorted({
+        r["coord_raw"].strip()
+        for r in res.data
+        if r.get("coord_raw")
+    })
+    print(f"Найдено уникальных адресов без координат: {len(unique_raw)}\n")
+
+    extra: dict[str, tuple[float, float]] = {}
+    if os.path.exists(_PORTS_EXTRA):
+        with open(_PORTS_EXTRA, encoding="utf-8") as f:
+            extra = json.load(f)
+
+    for raw in unique_raw:
+        # Уже есть в extra?
+        if raw.lower() in {k.lower() for k in extra}:
+            continue
+        # Уже есть в ports.ts?
+        lat_found, _ = lookup_port(raw, PORTS)
+        if lat_found is not None:
+            continue
+
+        print(f'Не найдено: "{raw}"')
+        inp = input("  Введите lat,lng (или Enter чтобы пропустить): ").strip()
+        if not inp:
+            continue
+        try:
+            lat_str, lng_str = inp.split(",")
+            lat_val = float(lat_str.strip())
+            lng_val = float(lng_str.strip())
+            extra[raw] = (lat_val, lng_val)
+            print(f"  ✓ Сохранено: {lat_val}, {lng_val}")
+        except (ValueError, TypeError):
+            print("  ✗ Неверный формат — пропущено")
+            continue
+
+    if extra:
+        with open(_PORTS_EXTRA, "w", encoding="utf-8") as f:
+            json.dump(extra, f, ensure_ascii=False, indent=2)
+        print(f"\n✓ Сохранено в {_PORTS_EXTRA}: {len(extra)} портов")
+
+        # Обновляем записи в БД
+        updated = 0
+        for raw, (lat_val, lng_val) in extra.items():
+            try:
+                res = (
+                    sb.table("vessel_dpr")
+                    .update({"lat": lat_val, "lng": lng_val})
+                    .eq("coord_raw", raw)
+                    .is_("lat", "null")
+                    .execute()
+                )
+                updated += len(res.data) if res.data else 0
+            except Exception as e:
+                log.error(f"  Ошибка обновления {raw!r}: {e}")
+        print(f"✓ Обновлено записей в БД: {updated}")
+    else:
+        print("\nНовых портов не добавлено.")
+
+
 # ── Точка входа ──────────────────────────────────────────────────────────────
 
 def main():
@@ -269,9 +380,16 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit",   type=int, default=0)
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--add-ports", action="store_true",
+                    help="Интерактивное добавление координат для неизвестных портов")
     args = ap.parse_args()
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # ── Режим --add-ports ──
+    if args.add_ports:
+        add_ports_interactive()
+        return
 
     if not LOGIN or not PASSWORD:
         sys.exit("Укажите XIMSS_LOGIN и XIMSS_PASS в .env или переменных окружения")
