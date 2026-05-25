@@ -1,5 +1,6 @@
 import XLSX from "xlsx-js-style";
 import { PORTS } from "./ports";
+import { VESSEL_NAME_ALIASES } from "./fleetTypes";
 
 /* ── Types ── */
 export interface DprSupply {
@@ -331,6 +332,8 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
       ""
     ).trim();
     vesselName = vesselName.toLowerCase();
+    // Применяем алиасы: латиница → кириллица и прочие нормализации
+    vesselName = VESSEL_NAME_ALIASES[vesselName] ?? vesselName;
 
     vessels.push({
       name: vesselName,

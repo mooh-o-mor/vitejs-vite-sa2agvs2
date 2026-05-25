@@ -1,4 +1,4 @@
-import { FLEET_TYPES } from "./fleetTypes";
+import { FLEET_TYPES, VESSEL_NAME_ALIASES } from "./fleetTypes";
 
 const BRANCH_NORMALIZATION: Record<string, string> = {
   "СЕВФ": "СВРФ",
@@ -25,11 +25,13 @@ export function getType(name: string, order: string[]): string {
 export function getFleetType(vesselName: string): string {
   if (!vesselName) return "";
   // Убираем диспетчерский тип-префикс если он есть
-  const stripped = vesselName
+  let key = vesselName
     .replace(/^(мфасс|тбс|ссн|асс|нис|мбс|мвс|мб|скб|всп|ппб|сбс|рвк|б\/с|с\/б|вс|асптр|мсс|пкс|мтб|гс|кп)\s+/i, "")
     .trim()
     .toLowerCase();
-  return FLEET_TYPES[stripped] ?? "";
+  // Применяем алиасы (латиница → кириллица и пр.)
+  key = VESSEL_NAME_ALIASES[key] ?? key;
+  return FLEET_TYPES[key] ?? "";
 }
 
 export function normalizeBranch(branch: string): string {
