@@ -20,7 +20,15 @@ Cron каждые 4 часа:
 
 import argparse, json, logging, os, re, sys, time
 from datetime import date, datetime, timezone
+from typing import Optional
 from xml.etree import ElementTree as ET
+
+# Загружаем .env если есть
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+except ImportError:
+    pass
 
 import requests, urllib3
 from selenium import webdriver
@@ -148,7 +156,7 @@ class XIMSSSession:
             xml = xml.replace("<XIMSS>", f'<XIMSS reqSeq="{seq}">', 1)
         r = requests.post(f"{self.url}?reqSeq={seq}", data=xml,
                           cookies=self.cookies, headers={"Content-Type": "text/xml"},
-                          verify=False, timeout=30)
+                          verify=False, timeout=90)
         log.debug(f"  → reqSeq={seq}  HTTP {r.status_code}")
         if not r.ok:
             log.error(f"  ← {r.status_code} {r.text[:300]}")
@@ -168,20 +176,35 @@ class XIMSSSession:
         if r is not None:
             log.info(f"Папка !ДИСП: {r.get('messages','?')} писем, {r.get('unseen','?')} непрочитанных")
 
-    def get_unseen_uids(self, limit=0):
+    def get_today_uids(self, limit=0):
+        """Возвращает UID сообщений за сегодня (по INTERNALDATE), игнорируя флаг Seen."""
+        today = date.today().strftime("%Y%m%d")
         xml = f"""<XIMSS>
   <folderBrowse folder="{FOLDER_ID}" id="11">
     <index from="0" till="499"/>
   </folderBrowse>
 </XIMSS>"""
         root = self.call(xml)
-        uids = [int(r.get("UID")) for r in root.findall(f".//folderReport[@folder='{FOLDER_ID}'][@id='11']")
-                if "Seen" not in r.findtext("FLAGS", "") and r.get("UID")]
-        log.info(f"Непрочитанных: {len(uids)}")
+        uids = []
+        for r in root.findall(f".//folderReport[@folder='{FOLDER_ID}'][@id='11']"):
+            uid = r.get("UID")
+            if not uid:
+                continue
+            # INTERNALDATE text: "20260525T051440Z"  localTime attr: "20260525T081440"
+            internaldate_el = r.find("INTERNALDATE")
+            internaldate    = (internaldate_el.text or "") if internaldate_el is not None else ""
+            local_time      = (internaldate_el.get("localTime", "") if internaldate_el is not None else "")
+            if internaldate.startswith(today) or local_time.startswith(today):
+                uids.append(int(uid))
+        log.info(f"Сообщений за {today}: {len(uids)}")
         if limit:
             uids = uids[:limit]
             log.info(f"Лимит: {limit}")
         return uids
+
+    # Обратная совместимость
+    def get_unseen_uids(self, limit=0):
+        return self.get_today_uids(limit=limit)
 
     def read_message(self, uid):
         xml = f"""<XIMSS>
@@ -248,8 +271,8 @@ class XIMSSSession:
 # ── Парсинг → vessel_dpr ─────────────────────────────────────────────────────
 
 VESSEL_TYPE_PREFIXES = {
-    "мвс", "ппб", "сбс", "рвк", "б/с", "с/б", "ас", "вс",
-    "асптр", "мсс", "мфасс", "пкс", "мтб", "гс", "кп",
+    "мвс", "ппб", "сбс", "рвк", "б/с", "с/б", "с/б", "ас", "вс",
+    "асптр", "мсс", "мфасс", "масс", "пкс", "мтб", "гс", "кп", "мб",
 }
 
 
@@ -260,12 +283,17 @@ def _clean_name(raw: str) -> str:
     # 2. Заменить кавычки на пробел ДО токенизации — иначе «СЛОВО» склеивается
     #    с предыдущим токеном при удалении кавычки: МФАСС«СП → МФАСС СП → ✓
     s = re.sub(r'[«»""\']+', " ", s)
+    # 2b. Если тип судна слит с именем без пробела (МФАСССпасатель → МФАСС Спасатель).
+    #     Применяем только к длинным префиксам, чтобы не разрезать случайные слова.
+    s = re.sub(r"(?i)(мфасс|масс\b|асптр|мфассмасс)(?=[А-ЯЁа-яё])", r"\1 ", s)
     # 3. Убрать тип судна в начале строки (одно слово/аббревиатура из списка)
     tokens = s.strip().split()
     while tokens and tokens[0].lower().rstrip(".") in VESSEL_TYPE_PREFIXES:
         tokens.pop(0)
-    # 4. Привести к нижнему регистру, убрать лишние пробелы
-    return re.sub(r"\s{2,}", " ", " ".join(tokens)).strip().lower()
+    # 4. Привести к нижнему регистру, убрать лишние пробелы и хвостовые точки
+    name = re.sub(r"\s{2,}", " ", " ".join(tokens)).strip().lower()
+    name = re.sub(r"[\s.]+$", "", name)   # хвостовые пробелы и точки
+    return name
 
 def _extract_time(f3):
     m = re.search(r"(\d{2}[:.]\d{2}\s*(?:МСК|UTC|мск)?)", f3)
@@ -300,10 +328,16 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
     if not dpr_type:
         dpr_type = detect_report_type(subject, body[:400])
 
+    # Пропускаем не-ДПР типы (ОТХОД, ПРИХОД, НЕПРЕДВИДЕННЫЕ, etc.)
+    if dpr_type not in ("МОРЕ", "ПОРТ"):
+        log.info(f"  Тип {dpr_type!r} — пропускаем")
+        return None
+
     # ── Парсинг полей ──
     fields = extract_fields_doc_form(body) if is_doc_form else extract_fields(body)
     if not fields:
-        log.warning("  Поля не найдены — пропускаем")
+        snippet = body.replace("\n", "↵")[:300]
+        log.warning(f"  Поля не найдены — пропускаем. Тело: {snippet!r}")
         return None
 
     # ── Название судна ──
@@ -314,7 +348,14 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
 
     # ── Дата ──
     f3 = fields.get("3", "")
-    report_date = parse_date_from_field3(f3) or date.today()
+    f3_date = parse_date_from_field3(f3)
+    today = date.today()
+    if f3_date and abs((today - f3_date).days) > 7:
+        # Вероятная опечатка в поле 3 — используем сегодня
+        log.warning(f"  Дата из п.3 {f3_date} далеко от сегодня ({today}) → используем today")
+        report_date = today
+    else:
+        report_date = f3_date or today
     report_time = _extract_time(f3)
 
     # ── Координаты ──
@@ -337,7 +378,12 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
     supplies = parse_supplies_numeric(fields)
     weather_val  = parse_weather(fields) if dpr_type == "МОРЕ" else None
     course, speed, distance = parse_course_speed(fields) if dpr_type == "МОРЕ" else (None, None, None)
-    eta_place, eta_date = parse_eta(fields) if dpr_type == "МОРЕ" else (None, None)
+    eta_place, eta_date_raw = parse_eta(fields) if dpr_type == "МОРЕ" else (None, None)
+    # Нормализуем eta_date → ISO (Postgres date column не принимает "29.05.26")
+    eta_date = None
+    if eta_date_raw:
+        _d = parse_date_from_field3(eta_date_raw)
+        eta_date = _d.isoformat() if _d else None
     power_source = parse_power_source(fields) if dpr_type == "ПОРТ" else None
     port_status  = parse_port_status(fields) if dpr_type == "ПОРТ" else None
     crew_val = parse_crew(fields)
@@ -373,7 +419,7 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
         "water_cons":    supplies.get("water_cons"),
         # МОРЕ
         "weather":       weather_val,
-        "course":        course,
+        "course":        int(course) if course is not None else None,
         "speed_current": speed,
         "distance_day":  distance,
         "eta_place":     eta_place,
@@ -528,7 +574,7 @@ def main():
         except Exception as e:
             log.warning(f"Ошибка запроса активных судов: {e}")
 
-    uids = ximss.get_unseen_uids(limit=args.limit)
+    uids = ximss.get_today_uids(limit=args.limit)
     if not uids:
         log.info("Новых писем нет")
         return
@@ -538,23 +584,34 @@ def main():
         log.info(f"─── UID {uid} ───")
         try:
             subject, sender, _, body = ximss.read_message(uid)
-
-            # Скачиваем сырое сообщение для MSG-вложений
-            raw_msg = None
-            try:
-                raw_msg = ximss.download_raw_message(uid)
-                if raw_msg:
-                    log.info(f"  Raw MSG: {len(raw_msg)} байт")
-            except Exception as e:
-                log.debug(f"  Raw download failed: {e}")
-
             log.info(f"  От:   {sender}")
             log.info(f"  Тема: {subject!r}")
+
+            # Скачиваем сырое сообщение ТОЛЬКО если нужно:
+            # тело пустое / нет полей / есть намёк на вложение
+            body_fields = extract_fields(body) if body.strip() else {}
+            attachment_hint = any(
+                kw in body[:400].lower()
+                for kw in ("приложени", "attach", "вложен")
+            )
+            raw_msg = None
+            if not body_fields or attachment_hint:
+                try:
+                    raw_msg = ximss.download_raw_message(uid)
+                    if raw_msg:
+                        log.info(f"  Raw MSG: {len(raw_msg)} байт")
+                    else:
+                        log.debug(f"  Raw MSG: пусто")
+                except Exception as e:
+                    log.warning(f"  Raw download failed: {e}")
+            else:
+                log.debug(f"  Raw download пропущен (поля найдены в теле)")
 
             record = parse_to_vessel_dpr(subject, sender, body, uid, raw_msg)
             if record is None:
                 skip += 1
-                ximss.mark_seen(uid)
+                if not args.dry_run:
+                    ximss.mark_seen(uid)
                 continue
 
             if args.dry_run:
@@ -567,7 +624,21 @@ def main():
                 else:
                     fail += 1
         except Exception as e:
+            err_str = str(e)
             log.error(f"  Ошибка UID {uid}: {e}")
+            # Если сессия умерла (sequence error / 400 / SSL EOF) — переподключаемся
+            if any(kw in err_str.lower() for kw in (
+                "sequence error", "ssl", "eof", "connection", "timed out", "max retries"
+            )) or "400 client error" in err_str.lower():
+                log.info("  Переподключение к XIMSS...")
+                try:
+                    session_id, cookies, last_seq = get_session()
+                    ximss = XIMSSSession(session_id, cookies, last_seq)
+                    ximss.open_folder()
+                    log.info("  Переподключение успешно — продолжаем")
+                except Exception as reauth_e:
+                    log.error(f"  Переподключение не удалось: {reauth_e}")
+                    break
             fail += 1
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Итог: {ok} записано, {skip} пропущено, {fail} ошибок")

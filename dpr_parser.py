@@ -115,8 +115,10 @@ _BRANCH_MAP: list[tuple[str, re.Pattern]] = [
 ]
 
 # Номер поля в начале строки — НЕ захватываем «метку» типа "Судно:",
-# чтобы не съесть начало значения (например "52-" в координатах)
-_FIELD_LINE_RE = re.compile(r"^\s*(?:п\.?\s*)?(\d{1,2})[.)]\s*", re.MULTILINE)
+# чтобы не съесть начало значения (например "52-" в координатах).
+# Формат A: "1. Текст" или "1) Текст"
+# Формат B: "1  Текст" (Каспийский филиал — два пробела вместо точки)
+_FIELD_LINE_RE = re.compile(r"^\s*(?:п\.?\s*)?(\d{1,2})(?:[.)]\s*|\s{2,})", re.MULTILINE)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -139,7 +141,14 @@ def detect_report_type(subject: str, body_head: str) -> str:
 
 def _strip_signature(text: str) -> str:
     m = _SIGNATURE_RE.search(text)
-    return text[:m.start()] if m else text
+    if m is None:
+        return text
+    # Если совпадение подписи стоит ДО первого пронумерованного поля —
+    # это не подпись, а данные (напр. "Капитан Мартышкин" как поле 1 без номера).
+    first_field = _FIELD_LINE_RE.search(text)
+    if first_field and m.start() < first_field.start():
+        return text
+    return text[:m.start()]
 
 def _clean_value(v: str) -> str:
     """Нормализует значение поля: убирает хвостовые табы, двойные пробелы."""
@@ -158,6 +167,9 @@ def extract_fields(body: str) -> dict[str, str]:
         1. Водолаз Денисов\\t \\r\\n2. Межбазовый переход\\t \\r\\n...
     """
     text = _strip_signature(body).replace("\r\n", "\n").replace("\r", "\n")
+
+    # Убираем маркеры цитирования email (>>>>> в начале строк)
+    text = re.sub(r"^[> \t]*>+\s*", "", text, flags=re.MULTILINE)
 
     # Обрезаем до первого нумерованного поля
     first = _FIELD_LINE_RE.search(text)
@@ -492,6 +504,14 @@ def extract_all_text_from_msg(raw_msg: bytes, subject: str = "") -> tuple[str, s
 #  НОВЫЕ КОЛОНКИ vessel_dpr — парсинг запасов, погоды, курса, ETA
 # ════════════════════════════════════════════════════════════════════════════
 
+def _safe_float(s: str) -> Optional[float]:
+    """Безопасное преобразование строки в float (None при ошибке)."""
+    try:
+        return float(s.replace(" ", "").replace(",", "."))
+    except (ValueError, AttributeError):
+        return None
+
+
 def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]:
     """
     Извлекает числовые значения запасов из поля 5.
@@ -543,7 +563,7 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
 
         # Извлекаем числа
         nums = re.findall(r"(\d[\d\s]*[\d,.]*)", token)
-        nums_clean = [float(n.replace(" ", "").replace(",", ".")) for n in nums if n.strip()]
+        nums_clean = [v for n in nums if n.strip() for v in (_safe_float(n),) if v is not None]
 
         if nums_clean:
             amt = nums_clean[0]
@@ -557,15 +577,16 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         # Расход: после тире/дефиса
         dash_m = re.search(r"[-–—]\s*(\d[\d\s]*[\d,.]*)", token)
         if dash_m:
-            cons_val = float(dash_m.group(1).replace(" ", "").replace(",", "."))
-            if supply_type in ("ДТ", "ТТ") and cons_val > 50:
-                cons_val /= 1000
-            elif supply_type in ("М", "В") and cons_val > 50:
-                cons_val /= 1000
-            # Нормализация OO → 0
-            if re.match(r"^OO$", dash_m.group(1).strip(), re.I):
-                cons_val = 0.0
-            result[cols[1]] = round(cons_val, 2)
+            cons_val = _safe_float(dash_m.group(1))
+            if cons_val is not None:
+                if supply_type in ("ДТ", "ТТ") and cons_val > 50:
+                    cons_val /= 1000
+                elif supply_type in ("М", "В") and cons_val > 50:
+                    cons_val /= 1000
+                # Нормализация OO → 0
+                if re.match(r"^OO$", dash_m.group(1).strip(), re.I):
+                    cons_val = 0.0
+                result[cols[1]] = round(cons_val, 2)
         elif len(nums_clean) > 1:
             cons_val = nums_clean[1]
             if supply_type in ("ДТ", "ТТ") and cons_val > 50:
