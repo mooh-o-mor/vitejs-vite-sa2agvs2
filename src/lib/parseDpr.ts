@@ -325,6 +325,11 @@ export function parseFilial(rows: any[][], branchMap?: Map<string, string>): Dpr
 
     let vesselName = name ? String(name).trim() : "";
     vesselName = vesselName.replace(/\s+/g, " ");
+    // Отсекаем диспетчерский тип-префикс (МБ, МФАСС, ТБС и др.) — авторитетный тип берётся из fleet.xlsx
+    vesselName = vesselName.replace(
+      /^(мфасс|тбс|ссн|асс|нис|мбс|мвс|мб|скб|всп|ппб|сбс|рвк|б\/с|с\/б|вс|асптр|мсс|пкс|мтб|гс|кп)\s+/i,
+      ""
+    ).trim();
     vesselName = vesselName.toLowerCase();
 
     vessels.push({

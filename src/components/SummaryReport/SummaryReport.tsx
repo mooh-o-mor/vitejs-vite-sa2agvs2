@@ -6,6 +6,7 @@ import { branchOrder, statusCls, STATUS_COLOR } from "./types";
 import { FilterBar } from "./FilterBar";
 import { ReportTable } from "./ReportTable";
 import { exportToExcel } from "./exportExcel";
+import { getFleetType } from "../../lib/utils";
 
 const SUPABASE_URL = "https://otjiwxvszomwpqmwusqd.supabase.co";
 
@@ -88,6 +89,10 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   };
 
   const getVesselType = useCallback((vesselName: string): string => {
+    // 1. Приоритет — реестровый тип из fleet.xlsx (uppercase для отображения)
+    const fleetType = getFleetType(vesselName);
+    if (fleetType) return fleetType.toUpperCase();
+    // 2. Фолбэк — тип из таблицы vessels (для судов не в fleet.xlsx)
     const normalized = vesselName.toUpperCase().trim();
     let type = typeMap.get(normalized);
     if (type) return type;

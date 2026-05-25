@@ -7,7 +7,7 @@ import "leaflet.markercluster";
 import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
 import { T, typeOrder, type VesselDprRow } from "../../lib/types";
-import { getType, formatVesselName } from "../../lib/utils";
+import { getType, formatVesselName, getFleetType } from "../../lib/utils";
 import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
@@ -384,6 +384,8 @@ mapRef.current.addEventListener("touchend", (e) => {
   }
 
   const getVesselType = (vesselName: string): string => {
+    const fleetType = getFleetType(vesselName);
+    if (fleetType) return fleetType.toUpperCase();
     const normalized = vesselName.toUpperCase().trim();
     let type = typeMap.get(normalized);
     if (type) return type;

@@ -3,6 +3,7 @@ import { CLR } from "./mapIcons";
 import { FilterControls } from "./FilterControls";
 import { VesselListItem } from "./VesselListItem";
 import type { DprRow } from "../../lib/parseDpr";
+import { getFleetType } from "../../lib/utils";
 
 interface Props {
   dates: string[];
@@ -79,6 +80,8 @@ export function Sidebar({
   if (!showSidebar) return null;
 
   const getVesselType = (vesselName: string): string => {
+    const fleetType = getFleetType(vesselName);
+    if (fleetType) return fleetType.toUpperCase();
     const normalized = vesselName.toUpperCase().trim();
     let type = typeMap.get(normalized);
     if (type) return type;

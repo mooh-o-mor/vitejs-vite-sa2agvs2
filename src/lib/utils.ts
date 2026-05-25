@@ -1,3 +1,5 @@
+import { FLEET_TYPES } from "./fleetTypes";
+
 const BRANCH_NORMALIZATION: Record<string, string> = {
   "СЕВФ": "СВРФ",
   "БФ": "БЛТФ",
@@ -15,6 +17,19 @@ export function getType(name: string, order: string[]): string {
   if (upper.includes("АСС")) return "АСС";
   if (upper.includes("СКБ")) return "СКБ";
   return "";
+}
+
+/** Реестровый тип судна из fleet.xlsx (lowercase).
+ *  Принимает имя как с типом, так и без — стрипает ДИСПЕТЧЕРСКИЙ префикс перед поиском.
+ */
+export function getFleetType(vesselName: string): string {
+  if (!vesselName) return "";
+  // Убираем диспетчерский тип-префикс если он есть
+  const stripped = vesselName
+    .replace(/^(мфасс|тбс|ссн|асс|нис|мбс|мвс|мб|скб|всп|ппб|сбс|рвк|б\/с|с\/б|вс|асптр|мсс|пкс|мтб|гс|кп)\s+/i, "")
+    .trim()
+    .toLowerCase();
+  return FLEET_TYPES[stripped] ?? "";
 }
 
 export function normalizeBranch(branch: string): string {

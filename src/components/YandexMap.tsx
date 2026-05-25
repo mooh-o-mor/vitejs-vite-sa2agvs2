@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../lib/parseDpr";
 import { T, typeOrder } from "../lib/types";
-import { getType } from "../lib/utils";
+import { getType, getFleetType } from "../lib/utils";
 import { Sidebar } from "./FleetMap/Sidebar";
 import { VesselPopup } from "./FleetMap/VesselPopup";
 
@@ -252,6 +252,8 @@ export function YandexMap({
   }
 
   const getVesselType = (vesselName: string): string => {
+    const fleetType = getFleetType(vesselName);
+    if (fleetType) return fleetType.toUpperCase();
     const normalized = vesselName.toUpperCase().trim();
     let type = typeMap.get(normalized);
     if (type) return type;
