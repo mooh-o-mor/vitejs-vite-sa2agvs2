@@ -47,22 +47,24 @@ def lookup_port(
         return None, None
 
     text = coord_raw.strip().lower()
+    # нормализуем пробел после/до дефиса: "санкт- петербург" → "санкт-петербург"
+    text = re.sub(r"-\s+", "-", text)
+    text = re.sub(r"\s+-", "-", text)
 
-    # 1. Точное совпадение
-    if text in ports:
-        return ports[text]
+    # Разбиваем по " / " (с пробелами) и "," — но НЕ по голому "/"
+    # (чтобы сохранить ключи вида "я/точка №12")
+    raw_parts = re.split(r" / |,", text)
+    parts = [p.strip() for p in raw_parts if p.strip()]
 
-    # 2. Поиск наиболее длинного совпадающего ключа
-    #    (специфичный причал важнее общего порта)
-    best_key: Optional[str] = None
-    best_len = 0
+    # Порядок поиска: с конца (специфичное) → вся строка (общее)
+    search_order = list(reversed(parts)) + [text]
 
-    for key in ports:
-        if key in text or text in key:
-            if len(key) > best_len:
-                best_key, best_len = key, len(key)
+    # Сортируем ключи по длине убывающей — специфичный причал важнее общего порта
+    sorted_keys = sorted(ports.keys(), key=len, reverse=True)
 
-    if best_key:
-        return ports[best_key]
+    for chunk in search_order:
+        for key in sorted_keys:
+            if key in chunk:
+                return ports[key]
 
     return None, None

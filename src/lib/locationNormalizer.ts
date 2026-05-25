@@ -110,7 +110,10 @@ export function findPortCoords(raw: string): [number, number] | null {
   const clean = raw
     .replace(/\s*(БЭП|СЭП|CЭП|Да|Нет)\s*$/i, "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    // нормализуем пробел после/до дефиса: "санкт- петербург" → "санкт-петербург"
+    .replace(/-\s+/g, "-")
+    .replace(/\s+-/g, "-");
 
   // Разбиваем по " / " (с пробелами) и "," — но НЕ по голому "/"
   const parts = clean
