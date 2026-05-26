@@ -241,12 +241,36 @@ def read_docx_attachment(data: bytes) -> str:
         return ""
     try:
         doc = DocxDocument(io.BytesIO(data))
-        parts = [p.text for p in doc.paragraphs if p.text.strip()]
+
+        # Параграфы внутри таблиц — собираем id, чтобы не читать дважды через doc.paragraphs
+        table_para_ids: set = set()
         for tbl in doc.tables:
             for row in tbl.rows:
-                cells = [c.text.strip() for c in row.cells if c.text.strip()]
-                if cells:
-                    parts.append("  ".join(cells))
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        table_para_ids.add(id(para))
+
+        # Нетабличные параграфы
+        parts = [p.text for p in doc.paragraphs
+                 if p.text.strip() and id(p) not in table_para_ids]
+
+        # Таблицы: если 2 колонки — колонка 1 лейбл (N. Описание), колонка 2 значение
+        for tbl in doc.tables:
+            for row in tbl.rows:
+                cells = [c.text.strip() for c in row.cells]
+                non_empty = [c for c in cells if c]
+                if len(non_empty) >= 2:
+                    label, value = non_empty[0], non_empty[1]
+                    m = re.match(r'^(\d{1,2})[.)]\s*', label)
+                    if m:
+                        # Убрать числовой префикс из колонки значения (если есть)
+                        val = re.sub(r'^\d{1,2}[.)]\s*', '', value).strip() or value
+                        parts.append(f"{m.group(1)}.  {val}")
+                    else:
+                        parts.append("  ".join(non_empty))
+                elif non_empty:
+                    parts.append(non_empty[0])
+
         return "\n".join(parts)
     except Exception as e:
         log.warning(f"docx ошибка: {e}")

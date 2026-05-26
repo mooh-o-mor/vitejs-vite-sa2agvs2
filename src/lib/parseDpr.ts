@@ -49,6 +49,8 @@ export interface DprRow {
   work_period?: string;
   /** Сырые поля ДПР (только для источника vessel_dpr) */
   fields_json?: Record<string, string> | null;
+  /** null = нет данных, true = ок, false = вложение не распарсено */
+  parse_ok?: boolean | null;
 }
 
 /* ── Status normalizer ── */

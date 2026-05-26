@@ -474,7 +474,7 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
               <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginTop: 10 }}>
                 {hasDataTab && (
                   <button style={tabStyle(activeTab === "data")} onClick={() => setActiveTab("data")}>
-                    {dataSource === "vessels" ? "📋 ПОЛЯ ДПР" : "📦 ЗАПАСЫ"}
+                    {dataSource === "vessels" ? "📋 ДПР" : "📦 ЗАПАСЫ"}
                   </button>
                 )}
                 <button style={tabStyle(activeTab === "weather")} onClick={() => setActiveTab("weather")}>
@@ -530,38 +530,42 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
             )}
 
             {/* ── Содержимое: Поля ДПР (для ДПР судов) ── */}
-            {(!showTabs || activeTab === "data") && hasFieldsJson && dataSource === "vessels" && (
-              <div style={{ marginTop: showTabs ? 8 : 0 }}>
-                {!showTabs && (
-                  <div style={{ margin: "10px 0 4px" }}>
-                    <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>📋 ПОЛЯ ДПР</span>
-                  </div>
-                )}
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 48, color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Поле</th>
-                      <th style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Значение</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(vessel.fields_json!)
-                      .filter(([, v]) => v && v.trim())
-                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                      .map(([key, value]) => (
-                        <tr key={key}>
-                          <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text2, fontFamily: "monospace", fontSize: 10, verticalAlign: "top" }}>
-                            П.{key}
-                          </td>
-                          <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                            {value}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            {(!showTabs || activeTab === "data") && hasFieldsJson && dataSource === "vessels" && (() => {
+              const DPR_FIELD_NAMES: Record<string, string> = {
+                "1": "Название судна", "2": "Состояние (АСГ/АСД/переход)",
+                "3": "Дата и время", "4": "Местоположение", "5": "Запасы",
+                "6": "Погода", "7": "Курс / скорость / мили",
+                "8": "Бюджет времени", "9": "Время работы механизмов",
+                "10": "Экипаж", "11": "ETA", "12": "Сроки запасов",
+                "13": "Пополнение запасов", "14": "Доп. информация",
+                "_note": "Примечание",
+              };
+              return (
+                <div style={{ marginTop: showTabs ? 8 : 0 }}>
+                  {!showTabs && (
+                    <div style={{ margin: "10px 0 4px" }}>
+                      <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>📋 ДПР</span>
+                    </div>
+                  )}
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                    <tbody>
+                      {Object.entries(vessel.fields_json!)
+                        .filter(([, v]) => v && v.trim())
+                        .sort(([a], [b]) => (parseInt(a) || 999) - (parseInt(b) || 999))
+                        .map(([key, value]) => (
+                          <tr key={key} title={`П.${key}${DPR_FIELD_NAMES[key] ? ": " + DPR_FIELD_NAMES[key] : ""}`}
+                              style={{ cursor: "default" }}>
+                            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                              <span style={{ color: T.text2, fontFamily: "monospace", fontSize: 9, marginRight: 6 }}>П.{key}</span>
+                              {value}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
 
             {/* ── Содержимое: Погода ── */}
             {showTabs && activeTab === "weather" && (

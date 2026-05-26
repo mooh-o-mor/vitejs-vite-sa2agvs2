@@ -62,6 +62,16 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
           <span style={{ fontSize: fontSize, color: T.text, padding: "0px", flexShrink: 0 }}>{vessel.branch}</span>
         )}
         {vessel.lat == null && <span style={{ fontSize: 9, color: "#c07800", flexShrink: 0 }}>📍?</span>}
+        {vessel.parse_ok != null && (
+          <span
+            title={vessel.parse_ok ? "ДПР получена и распарсена" : "ДПР во вложении — не распарсена"}
+            style={{
+              width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+              background: vessel.parse_ok ? "#22c55e" : "#f59e0b",
+              display: "inline-block",
+            }}
+          />
+        )}
       </div>
     </div>
   );
