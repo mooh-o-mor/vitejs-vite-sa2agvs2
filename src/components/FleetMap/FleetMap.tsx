@@ -4,7 +4,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
-import { supabase, supabaseAdmin } from "../../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import { parseMsgFiles, type DprRow } from "../../lib/parseDpr";
 import { T, type VesselDprRow, type VesselDprMapRow } from "../../lib/types";
 import { formatVesselName, getFleetType } from "../../lib/utils";
@@ -322,8 +322,7 @@ mapRef.current.addEventListener("touchend", (e) => {
   async function loadDates() {
     setLoading(true);
     const table = dataSource === "branches" ? "dpr_entries" : "vessel_dpr";
-    const client = dataSource === "vessels" ? supabaseAdmin : supabase;
-    const { data } = await client.from(table).select("report_date").order("report_date", { ascending: false });
+    const { data } = await supabase.from(table).select("report_date").order("report_date", { ascending: false });
     if (data) {
       const unique = [...new Set(data.map((r: any) => r.report_date))];
       setDates(unique);
@@ -377,7 +376,7 @@ mapRef.current.addEventListener("touchend", (e) => {
       const { data } = await supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name");
       setVessels(data || []);
     } else {
-      const { data } = await supabaseAdmin.from("vessel_dpr").select("*").eq("report_date", date).order("vessel_name");
+      const { data } = await supabase.from("vessel_dpr").select("*").eq("report_date", date).order("vessel_name");
       setVessels((data || []).map((v: VesselDprRow) => mapVesselDprToDprRow(v)));
     }
     setSelVessel(null);
