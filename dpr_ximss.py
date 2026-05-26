@@ -237,37 +237,28 @@ class XIMSSSession:
         return subject, sender, date_str, body
 
     def download_raw_message(self, uid) -> Optional[bytes]:
-        """Скачивает сырое сообщение в формате source (MIME/MSG)."""
-        xml = f"""<XIMSS>
+        """
+        Пытается извлечь содержимое MSG-вложения через XIMSS mode="source".
+        XIMSS не раскрывает бинарные вложения — это работает только для писем,
+        где само тело является OLE/CFB MSG-файлом (переадресованные письма).
+        Для обычных .doc/.docx вложений возвращает None.
+        """
+        xml_src = f"""<XIMSS>
   <folderRead mode="source" folder="{FOLDER_ID}" UID="{uid}"
-              totalSizeLimit="-1" id="21"/>
+              totalSizeLimit="-1" id="22"/>
 </XIMSS>"""
         try:
-            root = self.call(xml)
-            email = root.find(".//EMail")
-            if email is None:
+            root = self.call(xml_src)
+            email_el = root.find(".//EMail")
+            if email_el is None:
                 return None
-            # Пробуем взять source/raw данные
-            source = email.findtext("source")
-            if source:
-                return source.encode("utf-8", errors="replace")
-            # Иногда тело содержит base64 MSG
-            for mime in email.findall(".//MIME"):
-                ctype = (mime.get("contentType") or "").lower()
-                if "ms-outlook" in ctype or "octet-stream" in ctype:
-                    text = (mime.text or "").strip()
-                    if text:
-                        import base64
-                        try:
-                            return base64.b64decode(text)
-                        except Exception:
-                            pass
-            # Фолбэк: берём text content как есть
-            text_content = email.text
-            if text_content:
-                return text_content.encode("utf-8", errors="replace")
+            # В ряде писем XIMSS возвращает сырой RFC-822 источник в text() элемента EMail
+            email_text = (email_el.text or "").strip()
+            if len(email_text) > 500:
+                log.info(f"  Raw MSG (mode=source, {len(email_text)} chars)")
+                return email_text.encode("utf-8", errors="replace")
         except Exception as e:
-            log.debug(f"download_raw_message error: {e}")
+            log.debug(f"  download_raw error: {e}")
         return None
 
     def mark_seen(self, uid):
@@ -276,6 +267,23 @@ class XIMSSSession:
     <UID>{uid}</UID>
   </messageMark>
 </XIMSS>""")
+
+
+# ── Филиал из fleet.xlsx ────────────────────────────────────────────────────
+
+# Полное название Филиала из fleet.xlsx → аббревиатура
+_BRANCH_FROM_XLSX: dict[str, str] = {
+    "Балтийский":         "БЛТФ",
+    "Северный":           "СВРФ",
+    "Приморский":         "ПРМФ",
+    "Сахалинский":        "СХЛФ",
+    "Каспийский":         "КФ",
+    "Азово-Черноморский": "ЧМФ",
+    "Камчатский":         "ДВНФ",
+    "Калининградский":    "КЛНФ",
+    "Тверской":           "ТВФ",
+    "Поволжский":         "ПВФ",
+}
 
 
 # ── Парсинг → vessel_dpr ─────────────────────────────────────────────────────
@@ -345,19 +353,31 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
 
     # ── Парсинг полей ──
     fields = extract_fields_doc_form(body) if is_doc_form else extract_fields(body)
-    if not fields:
-        snippet = body.replace("\n", "↵")[:300]
-        log.warning(f"  Поля не найдены — пропускаем. Тело: {snippet!r}")
-        return None
 
     # ── Название судна ──
     raw_vessel_name = _clean_name(extract_vessel_name(fields, sender, subject) or "")
-    if not raw_vessel_name:
-        log.warning("  Название судна не определено — пропускаем")
-        return None
 
     # ── Разрешение канонического имени и типа из fleet.xlsx ──
-    fleet_info = resolve_vessel(raw_vessel_name, fields)
+    fleet_info = resolve_vessel(raw_vessel_name, fields) if raw_vessel_name else None
+
+    # Если email-адрес дал что-то нераспознанное (напр. "s zaborshchikov"),
+    # пробуем извлечь из темы письма напрямую
+    if not fleet_info and raw_vessel_name:
+        subj_name = _clean_name(
+            re.sub(
+                r"\b(дпр|море|порт|отход|приход|sea|port|dep|arr)\b"
+                r"|\d{2}[./]\d{2}[./]\d{4}|\d{2}[./]\d{2}[./]\d{2}"
+                r"|\d{4}[\s_]?(?:МСК|UTC)?",
+                " ", subject, flags=re.I,
+            ).strip(" \\-:_")
+        )
+        if subj_name and subj_name != raw_vessel_name:
+            fi2 = resolve_vessel(subj_name, fields)
+            if fi2:
+                log.info(f"  Имя из темы: {raw_vessel_name!r} → {subj_name!r} → {fi2.name!r}")
+                raw_vessel_name = subj_name
+                fleet_info = fi2
+
     if fleet_info:
         vessel_name = fleet_info.name        # каноническое lowercase имя
         vessel_type_val = fleet_info.vessel_type  # lowercase тип
@@ -366,7 +386,56 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
     else:
         vessel_name = raw_vessel_name
         vessel_type_val = ""
-        log.debug(f"  Судно не найдено в реестре флота: {raw_vessel_name!r}")
+        if raw_vessel_name:
+            log.debug(f"  Судно не найдено в реестре флота: {raw_vessel_name!r}")
+
+    if not fields:
+        # ДПР в вложении, которое не удалось открыть.
+        # Создаём минимальную запись parse_ok=False если знаем судно.
+        snippet = body.replace("\n", "↵")[:200]
+        log.warning(f"  Поля не найдены (вложение?). Тело: {snippet!r}")
+        if not vessel_name:
+            log.warning("  Судно тоже неизвестно — пропускаем")
+            return None
+        # Филиал
+        branch = ""
+        if fleet_info and fleet_info.branch:
+            branch = _BRANCH_FROM_XLSX.get(fleet_info.branch, fleet_info.branch)
+        if not branch:
+            branch = detect_branch(vessel_name, sender, body[:500])
+        log.info(f"  Судно: {vessel_name!r} (вложение не распарсено)  parse_ok=False")
+        return {
+            "vessel_name":   vessel_name,
+            "vessel_type":   vessel_type_val or None,
+            "branch":        branch or None,
+            "dpr_type":      dpr_type,
+            "report_date":   date.today().isoformat(),
+            "report_time":   None,
+            "msg_time":      msg_time,
+            "status":        None,
+            "coord_raw":     None,
+            "lat":           None,
+            "lng":           None,
+            "fields_json":   {"_note": "ДПР во вложении — не распарсен"},
+            "email_uid":     uid,
+            "email_subject": subject or None,
+            "email_from":    sender or None,
+            "uploaded_at":   datetime.now(timezone.utc).isoformat(),
+            "parse_ok":      False,
+            "fuel_dt_amt": None, "fuel_dt_cons": None,
+            "fuel_tt_amt": None, "fuel_tt_cons": None,
+            "oil_amt":     None, "oil_cons":     None,
+            "water_amt":   None, "water_cons":   None,
+            "weather": None, "course": None,
+            "speed_current": None, "distance_day": None,
+            "eta_place": None, "eta_date": None,
+            "power_source": None, "port_status": None,
+            "crew": None,
+        }
+
+    if not vessel_name:
+        log.warning("  Название судна не определено — пропускаем")
+        return None
 
     # ── Дата ──
     f3 = fields.get("3", "")
@@ -388,7 +457,12 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
         if lat is None:
             log.warning(f"  Не найден порт: {coord_raw!r}")
 
-    branch = detect_branch(vessel_name, sender, body[:500])
+    # ── Филиал: сначала из реестра fleet.xlsx, иначе detect_branch ──
+    branch = ""
+    if fleet_info and fleet_info.branch:
+        branch = _BRANCH_FROM_XLSX.get(fleet_info.branch, fleet_info.branch)
+    if not branch:
+        branch = detect_branch(vessel_name, sender, body[:500])
 
     # ── parse_ok: есть имя, дата/время, позиция ──
     has_name = bool(vessel_name)
