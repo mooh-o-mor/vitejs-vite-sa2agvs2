@@ -196,9 +196,22 @@ export const FLEET_TYPES: Record<string, string> = {
  */
 export const VESSEL_NAME_ALIASES: Record<string, string> = {
   // Латиница → кириллица
-  "kalas":      "калас",
-  "rostov":     "ростов великий",
-  "svetlomor3": "светломор-3",
+  "kalas":             "калас",
+  "rostov":            "ростов великий",
+  "svetlomor3":        "светломор-3",
+  // Email-паттерны sh.XXX@morspas.ru (vessel_name после _clean_name)
+  "k martyshkin":      "капитан мартышкин",
+  "k beklemishev":     "капитан беклемишев",
+  "k mishkin":         "капитан мишин",
+  "k balashov":        "капитан балашов",
+  "k barabash":        "капитан барабаш",
+  "k okhodov":         "капитан оходов",
+  "svetlomor 3":       "светломор-3",
+  "epron":             "эпрон",
+  "otto shmidt":       "отто шмидт",
+  "neftegaz 55":       "нефтегаз-55",
+  "yasny":             "ясный",
+  "lazurit":           "лазурит",
 };
 
 /** Порядок отображения реестровых типов (от крупных к малым) */

@@ -67,6 +67,16 @@ except ImportError as e:
 
 from ports_lookup import load_ports, lookup_port
 
+# Справочник флота из !fleet.xlsx
+try:
+    from fleet_lookup import resolve_vessel, get_canonical_name, get_vessel_type
+    _HAS_FLEET_LOOKUP = True
+except ImportError:
+    _HAS_FLEET_LOOKUP = False
+    def resolve_vessel(name, fields=None): return None   # type: ignore
+    def get_canonical_name(name, fields=None): return name   # type: ignore
+    def get_vessel_type(name, fields=None): return ""   # type: ignore
+
 # Загружаем порты один раз при старте
 _PORTS_TS = os.path.join(os.path.dirname(__file__), "src", "lib", "ports.ts")
 _PORTS_EXTRA = os.path.join(os.path.dirname(__file__), "ports_extra.json")
@@ -341,10 +351,22 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
         return None
 
     # ── Название судна ──
-    vessel_name = _clean_name(extract_vessel_name(fields, sender, subject) or "")
-    if not vessel_name:
+    raw_vessel_name = _clean_name(extract_vessel_name(fields, sender, subject) or "")
+    if not raw_vessel_name:
         log.warning("  Название судна не определено — пропускаем")
         return None
+
+    # ── Разрешение канонического имени и типа из fleet.xlsx ──
+    fleet_info = resolve_vessel(raw_vessel_name, fields)
+    if fleet_info:
+        vessel_name = fleet_info.name        # каноническое lowercase имя
+        vessel_type_val = fleet_info.vessel_type  # lowercase тип
+        if raw_vessel_name != vessel_name:
+            log.info(f"  Имя судна: {raw_vessel_name!r} → {vessel_name!r} (тип: {vessel_type_val})")
+    else:
+        vessel_name = raw_vessel_name
+        vessel_type_val = ""
+        log.debug(f"  Судно не найдено в реестре флота: {raw_vessel_name!r}")
 
     # ── Дата ──
     f3 = fields.get("3", "")
@@ -393,6 +415,7 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
 
     return {
         "vessel_name":   vessel_name,
+        "vessel_type":   vessel_type_val or None,
         "branch":        branch or None,
         "dpr_type":      dpr_type,
         "report_date":   report_date.isoformat(),

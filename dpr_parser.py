@@ -567,10 +567,8 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
 
         if nums_clean:
             amt = nums_clean[0]
-            # кг→т конвертация
-            if supply_type in ("ДТ", "ТТ") and amt > 2000:
-                amt /= 1000
-            elif supply_type in ("М", "В") and amt > 2000:
+            # кг→т конвертация: ДТ, ТТ, В конвертируем; М (масло) — всегда кг
+            if supply_type in ("ДТ", "ТТ", "В") and amt > 2000:
                 amt /= 1000
             result[cols[0]] = round(amt, 2)
 
@@ -579,9 +577,7 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         if dash_m:
             cons_val = _safe_float(dash_m.group(1))
             if cons_val is not None:
-                if supply_type in ("ДТ", "ТТ") and cons_val > 50:
-                    cons_val /= 1000
-                elif supply_type in ("М", "В") and cons_val > 50:
+                if supply_type in ("ДТ", "ТТ", "В") and cons_val > 50:
                     cons_val /= 1000
                 # Нормализация OO → 0
                 if re.match(r"^OO$", dash_m.group(1).strip(), re.I):
@@ -589,9 +585,7 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
                 result[cols[1]] = round(cons_val, 2)
         elif len(nums_clean) > 1:
             cons_val = nums_clean[1]
-            if supply_type in ("ДТ", "ТТ") and cons_val > 50:
-                cons_val /= 1000
-            elif supply_type in ("М", "В") and cons_val > 50:
+            if supply_type in ("ДТ", "ТТ", "В") and cons_val > 50:
                 cons_val /= 1000
             result[cols[1]] = round(cons_val, 2)
 
@@ -677,8 +671,16 @@ def parse_port_status(fields: dict[str, str]) -> Optional[str]:
     return " | ".join(parts) if parts else None
 
 def parse_crew(fields: dict[str, str]) -> Optional[str]:
-    """Поле 10 — количество экипажа."""
-    return fields.get("10", "").strip() or None
+    """
+    Поле 10 — количество экипажа.
+    Берём только первую строку (до \n) чтобы отрезать подпись / email-сигнатуру.
+    """
+    raw = fields.get("10", "").strip()
+    if not raw:
+        return None
+    # Берём только первую непустую строку
+    first_line = raw.split("\n")[0].strip()
+    return first_line or None
 
 
 # ════════════════════════════════════════════════════════════════════════════
