@@ -86,6 +86,25 @@ _SIGNATURE_RE = re.compile(
     re.I | re.MULTILINE,
 )
 
+# Шаблоны для обрезки подписи внутри ЗНАЧЕНИЯ поля
+_SIGNATURE_VALUE_STOP_PATTERNS: list[re.Pattern] = [
+    re.compile(r'с\s+уважением', re.IGNORECASE),
+    re.compile(r'best\s+regards', re.IGNORECASE),
+    re.compile(r'brgds', re.IGNORECASE),
+    re.compile(r'с\s+уваж\.?', re.IGNORECASE),
+    re.compile(r'imo\s*(?:no\.?|№)', re.IGNORECASE),
+    re.compile(r'inmarsat\s*c\s*:', re.IGNORECASE),
+    re.compile(r'inm-c\s*:', re.IGNORECASE),
+    re.compile(r'mmsi\s*[:\d]', re.IGNORECASE),
+    re.compile(r'mobile\s*\(master\)', re.IGNORECASE),
+    re.compile(r'e-mail\s*:', re.IGNORECASE),
+    re.compile(r'web\s*:\s*morspas', re.IGNORECASE),
+    re.compile(r'тел\.\s*\(mob\)', re.IGNORECASE),
+    re.compile(r'\+7\s*[\(\d]', re.IGNORECASE),
+    re.compile(r'морская\s+спасательная\s+служба', re.IGNORECASE),
+    re.compile(r'marine\s+rescue\s+service', re.IGNORECASE),
+]
+
 # Координатный паттерн (поддерживаем все реальные форматы)
 # "52-28,1 N/ 143-38,6 Е"  "45°04N/036°32E"  "55-31,6N 020-08,7E"
 _COORD_RE = re.compile(
@@ -118,7 +137,42 @@ _BRANCH_MAP: list[tuple[str, re.Pattern]] = [
 # чтобы не съесть начало значения (например "52-" в координатах).
 # Формат A: "1. Текст" или "1) Текст"
 # Формат B: "1  Текст" (Каспийский филиал — два пробела вместо точки)
-_FIELD_LINE_RE = re.compile(r"^\s*(?:п\.?\s*)?(\d{1,2})(?:[.)]\s*|\s{2,})", re.MULTILINE)
+# Формат C: "1.Название" (без пробела — DOC-шаблоны)
+# Формат D: "П.1Текст"  (Беклемишев — номер сразу за значением, без разделителя)
+_FIELD_LINE_RE = re.compile(
+    r"^\s*(?:[Пп]\.?\s*)?(\d{1,2})"
+    r"(?:"
+    r"[.)]\s*"          # "1. Текст" или "1) Текст"
+    r"|"
+    r"\s{2,}"            # "1  Текст" (Каспий)
+    r"|"
+    r"(?=\S)"            # "1Текст" (Беклемишев: номер + сразу значение)
+    r")",
+    re.MULTILINE,
+)
+
+# Паттерны-«обманки»: даты, время, количества с точкой, причалы
+# Используются для пост-фильтрации ложных номеров полей
+_FALSE_FIELD_PATTERNS: list[re.Pattern] = [
+    # Дата: 10.06.2026, 30.05.26, 26.05.2026г
+    re.compile(r"^\d{1,2}\.\d{2}\.\d{2,4}"),
+    # Время: 08.00 МСК, 0800
+    re.compile(r"^\d{1,2}\.\d{2}\s*(МСК|UTC|мск)?"),
+    # Количество с точкой: 13.2 т, 27.000 т, 1.80 т
+    re.compile(r"^\d{1,2}\.\d+\s*(т|кг|л|м)\b"),
+    # Причал в конце строки: 44.
+    re.compile(r"^\d{1,2}\.\s*$"),
+]
+
+# Значение поля, которое начинается с времени — вероятно ложное поле
+# (осколок строки "08.00 МСК" где "08." принят за номер поля)
+# Срабатывает только на КОРОТКИХ значениях (≤24 символа) —
+# реальное значение поля всегда длиннее.
+_FALSE_VALUE_TIME_RE = re.compile(
+    r"^\s*\d{2,4}\s*(?:МСК|UTC|мск|MSK)\b"   # "00 МСК", "0800 МСК"
+    r"|^\s*\d{2}[.:]\d{2}\b"                  # "00.00", "08:00"
+    r"|^\s*\d{4}\s*$"                          # "0800" (голое время)
+)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -150,13 +204,33 @@ def _strip_signature(text: str) -> str:
         return text
     return text[:m.start()]
 
+def strip_signature_from_value(text: str) -> str:
+    """Обрезает подпись отправителя внутри ЗНАЧЕНИЯ поля."""
+    for pat in _SIGNATURE_VALUE_STOP_PATTERNS:
+        m = pat.search(text)
+        if m:
+            text = text[:m.start()].strip(' \n\r\t/,;')
+    return text
+
 def _clean_value(v: str) -> str:
     """Нормализует значение поля: убирает хвостовые табы, двойные пробелы."""
     v = re.sub(r"[\t ]+$", "", v, flags=re.MULTILINE)   # хвостовые пробелы/табы
     v = re.sub(r"\n{2,}", "\n", v)                       # кратные переносы → один
     return v.strip()
 
-def extract_fields(body: str) -> dict[str, str]:
+def _is_false_field_context(text_before_num: str, num_str: str) -> bool:
+    """
+    Проверяет, не является ли кандидат поля ложным (дата/время/количество).
+    text_before_num — текст после предыдущего поля до начала этого кандидата
+    (включая возможный номер с точкой в дате).
+    """
+    num = int(num_str)
+    for pat in _FALSE_FIELD_PATTERNS:
+        if pat.search(text_before_num):
+            return True
+    return False
+
+def extract_fields(body: str, dpr_type: str = "МОРЕ") -> dict[str, str]:
     """
     Универсальный парсер пронумерованных полей ДПР.
 
@@ -165,7 +239,16 @@ def extract_fields(body: str) -> dict[str, str]:
 
     Формат B (Водолаз, Артемис) — поля через одиночный перенос + таб:
         1. Водолаз Денисов\\t \\r\\n2. Межбазовый переход\\t \\r\\n...
+
+    Двухфазный парсинг:
+      1. _FIELD_LINE_RE.split() собирает кандидатов (широкий захват)
+      2. Пост-фильтр отбрасывает ложные поля:
+         - номера за пределами max_field
+         - кандидаты нарушающие монотонность (N→M где M ≤ N > 2)
+         - большие скачки (N→M где M−N > 3) проверяются контекстом
     """
+    max_field = 10 if dpr_type == "ПОРТ" else 14
+
     text = _strip_signature(body).replace("\r\n", "\n").replace("\r", "\n")
 
     # Разбиваем склеенные поля на одной строке:
@@ -181,27 +264,93 @@ def extract_fields(body: str) -> dict[str, str]:
     if first:
         text = text[first.start():]
 
-    # Разбиваем по шаблону начала поля
+    # ── Сбор кандидатов полей в порядке появления ──
     # split() возвращает: [pre, num1, val1, num2, val2, ...]
     chunks = _FIELD_LINE_RE.split(text)
 
-    result: dict[str, str] = {}
+    # Собираем упорядоченный список (num, value) для пост-фильтрации
+    ordered_candidates: list[tuple[str, str]] = []
     i = 1
     while i + 1 < len(chunks):
         num = chunks[i].strip()
-        # Нормализуем ключ: "01" → "1", чтобы fields.get("1") работало
-        # независимо от того, пишет судно "01." или "1."
         if num.isdigit():
-            num = str(int(num))
+            num = str(int(num))  # "01" → "1"
         val = _clean_value(chunks[i + 1]) if i + 1 < len(chunks) else ""
-        if num and num not in result:
-            result[num] = val
+        if num and val:
+            ordered_candidates.append((num, val))
         i += 2
+
+    # ── Пост-фильтрация ──
+    # Двухпроходный алгоритм:
+    # Проход 1: проверяем каждый кандидат на правдоподобность
+    #   - номер в диапазоне 1..max_field?
+    #   - монотонность: допустим рост, допустим рестарт 1..2
+    #   - большой скачок (Δ>3) → проверить значение на дату/время/количество
+    # Проход 2: собираем принятые поля, отброшенные склеиваем с предыдущим
+    result: dict[str, str] = {}
+    last_num = 0
+    rejected_values: list[str] = []
+
+    for num, val in ordered_candidates:
+        if not num.isdigit():
+            rejected_values.append(val)
+            continue
+        n = int(num)
+
+        # Выход за max_field
+        if n > max_field:
+            rejected_values.append(val)
+            continue
+
+        # Рестарт нумерации (1 или 2 после больших номеров)
+        if n <= 2 and last_num > 2:
+            # Новая секция — разрешаем
+            pass
+        elif n <= last_num:
+            # Монотонность нарушена — ложное поле
+            rejected_values.append(val)
+            continue
+        elif n - last_num > 3 and last_num > 0:
+            # Большой скачок: проверить, не начинается ли значение с даты/времени/количества
+            stripped_val = val.strip()
+            is_suspicious = False
+            for pat in _FALSE_FIELD_PATTERNS:
+                if pat.match(stripped_val):
+                    is_suspicious = True
+                    break
+            if is_suspicious:
+                rejected_values.append(val)
+                continue
+
+        # ── Проверка значения на время ──
+        # Если короткое значение начинается с времени — вероятно ложное поле
+        # (фрагмент "08.00 МСК" где "08." было принято за номер поля)
+        # Реальные значения полей всегда длиннее 24 символов.
+        if len(val) <= 24 and _FALSE_VALUE_TIME_RE.match(val):
+            rejected_values.append(val)
+            continue
+
+        # Поле принято
+        if num not in result:
+            # Присоединяем накопленные отброшенные значения к этому полю
+            if rejected_values:
+                val = "\n".join(rejected_values + [val])
+                rejected_values.clear()
+            result[num] = val
+            last_num = n
+
+    # Оставшиеся отброшенные значения — в последнее поле
+    if rejected_values and result:
+        last_key = list(result.keys())[-1]
+        result[last_key] = result[last_key] + "\n" + "\n".join(rejected_values)
+
+    # ── Обрезка подписей в значениях полей ──
+    result = {k: strip_signature_from_value(v) for k, v in result.items()}
 
     return result
 
 
-def extract_fields_doc_form(text: str) -> dict[str, str]:
+def extract_fields_doc_form(text: str, dpr_type: str = "МОРЕ") -> dict[str, str]:
     """
     Парсер для формата таблицы Word .doc: каждая строка объединяет
     метку и значение одного поля (из двух колонок таблицы):
@@ -211,6 +360,8 @@ def extract_fields_doc_form(text: str) -> dict[str, str]:
     Стратегия: берём ПОСЛЕДНЕЕ вхождение "N. " в строке —
     это всегда начало колонки со значением.
     """
+    max_field = 10 if dpr_type == "ПОРТ" else 14
+
     result: dict[str, str] = {}
     for line in text.splitlines():
         line = line.strip()
@@ -223,11 +374,19 @@ def extract_fields_doc_form(text: str) -> dict[str, str]:
         # Последнее вхождение — колонка значения
         last = matches[-1]
         num = last.group(1)
+        if num.isdigit():
+            n = int(num)
+            if n > max_field:
+                continue
         val = re.sub(r"\s+", " ", line[last.end():]).strip()
         # Убираем '\r' и лишние пробелы внутри значения
         val = re.sub(r"[\r\n]+\s*", " ", val).strip()
         if num not in result and val:
             result[num] = val
+
+    # ── Обрезка подписей в значениях полей ──
+    result = {k: strip_signature_from_value(v) for k, v in result.items()}
+
     return result
 
 
@@ -426,6 +585,10 @@ def _read_docx_from_bytes(data: bytes) -> str:
 
     Таблицы с двумя колонками («N. Описание» | «значение») обрабатываются
     отдельно — берётся только колонка значения, лейблы не попадают в поля.
+
+    Многосекционные документы (Демидов): параграф из одних дефисов
+    трактуется как разделитель секций. При дублировании номеров полей
+    между секциями — сохраняется первое вхождение.
     """
     def _para_text(p_xml: str) -> str:
         texts = re.findall(r"<w:t[^>]*>(.*?)</w:t>", p_xml)
@@ -436,6 +599,9 @@ def _read_docx_from_bytes(data: bytes) -> str:
         t = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), t)
         return t.strip()
 
+    # Паттерн разделителя секций: строка из одних дефисов/тире
+    _SECTION_SEP_RE = re.compile(r"^[-–—]{3,}\s*$")
+
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             if "word/document.xml" not in zf.namelist():
@@ -443,6 +609,7 @@ def _read_docx_from_bytes(data: bytes) -> str:
             xml_text = zf.read("word/document.xml").decode("utf-8", errors="replace")
 
         lines: list[str] = []
+        seen_field_nums: set[str] = set()
 
         # Убираем таблицы из основного потока, чтобы не читать их параграфы дважды
         xml_no_tables = re.sub(r"<w:tbl\b[^>]*>.*?</w:tbl>", "", xml_text, flags=re.DOTALL)
@@ -450,8 +617,21 @@ def _read_docx_from_bytes(data: bytes) -> str:
         # Нетабличные параграфы
         for p in re.findall(r"<w:p[^>]*>(.*?)</w:p>", xml_no_tables, re.DOTALL):
             line = _para_text(p)
-            if line:
-                lines.append(line)
+            if not line:
+                continue
+            # Разделитель секций?
+            if _SECTION_SEP_RE.match(line):
+                lines.append("---")
+                continue
+            # Детектируем номер поля в строке
+            fm = re.match(r"^(\d{1,2})[.)]", line)
+            if fm:
+                fnum = str(int(fm.group(1)))
+                if fnum in seen_field_nums:
+                    # Дубликат номера поля — вторая секция, пропускаем
+                    continue
+                seen_field_nums.add(fnum)
+            lines.append(line)
 
         # Таблицы: двухколоночный формат ДПР (лейбл | значение)
         for tbl in re.findall(r"<w:tbl\b[^>]*>(.*?)</w:tbl>", xml_text, re.DOTALL):
@@ -467,6 +647,10 @@ def _read_docx_from_bytes(data: bytes) -> str:
                     label, value = cell_texts[0], cell_texts[1]
                     m = re.match(r"^(\d{1,2})[.)]\s*", label)
                     if m:
+                        fnum = str(int(m.group(1)))
+                        if fnum in seen_field_nums:
+                            continue  # Дубликат — пропускаем
+                        seen_field_nums.add(fnum)
                         val = re.sub(r"^\d{1,2}[.)]\s*", "", value).strip() or value
                         lines.append(f"{m.group(1)}.  {val}")
                     else:
@@ -575,9 +759,19 @@ def _safe_float(s: str) -> Optional[float]:
 def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]:
     """
     Извлекает числовые значения запасов из поля 5.
-    Паттерн: ДТ|IFO|DT 123.4 – 5.6  и аналогично для ТТ/MGO, М, В.
-    Алиасы: IFO=ДТ, MGO=ТТ.
-    Конвертация кг→т: если остаток > 2000 или расход > 50 → /1000.
+    Поддерживает все реальные форматы:
+      ДТ 100 – 5 / М 200 – 0 / В 50 – 2
+      ДТ(т) - 41,49 (82%); Масло(л)- 547 (56%)
+      ДТ: 124,550-0,100 / М: M10: 223-0; M14: 1261-0
+      ДТ 270,8(29,1%)- 5,4/ М-ГДГ 6940(46,3%)-50,0 / М-ВДГ 372
+      ДТ- 165,7 т (- 0,0 т) / М-900кг - 0 кг / В -
+      ДТ - 111,7 т. - 0,0 т / ТТ Нет / М 18511 кг. / В 116,0 т -
+      ДТ 2827 - 1575 / ТТ 227.950 - 0 / М 770,0 – 0,0 / В 38 - 2
+
+    Масла всех видов (М, М1, М2, М-ГДГ, М-ВДГ, МГД, МВДГ, МГ, Масло,
+    M10, M14, TPL) суммируются в oil_amt / oil_cons.
+    ДТ+ТТ суммируются в fuel_liters через отдельную агрегацию в dpr_ximss.
+
     Возвращает словарь с ключами: fuel_dt_amt, fuel_dt_cons, fuel_tt_amt, ...
     """
     result: dict[str, Optional[float]] = {
@@ -590,67 +784,153 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
     if not raw:
         return result
 
+    # ── Нормализация ──
     # Переносы строк → " / " чтобы не склеить лейбл со значением
     raw = re.sub(r"\s*\n\s*", " / ", raw)
+    # Убираем % и (скобки) — метаданные о проценте остатка
+    raw = re.sub(r"\(\d{1,3}[,.]?\d*\s*%\)", "", raw)
+    raw = re.sub(r"\d{1,3}[,.]?\d*\s*%", "", raw)
+    # Убираем префикс номера поля "5. " или "5) "
+    raw = re.sub(r"^\d{1,2}\s*[.)]\s*", "", raw).strip()
 
-    type_map: dict[str, tuple[str, str]] = {
-        "ДТ": ("fuel_dt_amt", "fuel_dt_cons"),
-        "ТТ": ("fuel_tt_amt", "fuel_tt_cons"),
-        "М":  ("oil_amt", "oil_cons"),
-        "В":  ("water_amt", "water_cons"),
-    }
-    aliases = {"IFO": "ДТ", "DT": "ДТ", "MGO": "ТТ", "TT": "ТТ"}
+    # ── Типы поставок ──
+    # fuel_dt: ДТ, IFO, DT
+    # fuel_tt: ТТ, MGO, TT
+    # oil (суммируем): М, M, М1, M1, М2, M2, М-ГДГ, М-ВДГ, МГД, МВДГ, МГ,
+    #                   Масло, M10, M14, TPL, ТРL
+    # water: В, V, Вода
+    # ignore: Продукты, НЕТ, Нет, -
 
-    # Разбиваем по /
-    tokens = re.split(r"\s*/\s*", raw)
+    OIL_LABELS = (
+        r"м(?:асло)?|m|м[-\s]?гдг|m[-\s]?gdg|м[-\s]?вдг|m[-\s]?vdg"
+        r"|мгд|мвдг|мг|m10|m14|tpl|трl"
+        r"|м[12]|m[12]"
+    )
+
+    # Разбиваем на сегменты: по " / ", " ; ", или по границе новой метки
+    # Сначала нормализуем двоеточия: "ДТ: 124" → "ДТ 124"
+    raw = re.sub(r"(ДТ|ТТ|М|В)\s*:", r"\1 ", raw, flags=re.I)
+    raw = re.sub(rf"({OIL_LABELS})\s*:", r"\1 ", raw, flags=re.I)
+
+    tokens = re.split(r"\s*/\s*|\s*;\s*", raw)
+
+    # Аккумуляторы для масла
+    oil_amt_total = 0.0
+    oil_cons_total = 0.0
+    oil_has_data = False
+
     for token in tokens:
         token = token.strip()
-        # Убираем префикс номера поля вида "5. " или "5) " перед значением
-        token = re.sub(r"^\d{1,2}\s*[.)]\s*", "", token).strip()
-        if not token or re.match(r"^(нет|net|-)$", token, re.I):
+        if not token or re.match(r"^(нет|net|продукты|products|-)$", token, re.I):
             continue
 
-        # Определяем тип — требуется цифра после префикса, чтобы
-        # не сматчить лейблы вроде "MGO (т)" или "IFO/MGO"
-        supply_type = ""
-        for prefix in ["ДТ", "ТТ", "М", "В", "IFO", "DT", "MGO", "TT"]:
-            if re.match(rf"^{prefix}\s+\d", token, re.I):
-                supply_type = aliases.get(prefix.upper(), prefix.upper())
-                break
-        if not supply_type:
+        # ── Определяем тип поставки ──
+        supply_family = ""  # "fuel_dt", "fuel_tt", "oil", "water"
+
+        # ДТ / IFO
+        if re.match(r"^(ДТ|DT|IFO)\b", token, re.I):
+            supply_family = "fuel_dt"
+        # ТТ / MGO
+        elif re.match(r"^(ТТ|TT|MGO)\b", token, re.I):
+            supply_family = "fuel_tt"
+        # Вода
+        elif re.match(r"^(В|V|Вода|Water)\b", token, re.I):
+            supply_family = "water"
+        # Масло (все виды)
+        elif re.match(rf"^({OIL_LABELS})\b", token, re.I):
+            supply_family = "oil"
+        # Голые числа без метки — пропускаем
+        elif re.match(r"^\d", token):
+            # Может быть продолжением предыдущего сегмента после переноса
+            continue
+        else:
             continue
 
-        cols = type_map.get(supply_type)
-        if not cols:
+        # ── Убираем метку и единицы измерения ──
+        # Убираем лидирующую метку
+        cleaned = token
+        cleaned = re.sub(r"^(ДТ|DT|IFO|ТТ|TT|MGO)\s*[:-]?\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(rf"^({OIL_LABELS})\s*[:-]?\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(r"^(В|V|Вода|Water)\s*[:-]?\s*", "", cleaned, flags=re.I)
+        # Убираем единицы измерения: т, т., кг, кг., л, (т), (л), (кг)
+        cleaned = re.sub(r"\s*(?:т\.|т|кг\.?|кг|л|г)\b\s*", " ", cleaned, flags=re.I)
+        cleaned = re.sub(r"\(\s*(?:т|кг|л)\s*\)", "", cleaned, flags=re.I)
+        cleaned = cleaned.strip()
+
+        if not cleaned or cleaned in ("-", "—", "–"):
             continue
 
-        # Извлекаем числа
-        nums = re.findall(r"(\d[\d\s]*[\d,.]*)", token)
-        nums_clean = [v for n in nums if n.strip() for v in (_safe_float(n),) if v is not None]
+        # Нормализуем точку-десятичный разделитель В ЧИСЛАХ (не в датах!)
+        # 227.950 → 227.950 (уже float-совместимо)
+        # Пропускаем если похоже на дату
+        if not re.match(r"\d{1,2}\.\d{2}\.\d{2,4}", cleaned):
+            # Заменяем . на , только если это десятичный разделитель
+            # (окружён цифрами и не является частью разделителя тысяч)
+            cleaned = re.sub(r"(\d)\.(\d)", r"\1,\2", cleaned)
+
+        # ── Извлекаем остаток и расход ──
+        # Ищем числа: первое — остаток, после тире/дефиса — расход
+        nums = re.findall(r"(\d[\d\s]*[\d,.]*)", cleaned)
+        nums_clean: list[float] = []
+        for n in nums:
+            v = _safe_float(n)
+            if v is not None:
+                nums_clean.append(v)
+
+        amt: Optional[float] = None
+        cons: Optional[float] = None
 
         if nums_clean:
             amt = nums_clean[0]
-            # кг→т конвертация: ДТ, ТТ, В конвертируем; М (масло) — всегда кг
-            if supply_type in ("ДТ", "ТТ", "В") and amt > 2000:
-                amt /= 1000
-            result[cols[0]] = round(amt, 2)
 
         # Расход: после тире/дефиса
-        dash_m = re.search(r"[-–—]\s*(\d[\d\s]*[\d,.]*)", token)
+        dash_m = re.search(r"[-–—]\s*(\d[\d\s]*[\d,.]*)", cleaned)
         if dash_m:
             cons_val = _safe_float(dash_m.group(1))
             if cons_val is not None:
-                if supply_type in ("ДТ", "ТТ", "В") and cons_val > 50:
-                    cons_val /= 1000
-                # Нормализация OO → 0
-                if re.match(r"^OO$", dash_m.group(1).strip(), re.I):
-                    cons_val = 0.0
-                result[cols[1]] = round(cons_val, 2)
+                cons = cons_val
         elif len(nums_clean) > 1:
-            cons_val = nums_clean[1]
-            if supply_type in ("ДТ", "ТТ", "В") and cons_val > 50:
-                cons_val /= 1000
-            result[cols[1]] = round(cons_val, 2)
+            cons = nums_clean[1]
+
+        # Нормализация: если после дефиса "OO" → 0
+        if dash_m and re.match(r"^OO$", dash_m.group(1).strip(), re.I):
+            cons = 0.0
+
+        # ── Конвертация кг→т ──
+        # Для топлива (ДТ, ТТ) и воды: >2000 остаток или >50 расход → кг
+        if supply_family in ("fuel_dt", "fuel_tt", "water"):
+            if amt is not None and amt > 2000:
+                amt = round(amt / 1000, 2)
+            if cons is not None and cons > 50:
+                cons = round(cons / 1000, 2)
+
+        # ── Запись в результат ──
+        if supply_family == "fuel_dt":
+            if amt is not None:
+                result["fuel_dt_amt"] = round(amt, 2)
+            if cons is not None:
+                result["fuel_dt_cons"] = round(cons, 2)
+        elif supply_family == "fuel_tt":
+            if amt is not None:
+                result["fuel_tt_amt"] = round(amt, 2)
+            if cons is not None:
+                result["fuel_tt_cons"] = round(cons, 2)
+        elif supply_family == "water":
+            if amt is not None:
+                result["water_amt"] = round(amt, 2)
+            if cons is not None:
+                result["water_cons"] = round(cons, 2)
+        elif supply_family == "oil":
+            oil_has_data = True
+            if amt is not None:
+                oil_amt_total += amt
+            if cons is not None:
+                oil_cons_total += cons
+
+    # ── Суммированное масло ──
+    if oil_has_data:
+        result["oil_amt"] = round(oil_amt_total, 2) if oil_amt_total > 0 else None
+        result["oil_cons"] = round(oil_cons_total, 2) if oil_cons_total > 0 else None
 
     return result
 
@@ -972,7 +1252,7 @@ def parse_msg_file(path: str) -> Optional[dict]:
     log.info(f"Тип:     {rtype}")
 
     # ── Поля ────────────────────────────────────────────────────────────────
-    fields = extract_fields_doc_form(body) if is_doc_form else extract_fields(body)
+    fields = extract_fields_doc_form(body, rtype) if is_doc_form else extract_fields(body, rtype)
     log.debug(f"Поля:    {json.dumps(fields, ensure_ascii=False)}")
 
     if not fields:

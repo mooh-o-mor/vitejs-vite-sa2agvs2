@@ -474,7 +474,9 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
               <div style={{ display: "flex", borderBottom: `1px solid ${T.border}`, marginTop: 10 }}>
                 {hasDataTab && (
                   <button style={tabStyle(activeTab === "data")} onClick={() => setActiveTab("data")}>
-                    {dataSource === "vessels" ? "📋 ДПР" : "📦 ЗАПАСЫ"}
+                    {dataSource === "vessels"
+                      ? `📋 ДПР ${(vessel as VesselDprMapRow).dpr_type || vessel.status || ''}`
+                      : "📦 ЗАПАСЫ"}
                   </button>
                 )}
                 <button style={tabStyle(activeTab === "weather")} onClick={() => setActiveTab("weather")}>
@@ -531,20 +533,54 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
 
             {/* ── Содержимое: Поля ДПР (для ДПР судов) ── */}
             {(!showTabs || activeTab === "data") && hasFieldsJson && dataSource === "vessels" && (() => {
-              const DPR_FIELD_NAMES: Record<string, string> = {
-                "1": "Название судна", "2": "Состояние (АСГ/АСД/переход)",
-                "3": "Дата и время", "4": "Местоположение", "5": "Запасы",
-                "6": "Погода", "7": "Курс / скорость / мили",
-                "8": "Бюджет времени", "9": "Время работы механизмов",
-                "10": "Экипаж", "11": "ETA", "12": "Сроки запасов",
-                "13": "Пополнение запасов", "14": "Доп. информация",
+              const DPR_FIELD_NAMES_SEA: Record<string, string> = {
+                "1": "Название судна",
+                "2": "Состояние (АСГ/АСД/переход)",
+                "3": "Дата и время",
+                "4": "Местоположение",
+                "5": "Запасы",
+                "6": "Погода",
+                "7": "Курс / скорость / мили",
+                "8": "Бюджет времени",
+                "9": "Время работы механизмов",
+                "10": "Экипаж",
+                "11": "ETA",
+                "12": "Сроки запасов",
+                "13": "Пополнение запасов",
+                "14": "Доп. информация",
                 "_note": "Примечание",
               };
+              const DPR_FIELD_NAMES_PORT: Record<string, string> = {
+                "1": "Название судна",
+                "2": "Состояние (АСГ/АСД/ремонт)",
+                "3": "Дата и время",
+                "4": "Местоположение (порт/причал)",
+                "5": "Запасы",
+                "6": "Погода",
+                "7": "Задача / задание",
+                "8": "Плановая работа",
+                "9": "Готовность / состояние мех.",
+                "10": "Экипаж",
+                "_note": "Примечание",
+              };
+
+              const vr = vessel as VesselDprMapRow;
+              const dprType = vr.dpr_type || vessel.status;
+              const isPort = dprType === "ПОРТ";
+              const fieldNames = isPort ? DPR_FIELD_NAMES_PORT : DPR_FIELD_NAMES_SEA;
+
+              // Нормализатор поля 4 — убирает префиксы "п. ", "порт ", "г. "
+              function normalizeLocation(loc: string): string {
+                return loc.replace(/^(п\.\s*порт\s+|порт\s+|г\.\s+|п\.\s+)/i, '').trim();
+              }
+
               return (
                 <div style={{ marginTop: showTabs ? 8 : 0 }}>
                   {!showTabs && (
                     <div style={{ margin: "10px 0 4px" }}>
-                      <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>📋 ДПР</span>
+                      <span style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace" }}>
+                        📋 ДПР {dprType || ''}
+                      </span>
                     </div>
                   )}
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -552,15 +588,19 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
                       {Object.entries(vessel.fields_json!)
                         .filter(([, v]) => v && v.trim())
                         .sort(([a], [b]) => (parseInt(a) || 999) - (parseInt(b) || 999))
-                        .map(([key, value]) => (
-                          <tr key={key} title={`П.${key}${DPR_FIELD_NAMES[key] ? ": " + DPR_FIELD_NAMES[key] : ""}`}
-                              style={{ cursor: "default" }}>
-                            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                              <span style={{ color: T.text2, fontFamily: "monospace", fontSize: 9, marginRight: 6 }}>П.{key}</span>
-                              {value}
-                            </td>
-                          </tr>
-                        ))}
+                        .map(([key, value]) => {
+                          // Нормализация поля 4
+                          const displayValue = key === "4" ? normalizeLocation(value) : value;
+                          return (
+                            <tr key={key} title={`П.${key}${fieldNames[key] ? ": " + fieldNames[key] : ""}`}
+                                style={{ cursor: "default" }}>
+                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                                <span style={{ color: T.text2, fontFamily: "monospace", fontSize: 9, marginRight: 6 }}>П.{key}</span>
+                                {displayValue}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>

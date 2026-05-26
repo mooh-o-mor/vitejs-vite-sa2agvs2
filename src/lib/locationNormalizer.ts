@@ -111,6 +111,10 @@ export function findPortCoords(raw: string): [number, number] | null {
     .replace(/\s*(БЭП|СЭП|CЭП|Да|Нет)\s*$/i, "")
     .trim()
     .toLowerCase()
+    // Убираем префиксы "п. ", "порт ", "г. "
+    .replace(/^(п\.\s*порт\s+|порт\s+|г\.\s+|п\.\s+)/i, "")
+    // Убираем кавычки «»""
+    .replace(/[«»""']/g, "")
     // нормализуем пробел после/до дефиса: "санкт- петербург" → "санкт-петербург"
     .replace(/-\s+/g, "-")
     .replace(/\s+-/g, "-");

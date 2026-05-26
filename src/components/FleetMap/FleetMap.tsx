@@ -348,6 +348,7 @@ mapRef.current.addEventListener("touchend", (e) => {
     supplies: [],
     contract_info: "",
     work_period: "",
+    dpr_type: v.dpr_type ?? null,
     fields_json: v.fields_json,
     msg_time: v.msg_time ?? null,
     parse_ok: v.parse_ok ?? null,
@@ -376,8 +377,37 @@ mapRef.current.addEventListener("touchend", (e) => {
       const { data } = await supabase.from("dpr_entries").select("*").eq("report_date", date).order("vessel_name");
       setVessels(data || []);
     } else {
-      const { data } = await supabase.from("vessel_dpr").select("*").eq("report_date", date).order("vessel_name");
-      setVessels((data || []).map((v: VesselDprRow) => mapVesselDprToDprRow(v)));
+      // vessel_dpr: получаем последнюю ДПР по каждому судну (за 30 дней),
+      // дедуплицируем на фронтенде по vessel_name → max report_date,
+      // затем фильтруем по выбранной дате
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const fromDate = thirtyDaysAgo.toISOString().slice(0, 10);
+
+      const { data } = await supabase
+        .from("vessel_dpr")
+        .select("*")
+        .gte("report_date", fromDate)
+        .order("report_date", { ascending: false })
+        .limit(1000);
+
+      // Дедупликация: оставляем запись с максимальным report_date для каждого судна
+      const seen = new Map<string, VesselDprRow>();
+      for (const row of (data || [])) {
+        const v = row as VesselDprRow;
+        if (!seen.has(v.vessel_name)) {
+          seen.set(v.vessel_name, v);
+        }
+      }
+
+      const mapped = Array.from(seen.values()).map((v) => mapVesselDprToDprRow(v));
+
+      // Фильтр по выбранной дате (если указана)
+      const filtered = date
+        ? mapped.filter((v) => v.report_date === date)
+        : mapped;
+
+      setVessels(filtered);
     }
     setSelVessel(null);
     setLoading(false);

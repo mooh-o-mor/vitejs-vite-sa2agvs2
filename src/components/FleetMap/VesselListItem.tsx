@@ -25,18 +25,21 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
   const bgColor = STATUS_BG[c];
   const fontSize = isMobile ? 10 : 11;
   const nameFontSize = isMobile ? 12 : 13;
-  
+
   const nameWithoutPrefix = vessel.vessel_name.replace(/^(мфасс|тбс|ссн|мбс|мвс|мб|нис|асс|скб)\s+/i, "").trim();
   const formattedName = formatVesselName(nameWithoutPrefix);
 
+  const today = new Date().toISOString().split('T')[0];
+  const isStale = vessel.report_date && vessel.report_date !== today;
+
   return (
-    <div 
+    <div
       onClick={onClick}
-      style={{ 
-        padding: isMobile ? "6px 8px" : "8px 10px", 
-        borderBottom: `1px solid ${T.border}`, 
-        cursor: "pointer", 
-        borderLeft: `3px solid ${isSelected ? T.accent : "transparent"}`, 
+      style={{
+        padding: isMobile ? "6px 8px" : "8px 10px",
+        borderBottom: `1px solid ${T.border}`,
+        cursor: "pointer",
+        borderLeft: `3px solid ${isSelected ? T.accent : "transparent"}`,
         background: isSelected ? "rgba(30,144,255,0.06)" : bgColor,
         transition: "all 0.2s",
         whiteSpace: "nowrap",
@@ -44,12 +47,12 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
     >
       <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 8, flexWrap: "nowrap" }}>
         {vesselType && (
-          <span style={{ 
-            fontSize: fontSize, 
-            color: T.text, 
-            fontFamily: "monospace", 
-            fontWeight: 500, 
-            padding: "0px", 
+          <span style={{
+            fontSize: fontSize,
+            color: T.text,
+            fontFamily: "monospace",
+            fontWeight: 500,
+            padding: "0px",
             flexShrink: 0,
           }}>
             {formatVesselType(vesselType)}
@@ -62,7 +65,16 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
           <span style={{ fontSize: fontSize, color: T.text, padding: "0px", flexShrink: 0 }}>{vessel.branch}</span>
         )}
         {vessel.lat == null && <span style={{ fontSize: 9, color: "#c07800", flexShrink: 0 }}>📍?</span>}
-        {vessel.parse_ok != null && (
+        {isStale ? (
+          <span
+            title={`Нет ДПР за сегодня. Последняя: ${vessel.report_date}`}
+            style={{
+              width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+              background: "#ef4444",
+              display: "inline-block",
+            }}
+          />
+        ) : vessel.parse_ok != null ? (
           <span
             title={vessel.parse_ok ? "ДПР получена и распарсена" : "ДПР во вложении — не распарсена"}
             style={{
@@ -71,7 +83,7 @@ export function VesselListItem({ vessel, vesselType, isSelected, onClick, isMobi
               display: "inline-block",
             }}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );

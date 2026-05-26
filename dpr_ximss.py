@@ -440,7 +440,7 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
         return None
 
     # ── Парсинг полей ──
-    fields = extract_fields_doc_form(body) if is_doc_form else extract_fields(body)
+    fields = extract_fields_doc_form(body, dpr_type) if is_doc_form else extract_fields(body, dpr_type)
 
     # ── Название судна ──
     raw_vessel_name = _clean_name(extract_vessel_name(fields, sender, subject) or "")
@@ -542,7 +542,30 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
     lat, lng = parse_coords(fields.get("4", ""))
     if lat is None and coord_raw:
         lat, lng = lookup_port(coord_raw, PORTS)
-        if lat is None:
+    # Фолбэк: если поле 4 пустое — ищем местоположение в других полях
+    # (Беклемишев: местоположение в П.10)
+    if lat is None and coord_raw in ("", None):
+        _LOCATION_HINT_RE = re.compile(
+            r"\b(порт|причал|якорн(?:ая|ой)|рейд|пр\.|наб\.|бухта|залив|мыс|губа|пролив)\b",
+            re.I,
+        )
+        for fn in ("10", "9", "8", "7", "6", "11", "12", "13", "14"):
+            fv = fields.get(fn, "").strip()
+            if fv and _LOCATION_HINT_RE.search(fv):
+                # Обрезаем supplies-строки (ДТ:, М:, В:, etc.) после переноса
+                loc_part = re.split(
+                    r"\n\s*(?:ДТ|IFO|DT|ТТ|MGO|TT|[МM]\d*[- ]?(?:ГДГ|ВДГ|Г)?|M10|M14|TPL|ТРL|Масло|В|V|Water|Вода)\s*[:–—-]",
+                    fv, maxsplit=1, flags=re.I,
+                )[0].strip()
+                coord_raw = loc_part
+                lat, lng = lookup_port(coord_raw, PORTS)
+                if lat is not None:
+                    log.info(f"  Местоположение из П.{fn}: {coord_raw!r}")
+                    break
+                # Если порт не найден — coord_raw уже установлен, попробуем след. поле
+        if lat is None and not coord_raw:
+            log.warning(f"  Местоположение не найдено ни в одном поле")
+        elif lat is None and coord_raw:
             log.warning(f"  Не найден порт: {coord_raw!r}")
 
     # ── Филиал: сначала из реестра fleet.xlsx, иначе detect_branch ──
@@ -560,6 +583,21 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
 
     # ── Новые колонки ──
     supplies = parse_supplies_numeric(fields)
+    # Фолбэк: если П.5 пустое — ищем запасы в других полях
+    # (Беклемишев: запасы без номера поля между П.10 и П.12)
+    _supplies_has_data = any(
+        supplies.get(k) is not None
+        for k in ("fuel_dt_amt", "fuel_tt_amt", "oil_amt", "water_amt")
+    )
+    if not _supplies_has_data:
+        for fn in ("10", "8", "9", "11", "12", "13", "14"):
+            fv = fields.get(fn, "").strip()
+            if fv and re.search(r"\b(?:ДТ|IFO|DT|ТТ|MGO|TT|Масло|[МM]\d*[- ]?(?:ГДГ|ВДГ|Г)\b)\s*[:–—-]", fv, re.I):
+                # Нашли запасы в другом поле — парсим
+                fake_fields = {"5": fv}
+                supplies = parse_supplies_numeric(fake_fields)
+                log.info(f"  Запасы из П.{fn}")
+                break
     weather_val  = parse_weather(fields) if dpr_type == "МОРЕ" else None
     course, speed, distance = parse_course_speed(fields) if dpr_type == "МОРЕ" else (None, None, None)
     eta_place, eta_date_raw = parse_eta(fields) if dpr_type == "МОРЕ" else (None, None)
@@ -721,6 +759,8 @@ def main():
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--add-ports", action="store_true",
                     help="Интерактивное добавление координат для неизвестных портов")
+    ap.add_argument("--uids", type=str, default="",
+                    help="Обработать конкретные UID через запятую: --uids 2018,2504")
     args = ap.parse_args()
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -759,7 +799,11 @@ def main():
         except Exception as e:
             log.warning(f"Ошибка запроса активных судов: {e}")
 
-    uids = ximss.get_today_uids(limit=args.limit)
+    if args.uids:
+        uids = [int(u.strip()) for u in args.uids.split(",") if u.strip()]
+        log.info(f"Режим --uids: обрабатываем {uids}")
+    else:
+        uids = ximss.get_today_uids(limit=args.limit)
     if not uids:
         log.info("Новых писем нет")
         return
@@ -775,7 +819,7 @@ def main():
 
             # Скачиваем сырое сообщение ТОЛЬКО если нужно:
             # тело пустое / нет полей / есть намёк на вложение
-            body_fields = extract_fields(body) if body.strip() else {}
+            body_fields = extract_fields(body, "") if body.strip() else {}
             attachment_hint = any(
                 kw in body[:400].lower()
                 for kw in ("приложени", "attach", "вложен")
