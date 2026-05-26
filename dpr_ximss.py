@@ -89,13 +89,24 @@ else:
 
 # ── Selenium логин ───────────────────────────────────────────────────────────
 
-def get_session():
+def get_session(keep_driver=False):
+    """
+    Логин через Selenium → XIMSS session ID + cookies + max_seq.
+    Если keep_driver=True — возвращает также driver (НЕ закрывает браузер).
+    """
     log.info("Запуск браузера (headless)...")
     opts = webdriver.ChromeOptions()
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--headless")
     opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+    # Папка загрузок
+    download_dir = os.path.join(os.getcwd(), "downloads")
+    os.makedirs(download_dir, exist_ok=True)
+    prefs = {"download.default_directory": download_dir,
+             "download.prompt_for_download": False,
+             "download.directory_upgrade": True}
+    opts.add_experimental_option("prefs", prefs)
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
     driver.get(f"{BASE}/?Skin=cg-web#/login")
@@ -111,7 +122,10 @@ def get_session():
 
     cookies = {c["name"]: c["value"] for c in driver.get_cookies()}
     logs    = driver.get_log("performance")
-    driver.quit()
+
+    if not keep_driver:
+        driver.quit()
+        driver = None
 
     session_id, max_seq = None, 0
     for entry in logs:
@@ -145,7 +159,84 @@ def get_session():
     if not session_id:
         raise RuntimeError("Не удалось получить session ID")
     log.info(f"Сессия: {session_id}  max_seq (HTTP+WS): {max_seq}")
+    if keep_driver:
+        return session_id, cookies, max_seq, driver
     return session_id, cookies, max_seq
+
+
+# ── Webmail fallback для сообщений с вложениями ─────────────────────────────
+
+def _download_attachment_via_webmail(driver, uid: int, download_dir: str) -> Optional[str]:
+    """
+    Открывает письмо в веб-интерфейсе, ищет ссылку на .doc/.docx,
+    кликает для скачивания. Возвращает путь к скачанному файлу или None.
+    """
+    try:
+        # Перейти на страницу письма. Формат CommuniGate:
+        #   #/mail/{FOLDER_ID}/view/{UID}
+        msg_url = f"{BASE}/?Skin=cg-web#/mail/{FOLDER_ID}/view/{uid}"
+        driver.get(msg_url)
+        time.sleep(4)
+
+        # Ищем кнопку вложения. CommuniGate webmail рендерит вложения
+        # как <button> внутри контейнера с классом _attachments_
+        buttons = driver.find_elements(By.CSS_SELECTOR, "[class*='_attachments_'] button")
+        target_btn = None
+        for btn in buttons:
+            text = (btn.text or "").strip().lower()
+            if text.endswith((".doc", ".docx")) or ".doc" in text:
+                target_btn = btn
+                log.info(f"  Webmail: кнопка вложения {btn.text.strip()!r}")
+                break
+
+        # Фолбэк: любая кнопка с .doc в тексте
+        if not target_btn:
+            all_btns = driver.find_elements(By.TAG_NAME, "button")
+            for btn in all_btns:
+                text = (btn.text or "").strip().lower()
+                if ".doc" in text:
+                    target_btn = btn
+                    log.info(f"  Webmail (fallback): кнопка {btn.text.strip()!r}")
+                    break
+
+        if not target_btn:
+            log.warning(f"  Webmail: кнопка вложения не найдена (UID {uid})")
+            return None
+
+        # Запоминаем существующие файлы в папке загрузок
+        before = set(os.listdir(download_dir))
+
+        # Кликаем кнопку
+        target_btn.click()
+        time.sleep(5)
+
+        # Ждём новый файл
+        after = set(os.listdir(download_dir))
+        new_files = after - before
+        if new_files:
+            fname = list(new_files)[0]
+            filepath = os.path.join(download_dir, fname)
+            log.info(f"  Webmail: скачан {fname} ({os.path.getsize(filepath)} байт)")
+            return filepath
+
+        # Иногда файл скачивается с тем же именем (перезапись) — ищем по времени
+        candidates = []
+        for fname in os.listdir(download_dir):
+            fp = os.path.join(download_dir, fname)
+            mtime = os.path.getmtime(fp)
+            if time.time() - mtime < 30 and fname.lower().endswith((".doc", ".docx")):
+                candidates.append((mtime, fp))
+        if candidates:
+            candidates.sort(reverse=True)
+            filepath = candidates[0][1]
+            log.info(f"  Webmail: найден по времени {os.path.basename(filepath)} ({os.path.getsize(filepath)} байт)")
+            return filepath
+
+        log.warning(f"  Webmail: файл не появился в {download_dir}")
+        return None
+    except Exception as e:
+        log.warning(f"  Webmail error UID {uid}: {e}")
+        return None
 
 
 # ── XIMSS API ────────────────────────────────────────────────────────────────
@@ -316,13 +407,11 @@ def _extract_time(f3):
     m = re.search(r"(\d{2}[:.]\d{2}\s*(?:МСК|UTC|мск)?)", f3)
     return m.group(1).strip() if m else ""
 
-def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None):
+def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=False):
     """Парсит ДПР в формат vessel_dpr. Приоритет: вложения MSG → тело письма."""
     if not body.strip() and not raw_msg:
         log.warning("  Пустое тело и нет raw MSG — пропускаем")
         return None
-
-    is_doc_form = False
     dpr_type = ""
     msg_time = None
 
@@ -676,6 +765,7 @@ def main():
         return
 
     ok = fail = skip = 0
+    webmail_uids: list[int] = []  # UID для webmail-фолбэка
     for uid in uids:
         log.info(f"─── UID {uid} ───")
         try:
@@ -710,6 +800,10 @@ def main():
                     ximss.mark_seen(uid)
                 continue
 
+            # Запоминаем UID для webmail-фолбэка если parse_ok=False (вложение)
+            if record.get("parse_ok") is False and not args.dry_run:
+                webmail_uids.append(uid)
+
             if args.dry_run:
                 print(json.dumps(record, ensure_ascii=False, indent=2, default=str))
                 ok += 1
@@ -738,6 +832,70 @@ def main():
             fail += 1
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Итог: {ok} записано, {skip} пропущено, {fail} ошибок")
+
+    # ── Webmail fallback: для писем с parse_ok=False (вложения) ──
+    if webmail_uids and sb and not args.dry_run:
+        log.info(f"\n─── Webmail fallback для {len(webmail_uids)} писем ───")
+        session_id2, cookies2, last_seq2, driver = get_session(keep_driver=True)
+        download_dir = os.path.join(os.getcwd(), "downloads")
+        os.makedirs(download_dir, exist_ok=True)
+
+        for uid in webmail_uids:
+            log.info(f"  UID {uid}: пробуем скачать вложение...")
+            filepath = _download_attachment_via_webmail(driver, uid, download_dir)
+            if filepath is None:
+                log.warning(f"  UID {uid}: не удалось скачать")
+                continue
+
+            # Читаем и парсим скачанный файл
+            try:
+                with open(filepath, "rb") as fh:
+                    file_data = fh.read()
+
+                # Определяем формат и извлекаем текст
+                fname_lower = os.path.basename(filepath).lower()
+                att_text = ""
+                is_form = False
+
+                if fname_lower.endswith(".docx"):
+                    from dpr_parser import _read_docx_from_bytes
+                    att_text = _read_docx_from_bytes(file_data)
+                elif fname_lower.endswith(".doc"):
+                    from dpr_parser import read_doc_attachment
+                    att_text, is_form = read_doc_attachment(file_data)
+                else:
+                    from dpr_parser import _read_text_attachment
+                    att_text = _read_text_attachment(file_data)
+
+                if not att_text.strip():
+                    log.warning(f"  UID {uid}: не удалось извлечь текст из {os.path.basename(filepath)}")
+                    continue
+
+                log.info(f"  UID {uid}: извлечено {len(att_text)} символов из {os.path.basename(filepath)}")
+
+                # Повторный парсинг с извлечённым текстом
+                subject, sender, _, _body = ximss.read_message(uid)
+                record2 = parse_to_vessel_dpr(subject, sender, att_text, uid, raw_msg=None, is_doc_form=is_form)
+                if record2 and record2.get("parse_ok"):
+                    if upsert_vessel_dpr(sb, record2):
+                        log.info(f"  UID {uid}: ✓ обновлён через webmail")
+                        ok += 1
+                    else:
+                        log.warning(f"  UID {uid}: не удалось обновить в БД")
+                else:
+                    log.warning(f"  UID {uid}: после webmail parse_ok всё ещё False")
+
+            except Exception as e:
+                log.error(f"  UID {uid}: ошибка обработки файла: {e}")
+            finally:
+                # Удаляем скачанный файл
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+
+        driver.quit()
+        log.info("Webmail fallback завершён")
 
     # ── Задача 5: условие остановки ──
     if sb and not args.dry_run and active_vessel_count > 0:

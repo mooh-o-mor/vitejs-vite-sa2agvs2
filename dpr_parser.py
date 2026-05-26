@@ -168,6 +168,11 @@ def extract_fields(body: str) -> dict[str, str]:
     """
     text = _strip_signature(body).replace("\r\n", "\n").replace("\r", "\n")
 
+    # Разбиваем склеенные поля на одной строке:
+    # "2) Ремонт  3) 26/05/2026 4) БП Санкт-Петербург" → каждая N) на новой строке
+    # Ищем не-цифру + пробел(ы) + номер поля (1-2 цифры) + . или )
+    text = re.sub(r"([^\d])\s+(\d{1,2}\s*[.)])", r"\1\n\2", text)
+
     # Убираем маркеры цитирования email (>>>>> в начале строк)
     text = re.sub(r"^[> \t]*>+\s*", "", text, flags=re.MULTILINE)
 
@@ -530,8 +535,8 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
     if not raw:
         return result
 
-    # Склеиваем переносы строк (Inmarsat)
-    raw = re.sub(r"\s*\n\s*", "", raw)
+    # Переносы строк → " / " чтобы не склеить лейбл со значением
+    raw = re.sub(r"\s*\n\s*", " / ", raw)
 
     type_map: dict[str, tuple[str, str]] = {
         "ДТ": ("fuel_dt_amt", "fuel_dt_cons"),
@@ -545,13 +550,16 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
     tokens = re.split(r"\s*/\s*", raw)
     for token in tokens:
         token = token.strip()
+        # Убираем префикс номера поля вида "5. " или "5) " перед значением
+        token = re.sub(r"^\d{1,2}\s*[.)]\s*", "", token).strip()
         if not token or re.match(r"^(нет|net|-)$", token, re.I):
             continue
 
-        # Определяем тип
+        # Определяем тип — требуется цифра после префикса, чтобы
+        # не сматчить лейблы вроде "MGO (т)" или "IFO/MGO"
         supply_type = ""
         for prefix in ["ДТ", "ТТ", "М", "В", "IFO", "DT", "MGO", "TT"]:
-            if re.match(rf"^{prefix}\b", token, re.I):
+            if re.match(rf"^{prefix}\s+\d", token, re.I):
                 supply_type = aliases.get(prefix.upper(), prefix.upper())
                 break
         if not supply_type:
