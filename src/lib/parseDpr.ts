@@ -875,11 +875,11 @@ async function tryParseMsgAsTextDpr(buf: ArrayBuffer): Promise<DprVessel | null>
 
     if (!lines || lines.length === 0) return null;
 
-    const dprType = detectDprType(lines, subject);
+    const dprType = detectDprType(lines, subject ?? undefined);
     if (!dprType || dprType === "отход" || dprType === "приход") return null;
 
-    if (dprType === "море") return parseDprMore(lines, subject);
-    if (dprType === "порт") return parseDprPort(lines, subject);
+    if (dprType === "море") return parseDprMore(lines, subject ?? undefined);
+    if (dprType === "порт") return parseDprPort(lines, subject ?? undefined);
 
     return null;
   } catch (_) {

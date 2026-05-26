@@ -105,6 +105,7 @@ export interface VesselDprRow {
 export interface VesselDprMapRow extends DprRow {
   msg_time: string | null;
   parse_ok: boolean | null;
+  fields_json: Record<string, string> | null;
   weather: string | null;
   course: number | null;
   speed_current: number | null;
