@@ -48,7 +48,7 @@ export interface DprSupply {
 }
 
 export interface DprRow {
-  id: number;
+  id?: number;
   vessel_name: string;
   branch: string;
   report_date: string;
