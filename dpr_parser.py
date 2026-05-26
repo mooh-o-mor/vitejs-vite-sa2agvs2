@@ -242,17 +242,17 @@ def read_docx_attachment(data: bytes) -> str:
     try:
         doc = DocxDocument(io.BytesIO(data))
 
-        # Параграфы внутри таблиц — собираем id, чтобы не читать дважды через doc.paragraphs
-        table_para_ids: set = set()
+        # Параграфы внутри таблиц — по XML-элементу (python-docx создаёт новые обёртки)
+        table_para_elems: set = set()
         for tbl in doc.tables:
             for row in tbl.rows:
                 for cell in row.cells:
                     for para in cell.paragraphs:
-                        table_para_ids.add(id(para))
+                        table_para_elems.add(id(para._element))
 
         # Нетабличные параграфы
         parts = [p.text for p in doc.paragraphs
-                 if p.text.strip() and id(p) not in table_para_ids]
+                 if p.text.strip() and id(p._element) not in table_para_elems]
 
         # Таблицы: если 2 колонки — колонка 1 лейбл (N. Описание), колонка 2 значение
         for tbl in doc.tables:
@@ -422,27 +422,58 @@ def _read_msg_attachments_cfb(raw_msg: bytes) -> list[tuple[str, bytes]]:
     return attachments
 
 def _read_docx_from_bytes(data: bytes) -> str:
-    """Извлекает текст из .docx (ZIP/XML) без python-docx."""
+    """Извлекает текст из .docx (ZIP/XML) без python-docx.
+
+    Таблицы с двумя колонками («N. Описание» | «значение») обрабатываются
+    отдельно — берётся только колонка значения, лейблы не попадают в поля.
+    """
+    def _para_text(p_xml: str) -> str:
+        texts = re.findall(r"<w:t[^>]*>(.*?)</w:t>", p_xml)
+        t = "".join(texts)
+        t = t.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        t = t.replace("&apos;", "'").replace("&quot;", "\"")
+        t = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), t)
+        t = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), t)
+        return t.strip()
+
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             if "word/document.xml" not in zf.namelist():
                 return ""
-            xml_bytes = zf.read("word/document.xml")
-        xml_text = xml_bytes.decode("utf-8", errors="replace")
-        # Извлекаем параграфы
-        paragraphs = re.findall(r"<w:p[^>]*>(.*?)</w:p>", xml_text, re.DOTALL)
-        lines = []
-        for p in paragraphs:
-            texts = re.findall(r"<w:t[^>]*>(.*?)</w:t>", p)
-            line = "".join(texts)
-            # Декодируем XML entities
-            line = line.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-            line = line.replace("&apos;", "'").replace("&quot;", "\"")
-            line = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), line)
-            line = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), line)
-            line = line.strip()
+            xml_text = zf.read("word/document.xml").decode("utf-8", errors="replace")
+
+        lines: list[str] = []
+
+        # Убираем таблицы из основного потока, чтобы не читать их параграфы дважды
+        xml_no_tables = re.sub(r"<w:tbl\b[^>]*>.*?</w:tbl>", "", xml_text, flags=re.DOTALL)
+
+        # Нетабличные параграфы
+        for p in re.findall(r"<w:p[^>]*>(.*?)</w:p>", xml_no_tables, re.DOTALL):
+            line = _para_text(p)
             if line:
                 lines.append(line)
+
+        # Таблицы: двухколоночный формат ДПР (лейбл | значение)
+        for tbl in re.findall(r"<w:tbl\b[^>]*>(.*?)</w:tbl>", xml_text, re.DOTALL):
+            for row in re.findall(r"<w:tr\b[^>]*>(.*?)</w:tr>", tbl, re.DOTALL):
+                cells = re.findall(r"<w:tc\b[^>]*>(.*?)</w:tc>", row, re.DOTALL)
+                cell_texts = []
+                for cell in cells:
+                    paras = re.findall(r"<w:p[^>]*>(.*?)</w:p>", cell, re.DOTALL)
+                    ct = " ".join(_para_text(p) for p in paras).strip()
+                    if ct:
+                        cell_texts.append(ct)
+                if len(cell_texts) >= 2:
+                    label, value = cell_texts[0], cell_texts[1]
+                    m = re.match(r"^(\d{1,2})[.)]\s*", label)
+                    if m:
+                        val = re.sub(r"^\d{1,2}[.)]\s*", "", value).strip() or value
+                        lines.append(f"{m.group(1)}.  {val}")
+                    else:
+                        lines.append("  ".join(cell_texts))
+                elif cell_texts:
+                    lines.append(cell_texts[0])
+
         return "\n".join(lines)
     except Exception as e:
         log.debug(f"_read_docx_from_bytes error: {e}")
