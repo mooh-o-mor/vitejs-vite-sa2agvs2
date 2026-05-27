@@ -913,13 +913,15 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
 
         # ── Убираем метку и единицы измерения ──
         # Убираем лидирующую метку
+        # ВАЖНО: \b после группы предотвращает совпадение bare "m" с "M10"/"M14"
+        # (иначе Python выбирает |m| раньше |m10| при левосторонней проверке альтернатив)
         cleaned = token
         cleaned = re.sub(r"^(ДТ|DT|IFO|ТТ|TT|MGO)\s*[:-]?\s*", "", cleaned, flags=re.I)
-        cleaned = re.sub(rf"^({OIL_LABELS})\s*[:-]?\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(rf"^({OIL_LABELS})\b\s*[:-]?\s*", "", cleaned, flags=re.I)
         cleaned = re.sub(r"^(В|V|Вода|Water)\s*[:-]?\s*", "", cleaned, flags=re.I)
         # После снятия основного лейбла убираем:
         # 1) Суб-лейбл масла (марка): "M10 ", "M14 ", "МГД " — чтобы "М M10 223-0" → "223-0"
-        cleaned = re.sub(rf"^({OIL_LABELS})\s*[:-]?\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(rf"^({OIL_LABELS})\b\s*[:-]?\s*", "", cleaned, flags=re.I)
         # 2) Вязкостная марка: "15w40", "5W30", "10W40" — чтобы "15w40: 5202-0" → "5202-0"
         cleaned = re.sub(r"^\d+[wW]\d+\s*[:-]?\s*", "", cleaned)
         # Убираем единицы измерения: т, т., кг, кг., л, (т), (л), (кг)
