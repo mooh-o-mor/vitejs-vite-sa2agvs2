@@ -332,7 +332,12 @@ mapRef.current.addEventListener("touchend", (e) => {
   }
 
   useEffect(() => {
-    if (selDate) loadVessels(selDate);
+    if (dataSource === "vessels") {
+      // vessel_dpr: не зависим от selDate — показываем всех с последней записью за 30 дней
+      loadVessels("");
+    } else if (selDate) {
+      loadVessels(selDate);
+    }
   }, [selDate, dataSource]);
 
   /** Маппинг VesselDprRow → DprRow + новые поля для vessel_dpr */
@@ -391,26 +396,29 @@ mapRef.current.addEventListener("touchend", (e) => {
         .order("report_date", { ascending: false })
         .limit(1000);
 
-      // Дедупликация: оставляем запись с максимальным report_date для каждого судна
+      // Дедупликация: для каждого судна оставляем запись с наибольшим report_date.
+      // При равных датах предпочитаем parse_ok=true (есть координаты) над false.
       const seen = new Map<string, VesselDprRow>();
       for (const row of (data || [])) {
         const v = row as VesselDprRow;
-        if (!seen.has(v.vessel_name)) {
+        const existing = seen.get(v.vessel_name);
+        if (
+          !existing ||
+          v.report_date > existing.report_date ||
+          (v.report_date === existing.report_date && v.parse_ok && !existing.parse_ok)
+        ) {
           seen.set(v.vessel_name, v);
         }
       }
 
+      // В режиме ДПР Судов показываем все суда с их ПОСЛЕДНЕЙ записью за 30 дней —
+      // без фильтра по выбранной дате, чтобы суда, отчитавшиеся вчера, тоже были видны.
       const mapped = Array.from(seen.values()).map((v) => mapVesselDprToDprRow(v));
 
-      // Фильтр по выбранной дате (если указана)
-      const filtered = date
-        ? mapped.filter((v) => v.report_date === date)
-        : mapped;
-
       // Алфавитная сортировка по названию судна
-      filtered.sort((a, b) => a.vessel_name.localeCompare(b.vessel_name, "ru"));
+      mapped.sort((a, b) => a.vessel_name.localeCompare(b.vessel_name, "ru"));
 
-      setVessels(filtered);
+      setVessels(mapped);
     }
     setSelVessel(null);
     setLoading(false);
