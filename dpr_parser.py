@@ -805,10 +805,18 @@ def extract_all_text_from_msg(raw_msg: bytes, subject: str = "") -> tuple[str, s
 #  НОВЫЕ КОЛОНКИ vessel_dpr — парсинг запасов, погоды, курса, ETA
 # ════════════════════════════════════════════════════════════════════════════
 
+_SUPPLY_MAX = 99_999.99  # numeric(7,2) в Supabase — максимум
+
+
 def _safe_float(s: str) -> Optional[float]:
-    """Безопасное преобразование строки в float (None при ошибке)."""
+    """Безопасное преобразование строки в float (None при ошибке или >_SUPPLY_MAX)."""
     try:
-        return float(s.replace(" ", "").replace(",", "."))
+        v = float(s.replace(" ", "").replace(",", "."))
+        # Значения ≥ 100 000 явно некорректны (overflow numeric(7,2)) — возвращаем None
+        if abs(v) >= 100_000:
+            log.warning(f"  _safe_float: значение {v} превышает лимит колонки — игнорируем")
+            return None
+        return v
     except (ValueError, AttributeError):
         return None
 
@@ -909,6 +917,11 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         cleaned = re.sub(r"^(ДТ|DT|IFO|ТТ|TT|MGO)\s*[:-]?\s*", "", cleaned, flags=re.I)
         cleaned = re.sub(rf"^({OIL_LABELS})\s*[:-]?\s*", "", cleaned, flags=re.I)
         cleaned = re.sub(r"^(В|V|Вода|Water)\s*[:-]?\s*", "", cleaned, flags=re.I)
+        # После снятия основного лейбла убираем:
+        # 1) Суб-лейбл масла (марка): "M10 ", "M14 ", "МГД " — чтобы "М M10 223-0" → "223-0"
+        cleaned = re.sub(rf"^({OIL_LABELS})\s*[:-]?\s*", "", cleaned, flags=re.I)
+        # 2) Вязкостная марка: "15w40", "5W30", "10W40" — чтобы "15w40: 5202-0" → "5202-0"
+        cleaned = re.sub(r"^\d+[wW]\d+\s*[:-]?\s*", "", cleaned)
         # Убираем единицы измерения: т, т., кг, кг., л, (т), (л), (кг)
         cleaned = re.sub(r"\s*(?:т\.|т|кг\.?|кг|л|г)\b\s*", " ", cleaned, flags=re.I)
         cleaned = re.sub(r"\(\s*(?:т|кг|л)\s*\)", "", cleaned, flags=re.I)
