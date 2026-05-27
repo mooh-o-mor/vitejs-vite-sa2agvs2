@@ -410,11 +410,11 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
                 return { text: delta.toFixed(2), received: false }; // израсходовано
               };
 
-              const rows: [string, number | null, number | null][] = [
-                ["ДТ",    vr.fuel_dt_amt, prevAmts?.fuel_dt_amt ?? null],
-                ["ТТ",    vr.fuel_tt_amt, prevAmts?.fuel_tt_amt ?? null],
-                ["Масло", vr.oil_amt,     prevAmts?.oil_amt ?? null],
-                ["Вода",  vr.water_amt,   prevAmts?.water_amt ?? null],
+              const rows: [string, number | null, number | null, number | null][] = [
+                ["ДТ",    vr.fuel_dt_amt, prevAmts?.fuel_dt_amt ?? null, vr.fuel_dt_cons ?? null],
+                ["ТТ",    vr.fuel_tt_amt, prevAmts?.fuel_tt_amt ?? null, vr.fuel_tt_cons ?? null],
+                ["Масло", vr.oil_amt,     prevAmts?.oil_amt ?? null,     vr.oil_cons ?? null],
+                ["Вода",  vr.water_amt,   prevAmts?.water_amt ?? null,   vr.water_cons ?? null],
               ];
 
               return (
@@ -425,17 +425,20 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
                       <tr>
                         <th style={{ color: T.text2, fontWeight: "normal", textAlign: "left", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}></th>
                         <th style={{ color: T.text2, fontWeight: "normal", textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Остаток</th>
-                        <th style={{ color: T.text2, fontWeight: "normal", textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Расход</th>
+                        <th style={{ color: T.text2, fontWeight: "normal", textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>Δ</th>
+                        <th style={{ color: T.text2, fontWeight: "normal", textAlign: "right", padding: "3px 4px", borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>ДПР</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.filter(([, amt]) => amt != null).map(([label, amt, prevAmt]) => {
+                      {rows.filter(([, amt]) => amt != null).map(([label, amt, prevAmt, dbCons]) => {
                         const cons = calcCons(amt, prevAmt);
+                        const dbConsText = dbCons != null ? dbCons.toFixed(2) : "—";
                         return (
                           <tr key={label}>
                             <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontFamily: "monospace", fontSize: 10 }}>{label}</td>
                             <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace", textAlign: "right" }}>{amt != null ? amt : "—"}</td>
                             <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: cons.received ? "#1565C0" : "#c07800", fontFamily: "monospace", textAlign: "right" }}>{cons.text}</td>
+                            <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace", textAlign: "right", opacity: 0.7 }}>{dbConsText}</td>
                           </tr>
                         );
                       })}
