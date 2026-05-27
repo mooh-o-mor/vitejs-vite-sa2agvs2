@@ -930,6 +930,81 @@ def reparse_from_db(sb, vessel_filter: str = "", date_filter: str = "") -> None:
     print(f"\nРепарсинг завершён: {ok} обновлено, {fail} ошибок, {skip} пропущено")
 
 
+# ── Заполнение raw_body из почты ────────────────────────────────────────────
+
+def fill_raw_body(sb, ximss: "XIMSSSession") -> None:
+    """
+    Скачивает текст письма для всех записей vessel_dpr с пустым raw_body.
+    Использует email_uid для точечного запроса — одна сессия, без лишних логинов.
+    """
+    from dpr_parser import extract_fields, extract_all_text_from_msg
+
+    # Все записи без raw_body
+    res = sb.table("vessel_dpr").select("email_uid,vessel_name,report_date,dpr_type") \
+        .is_("raw_body", "null") \
+        .not_.is_("email_uid", "null") \
+        .execute()
+    rows = res.data or []
+    if not rows:
+        print("Все записи уже имеют raw_body — ничего не нужно делать.")
+        return
+
+    # Группируем по email_uid (один UID может дать несколько записей — разные dpr_type)
+    uid_map: dict[int, list[dict]] = {}
+    for row in rows:
+        uid = row["email_uid"]
+        uid_map.setdefault(uid, []).append(row)
+
+    print(f"Записей без raw_body: {len(rows)} (уникальных UID: {len(uid_map)})")
+    updated = skipped = failed = 0
+
+    for uid, uid_rows in uid_map.items():
+        names = ", ".join(r["vessel_name"] for r in uid_rows)
+        log.info(f"  UID {uid}: {names}")
+        try:
+            subject, sender, _, body = ximss.read_message(uid)
+        except Exception as e:
+            log.warning(f"  UID {uid}: ошибка read_message: {e}")
+            failed += len(uid_rows)
+            continue
+
+        # Проверяем, есть ли нумерованные поля в теле
+        body_fields = extract_fields(body, "") if body.strip() else {}
+        raw_text = body
+
+        # Если в теле нет полей — пробуем скачать raw MSG
+        if not body_fields:
+            try:
+                raw_msg = ximss.download_raw_message(uid)
+                if raw_msg:
+                    extracted, _, _ = extract_all_text_from_msg(raw_msg, subject)
+                    if extracted.strip():
+                        raw_text = extracted
+                        log.info(f"  UID {uid}: текст из raw MSG ({len(raw_text)} символов)")
+            except Exception as e:
+                log.warning(f"  UID {uid}: ошибка raw MSG: {e}")
+
+        if not raw_text.strip():
+            log.warning(f"  UID {uid}: пустой текст — пропускаем")
+            skipped += len(uid_rows)
+            continue
+
+        # Обновляем все DB-записи с этим UID
+        try:
+            sb.table("vessel_dpr") \
+                .update({"raw_body": raw_text}) \
+                .eq("email_uid", uid) \
+                .is_("raw_body", "null") \
+                .execute()
+            log.info(f"  UID {uid}: ✓ raw_body сохранён ({len(raw_text)} символов) для {len(uid_rows)} записи")
+            updated += len(uid_rows)
+        except Exception as e:
+            log.error(f"  UID {uid}: ошибка обновления БД: {e}")
+            failed += len(uid_rows)
+
+    print(f"\nЗаполнение raw_body завершено: {updated} обновлено, {skipped} пропущено, {failed} ошибок")
+
+
 # ── Точка входа ──────────────────────────────────────────────────────────────
 
 def main():
@@ -947,6 +1022,8 @@ def main():
                     help="Фильтр по имени судна для --reparse (подстрока): --vessel балтика")
     ap.add_argument("--date",     type=str, default="",
                     help="Фильтр по дате для --reparse (YYYY-MM-DD): --date 2026-05-27")
+    ap.add_argument("--fill-raw-body", action="store_true",
+                    help="Заполнить raw_body для всех записей без него (одна сессия в почте)")
     args = ap.parse_args()
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -963,6 +1040,19 @@ def main():
         from supabase import create_client
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         reparse_from_db(sb, vessel_filter=args.vessel, date_filter=args.date)
+        return
+
+    # ── Режим --fill-raw-body (одна почтовая сессия) ──
+    if getattr(args, "fill_raw_body", False):
+        if not SUPABASE_KEY:
+            sys.exit("Укажите SUPABASE_KEY в .env или переменных окружения")
+        from supabase import create_client
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        session_id, cookies, last_seq = get_or_create_session()
+        ximss = XIMSSSession(session_id, cookies, last_seq)
+        ximss.open_folder()
+        fill_raw_body(sb, ximss)
+        _save_session_cache(session_id, cookies, ximss.seq)
         return
 
     if not LOGIN or not PASSWORD:
