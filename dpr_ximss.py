@@ -184,6 +184,89 @@ def get_session(keep_driver=False):
     return session_id, cookies, max_seq
 
 
+# ── Кеш сессии (избегаем лишних логинов) ────────────────────────────────────
+
+_CACHE_FILE = os.path.join(os.path.dirname(__file__), "session_cache.json")
+_CACHE_TTL_HOURS = 6  # сессия CommuniGate живёт несколько часов
+
+
+def _save_session_cache(session_id: str, cookies: dict, max_seq: int) -> None:
+    """Сохраняет сессию на диск для повторного использования."""
+    try:
+        data = {
+            "session_id": session_id,
+            "cookies": cookies,
+            "max_seq": max_seq,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        log.debug(f"Сессия сохранена в кеш")
+    except Exception as e:
+        log.warning(f"Не удалось сохранить кеш сессии: {e}")
+
+
+def _load_session_cache() -> Optional[tuple]:
+    """Загружает кеш сессии. Возвращает (session_id, cookies, max_seq) или None."""
+    if not os.path.exists(_CACHE_FILE):
+        return None
+    try:
+        with open(_CACHE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        saved_at = datetime.fromisoformat(data["saved_at"])
+        age_hours = (datetime.now(timezone.utc) - saved_at).total_seconds() / 3600
+        if age_hours > _CACHE_TTL_HOURS:
+            log.debug(f"Кеш сессии устарел ({age_hours:.1f}ч > {_CACHE_TTL_HOURS}ч)")
+            return None
+        return data["session_id"], data["cookies"], int(data["max_seq"])
+    except Exception as e:
+        log.debug(f"Ошибка чтения кеша сессии: {e}")
+        return None
+
+
+def _test_cached_session(session_id: str, cookies: dict, max_seq: int) -> bool:
+    """Проверяет сессию через folderOpen — тот же запрос что делает open_folder().
+    Живая сессия → HTTP 200. Мёртвая → HTTP 4xx/5xx."""
+    try:
+        url = f"{BASE}/Session/{session_id}/sync"
+        seq = max_seq + 1
+        xml = f"""<XIMSS reqSeq="{seq}">
+  <folderOpen mailbox="{FOLDER_NAME}" sortField="INTERNALDATE"
+              sortOrder="desc" folder="{FOLDER_ID}" id="10">
+    <field>FLAGS</field><field>INTERNALDATE</field>
+  </folderOpen>
+</XIMSS>"""
+        r = requests.post(
+            f"{url}?reqSeq={seq}", data=xml,
+            cookies=cookies, headers={"Content-Type": "text/xml"},
+            verify=False, timeout=10
+        )
+        log.debug(f"Проверка кеша: HTTP {r.status_code}")
+        return r.status_code == 200
+    except Exception as e:
+        log.debug(f"Ошибка проверки кеша: {e}")
+        return False
+
+
+def get_or_create_session() -> tuple:
+    """
+    Возвращает (session_id, cookies, max_seq).
+    Сначала пробует кешированную сессию — при неудаче делает новый логин.
+    """
+    cached = _load_session_cache()
+    if cached:
+        session_id, cookies, max_seq = cached
+        log.info("Кеш сессии найден, проверяем...")
+        if _test_cached_session(session_id, cookies, max_seq):
+            log.info("✓ Кешированная сессия активна — логин пропускаем")
+            return session_id, cookies, max_seq + 1000
+        log.info("Кешированная сессия истекла, логинимся заново")
+
+    session_id, cookies, max_seq = get_session()
+    _save_session_cache(session_id, cookies, max_seq)
+    return session_id, cookies, max_seq
+
+
 # ── Webmail fallback для сообщений с вложениями ─────────────────────────────
 
 def _download_attachment_via_webmail(driver, uid: int, download_dir: str) -> Optional[str]:
@@ -551,6 +634,7 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
             "eta_place": None, "eta_date": None,
             "power_source": None, "port_status": None,
             "crew": None,
+            "raw_body": body or None,
         }
 
     if not vessel_name:
@@ -691,6 +775,8 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
         "port_status":   port_status,
         # Общее
         "crew":          crew_val,
+        # Сырой текст для репарсинга без почты
+        "raw_body":      body or None,
     }
 
 
@@ -789,17 +875,77 @@ def add_ports_interactive() -> None:
         print("\nНовых портов не добавлено.")
 
 
+# ── Репарсинг из raw_body без почты ─────────────────────────────────────────
+
+def reparse_from_db(sb, vessel_filter: str = "", date_filter: str = "") -> None:
+    """
+    Перепарсивает записи vessel_dpr из сохранённого raw_body —
+    без логина в почту. Обновляет все поля кроме raw_body.
+
+    vessel_filter — имя судна (substring, lowercase) или "" для всех
+    date_filter   — дата YYYY-MM-DD или "" для всех
+    """
+    query = sb.table("vessel_dpr").select("*").not_.is_("raw_body", "null")
+    if vessel_filter:
+        query = query.ilike("vessel_name", f"%{vessel_filter.lower()}%")
+    if date_filter:
+        query = query.eq("report_date", date_filter)
+    res = query.order("report_date", desc=True).execute()
+
+    rows = res.data or []
+    log.info(f"Записей для репарсинга: {len(rows)}")
+    ok = fail = skip = 0
+
+    for row in rows:
+        raw_body  = row["raw_body"]
+        subject   = row.get("email_subject") or ""
+        sender    = row.get("email_from") or ""
+        uid       = row.get("email_uid") or 0
+        v_name    = row.get("vessel_name", "?")
+        r_date    = row.get("report_date", "?")
+
+        log.info(f"  Репарсим: {v_name} / {r_date}")
+
+        # Пробуем стандартный парсер, затем doc-form
+        record = None
+        for is_form in (False, True):
+            record = parse_to_vessel_dpr(subject, sender, raw_body, uid, is_doc_form=is_form)
+            if record and record.get("parse_ok"):
+                break
+
+        if not record:
+            log.warning(f"  ✗ {v_name} / {r_date}: не удалось перепарсить")
+            fail += 1
+            continue
+
+        # Сохраняем оригинальный raw_body (parse_to_vessel_dpr мог его перезаписать)
+        record["raw_body"] = raw_body
+
+        if upsert_vessel_dpr(sb, record):
+            ok += 1
+        else:
+            fail += 1
+
+    print(f"\nРепарсинг завершён: {ok} обновлено, {fail} ошибок, {skip} пропущено")
+
+
 # ── Точка входа ──────────────────────────────────────────────────────────────
 
 def main():
     ap = argparse.ArgumentParser(description="ДПР с судов → vessel_dpr")
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--limit",   type=int, default=0)
-    ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--dry-run",  action="store_true")
+    ap.add_argument("--limit",    type=int, default=0)
+    ap.add_argument("--verbose",  action="store_true")
     ap.add_argument("--add-ports", action="store_true",
                     help="Интерактивное добавление координат для неизвестных портов")
-    ap.add_argument("--uids", type=str, default="",
+    ap.add_argument("--uids",     type=str, default="",
                     help="Обработать конкретные UID через запятую: --uids 2018,2504")
+    ap.add_argument("--reparse",  action="store_true",
+                    help="Перепарсить записи из raw_body без обращения к почте")
+    ap.add_argument("--vessel",   type=str, default="",
+                    help="Фильтр по имени судна для --reparse (подстрока): --vessel балтика")
+    ap.add_argument("--date",     type=str, default="",
+                    help="Фильтр по дате для --reparse (YYYY-MM-DD): --date 2026-05-27")
     args = ap.parse_args()
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -807,6 +953,15 @@ def main():
     # ── Режим --add-ports ──
     if args.add_ports:
         add_ports_interactive()
+        return
+
+    # ── Режим --reparse (без почты) ──
+    if args.reparse:
+        if not SUPABASE_KEY:
+            sys.exit("Укажите SUPABASE_KEY в .env или переменных окружения")
+        from supabase import create_client
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        reparse_from_db(sb, vessel_filter=args.vessel, date_filter=args.date)
         return
 
     if not LOGIN or not PASSWORD:
@@ -819,7 +974,7 @@ def main():
         from supabase import create_client
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    session_id, cookies, last_seq = get_session()
+    session_id, cookies, last_seq = get_or_create_session()
     ximss = XIMSSSession(session_id, cookies, last_seq)
     ximss.open_folder()
 
@@ -906,6 +1061,7 @@ def main():
                 log.info("  Переподключение к XIMSS...")
                 try:
                     session_id, cookies, last_seq = get_session()
+                    _save_session_cache(session_id, cookies, last_seq)
                     ximss = XIMSSSession(session_id, cookies, last_seq)
                     ximss.open_folder()
                     log.info("  Переподключение успешно — продолжаем")
@@ -979,6 +1135,10 @@ def main():
 
         driver.quit()
         log.info("Webmail fallback завершён")
+
+    # ── Обновляем кеш сессии с финальным seq (чтобы следующий запуск не перепутал номер) ──
+    if not args.dry_run:
+        _save_session_cache(session_id, cookies, ximss.seq)
 
     # ── Задача 5: условие остановки ──
     if sb and not args.dry_run and active_vessel_count > 0:

@@ -20,6 +20,8 @@ dist-ssr
 # Python
 __pycache__/
 *.pyc
+session_cache.json
+downloads/
 
 # Nested repos
 free-claude-code/
