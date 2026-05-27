@@ -724,6 +724,13 @@ def _read_eml_from_bytes(data: bytes) -> str:
                         parts.append(payload.decode(charset, errors="replace"))
                     except (LookupError, UnicodeDecodeError):
                         parts.append(payload.decode("utf-8", errors="replace"))
+            elif ct == "message/rfc822":
+                # Вложенное письмо .eml (пересланное/forwarded) — рекурсивно обходим
+                payload = part.get_payload()
+                subs = payload if isinstance(payload, list) else [payload]
+                for sub in subs:
+                    if hasattr(sub, "get_content_type"):
+                        _walk(sub)
             elif part.is_multipart():
                 for sub in part.get_payload():
                     if hasattr(sub, "get_content_type"):
@@ -782,7 +789,7 @@ def extract_all_text_from_msg(raw_msg: bytes, subject: str = "") -> tuple[str, s
                 text, is_form = t, False
                 break
 
-    # 2. Фолбэк: тело письма
+    # 2. Фолбэк: тело письма (CFB)
     if not text.strip():
         try:
             ole = olefile.OleFileIO(io.BytesIO(raw_msg))
@@ -796,7 +803,15 @@ def extract_all_text_from_msg(raw_msg: bytes, subject: str = "") -> tuple[str, s
         except Exception:
             pass
 
-    # 3. Определяем тип ДПР
+    # 3. Фолбэк: RFC-822 (mode=source от XIMSS — пересланное письмо с .eml вложением)
+    # Если не OLE/CFB — пробуем как обычный email (message/rfc822 вложения обходятся рекурсивно)
+    if not text.strip() and raw_msg[:4] != b'\xd0\xcf\x11\xe0':
+        t = _read_eml_from_bytes(raw_msg)
+        if t.strip():
+            log.info(f"RFC-822 fallback (mode=source, {len(t)} chars)")
+            text = t
+
+    # 5. Определяем тип ДПР
     dpr_type = detect_report_type(subject, text[:400]) if text.strip() else ""
 
     return text, dpr_type, is_form
