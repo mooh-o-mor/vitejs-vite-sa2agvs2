@@ -118,16 +118,36 @@ def get_session(keep_driver=False):
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, "[data-test-id='login-input-password-field']"))
     ).send_keys(PASSWORD + Keys.RETURN)
-    time.sleep(5)
+
+    # Ждём появления /Session/ в сетевых логах (до 20 сек)
+    session_id, max_seq = None, 0
+    for attempt in range(20):
+        time.sleep(1)
+        raw_logs = driver.get_log("performance")
+        for entry in raw_logs:
+            try:
+                msg = json.loads(entry["message"])["message"]
+                if msg["method"] == "Network.requestWillBeSent":
+                    url = msg["params"]["request"].get("url", "")
+                    if "/Session/" in url and not session_id:
+                        session_id = url.split("/Session/")[1].split("/")[0]
+                    if "reqSeq=" in url and session_id:
+                        seq_val = int(url.split("reqSeq=")[1].split("&")[0])
+                        max_seq = max(max_seq, seq_val)
+            except Exception:
+                pass
+        if session_id:
+            log.debug(f"  Session found after {attempt+1}s")
+            break
+    # Если так и не нашли — читаем полный лог ещё раз
+    logs = driver.get_log("performance") if not session_id else []
 
     cookies = {c["name"]: c["value"] for c in driver.get_cookies()}
-    logs    = driver.get_log("performance")
 
     if not keep_driver:
         driver.quit()
         driver = None
 
-    session_id, max_seq = None, 0
     for entry in logs:
         msg = json.loads(entry["message"])["message"]
         method = msg["method"]
@@ -407,6 +427,18 @@ def _extract_time(f3):
     m = re.search(r"(\d{2}[:.]\d{2}\s*(?:МСК|UTC|мск)?)", f3)
     return m.group(1).strip() if m else ""
 
+
+def _parse_date_from_subject(subject: str) -> Optional["date"]:
+    """Извлекает последнюю дату из темы письма.
+    Для батчей «15, 16, 17, 18, 19.05.26» возвращает 19.05.2026."""
+    if not subject:
+        return None
+    hits = re.findall(r"\b(\d{1,2})[./](\d{2})[./](\d{2,4})\b", subject)
+    if hits:
+        d, mon, y = hits[-1]
+        return parse_date_from_field3(f"{d}.{mon}.{y}")
+    return None
+
 def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=False):
     """Парсит ДПР в формат vessel_dpr. Приоритет: вложения MSG → тело письма."""
     if not body.strip() and not raw_msg:
@@ -528,14 +560,21 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
     # ── Дата ──
     f3 = fields.get("3", "")
     f3_date = parse_date_from_field3(f3)
-    today = date.today()
-    if f3_date and abs((today - f3_date).days) > 7:
-        # Вероятная опечатка в поле 3 — используем сегодня
-        log.warning(f"  Дата из п.3 {f3_date} далеко от сегодня ({today}) → используем today")
-        report_date = today
-    else:
-        report_date = f3_date or today
-    report_time = _extract_time(f3)
+
+    # Если в поле 3 нет даты — пробуем поле 4 (иногда дата+место объединены)
+    if not f3_date:
+        f3_date = parse_date_from_field3(fields.get("4", ""))
+        if f3_date:
+            log.debug(f"  Дата из П.4: {f3_date}")
+
+    # Если и так нет — берём последнюю дату из темы письма
+    if not f3_date:
+        f3_date = _parse_date_from_subject(subject)
+        if f3_date:
+            log.debug(f"  Дата из темы: {f3_date}")
+
+    report_date = f3_date or date.today()
+    report_time = _extract_time(f3) or _extract_time(fields.get("4", ""))
 
     # ── Координаты ──
     coord_raw = build_coord_raw(fields, dpr_type)

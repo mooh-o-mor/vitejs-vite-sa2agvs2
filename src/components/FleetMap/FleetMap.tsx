@@ -407,6 +407,9 @@ mapRef.current.addEventListener("touchend", (e) => {
         ? mapped.filter((v) => v.report_date === date)
         : mapped;
 
+      // Алфавитная сортировка по названию судна
+      filtered.sort((a, b) => a.vessel_name.localeCompare(b.vessel_name, "ru"));
+
       setVessels(filtered);
     }
     setSelVessel(null);

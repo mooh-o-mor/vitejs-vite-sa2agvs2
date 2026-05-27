@@ -592,7 +592,7 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
                           // Нормализация поля 4
                           const displayValue = key === "4" ? normalizeLocation(value) : value;
                           return (
-                            <tr key={key} title={`П.${key}${fieldNames[key] ? ": " + fieldNames[key] : ""}`}
+                            <tr key={key} title={fieldNames[key] || undefined}
                                 style={{ cursor: "default" }}>
                               <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
                                 <span style={{ color: T.text2, fontFamily: "monospace", fontSize: 9, marginRight: 6 }}>П.{key}</span>
