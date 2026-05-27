@@ -523,7 +523,41 @@ def _parse_date_from_subject(subject: str) -> Optional["date"]:
         return parse_date_from_field3(f"{d}.{mon}.{y}")
     return None
 
-def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=False):
+
+def _parse_email_date(date_str: str) -> Optional["date"]:
+    """
+    Парсит дату из заголовка Date email-сообщения (RFC 2822).
+    Пример: 'Tue, 27 May 2026 06:15:00 +0300' → date(2026, 5, 27)
+    """
+    if not date_str:
+        return None
+    try:
+        import email.utils as _email_utils
+        tup = _email_utils.parsedate(date_str)
+        if tup and tup[0] and tup[1] and tup[2]:
+            return date(tup[0], tup[1], tup[2])
+    except Exception:
+        pass
+    # Резервный поиск: "27 May 2026" или "27 May 26"
+    MONTHS = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,
+              "jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12}
+    m = re.search(r"(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2,4})", date_str)
+    if m:
+        try:
+            d = int(m.group(1))
+            mon = MONTHS.get(m.group(2).lower())
+            y = int(m.group(3))
+            if y < 100:
+                y += 2000
+            if mon:
+                return date(y, mon, d)
+        except Exception:
+            pass
+    return None
+
+
+def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=False,
+                        email_date: Optional["date"] = None):
     """Парсит ДПР в формат vessel_dpr. Приоритет: вложения MSG → тело письма."""
     if not body.strip() and not raw_msg:
         log.warning("  Пустое тело и нет raw MSG — пропускаем")
@@ -608,12 +642,15 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
         if not branch:
             branch = detect_branch(vessel_name, sender, body[:500])
         log.info(f"  Судно: {vessel_name!r} (вложение не распарсено)  parse_ok=False")
+        fallback_date = (email_date
+                         or _parse_date_from_subject(subject)
+                         or date.today())
         return {
             "vessel_name":   vessel_name,
             "vessel_type":   vessel_type_val or None,
             "branch":        branch or None,
             "dpr_type":      dpr_type,
-            "report_date":   date.today().isoformat(),
+            "report_date":   fallback_date.isoformat(),
             "report_time":   None,
             "msg_time":      msg_time,
             "status":        None,
@@ -642,23 +679,27 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
         log.warning("  Название судна не определено — пропускаем")
         return None
 
-    # ── Дата ──
+    # ── Дата и время ──
+    # report_date: используем дату из параметров письма (надёжно, нет человеческого фактора).
+    # П.3 содержит дату, введённую экипажем — может быть с опечаткой (месяц/год).
+    # Порядок приоритетов:
+    #   1. email_date  — дата из Date-заголовка письма (передаётся из XIMSS)
+    #   2. тема письма — обычно содержит дату в явном виде
+    #   3. сегодня     — абсолютный фоллбэк
     f3 = fields.get("3", "")
-    f3_date = parse_date_from_field3(f3)
+    if email_date:
+        report_date = email_date
+        log.debug(f"  Дата из письма: {report_date}")
+    else:
+        subj_date = _parse_date_from_subject(subject)
+        if subj_date:
+            report_date = subj_date
+            log.debug(f"  Дата из темы: {report_date}")
+        else:
+            report_date = date.today()
+            log.debug(f"  Дата: сегодня ({report_date})")
 
-    # Если в поле 3 нет даты — пробуем поле 4 (иногда дата+место объединены)
-    if not f3_date:
-        f3_date = parse_date_from_field3(fields.get("4", ""))
-        if f3_date:
-            log.debug(f"  Дата из П.4: {f3_date}")
-
-    # Если и так нет — берём последнюю дату из темы письма
-    if not f3_date:
-        f3_date = _parse_date_from_subject(subject)
-        if f3_date:
-            log.debug(f"  Дата из темы: {f3_date}")
-
-    report_date = f3_date or date.today()
+    # Время суток — по-прежнему из П.3 (экипаж указывает время наблюдения)
     report_time = _extract_time(f3) or _extract_time(fields.get("4", ""))
 
     # ── Координаты ──
@@ -907,10 +948,22 @@ def reparse_from_db(sb, vessel_filter: str = "", date_filter: str = "") -> None:
 
         log.info(f"  Репарсим: {v_name} / {r_date}")
 
+        # Дата: тема письма (надёжно) → uploaded_at (дата обработки) → None
+        reparse_email_date: Optional[date] = _parse_date_from_subject(subject)
+        if not reparse_email_date:
+            uploaded_at_str = row.get("uploaded_at", "")
+            if uploaded_at_str:
+                try:
+                    reparse_email_date = date.fromisoformat(uploaded_at_str[:10])
+                except Exception:
+                    pass
+
         # Пробуем стандартный парсер, затем doc-form
         record = None
         for is_form in (False, True):
-            record = parse_to_vessel_dpr(subject, sender, raw_body, uid, is_doc_form=is_form)
+            record = parse_to_vessel_dpr(subject, sender, raw_body, uid,
+                                         is_doc_form=is_form,
+                                         email_date=reparse_email_date)
             if record and record.get("parse_ok"):
                 break
 
@@ -1132,9 +1185,11 @@ def main():
     for uid in uids:
         log.info(f"─── UID {uid} ───")
         try:
-            subject, sender, _, body = ximss.read_message(uid)
+            subject, sender, date_str, body = ximss.read_message(uid)
+            email_date = _parse_email_date(date_str)
             log.info(f"  От:   {sender}")
             log.info(f"  Тема: {subject!r}")
+            log.info(f"  Дата письма: {date_str!r} → {email_date}")
 
             # Скачиваем сырое сообщение ТОЛЬКО если нужно:
             # тело пустое / нет полей / есть намёк на вложение
@@ -1156,7 +1211,8 @@ def main():
             else:
                 log.debug(f"  Raw download пропущен (поля найдены в теле)")
 
-            record = parse_to_vessel_dpr(subject, sender, body, uid, raw_msg)
+            record = parse_to_vessel_dpr(subject, sender, body, uid, raw_msg,
+                                         email_date=email_date)
             if record is None:
                 skip += 1
                 if not args.dry_run:
@@ -1242,8 +1298,10 @@ def main():
                 log.info(f"  UID {uid}: извлечено {len(att_text)} символов из {os.path.basename(filepath)}")
 
                 # Повторный парсинг с извлечённым текстом
-                subject, sender, _, _body = ximss.read_message(uid)
-                record2 = parse_to_vessel_dpr(subject, sender, att_text, uid, raw_msg=None, is_doc_form=is_form)
+                subject, sender, date_str2, _body = ximss.read_message(uid)
+                email_date2 = _parse_email_date(date_str2)
+                record2 = parse_to_vessel_dpr(subject, sender, att_text, uid, raw_msg=None,
+                                              is_doc_form=is_form, email_date=email_date2)
                 if record2 and record2.get("parse_ok"):
                     if upsert_vessel_dpr(sb, record2):
                         log.info(f"  UID {uid}: ✓ обновлён через webmail")
