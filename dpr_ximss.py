@@ -381,12 +381,14 @@ class XIMSSSession:
         if r is not None:
             log.info(f"Папка !ДИСП: {r.get('messages','?')} писем, {r.get('unseen','?')} непрочитанных")
 
-    def get_today_uids(self, limit=0):
-        """Возвращает UID сообщений за сегодня (по INTERNALDATE), игнорируя флаг Seen."""
+    def get_today_uids(self, limit=0, all_uids=False):
+        """Возвращает UID сообщений за сегодня (по INTERNALDATE), игнорируя флаг Seen.
+        all_uids=True — возвращает ВСЕ UIDs в папке (без фильтра по дате).
+        """
         today = date.today().strftime("%Y%m%d")
         xml = f"""<XIMSS>
   <folderBrowse folder="{FOLDER_ID}" id="11">
-    <index from="0" till="499"/>
+    <index from="0" till="999"/>
   </folderBrowse>
 </XIMSS>"""
         root = self.call(xml)
@@ -395,13 +397,17 @@ class XIMSSSession:
             uid = r.get("UID")
             if not uid:
                 continue
-            # INTERNALDATE text: "20260525T051440Z"  localTime attr: "20260525T081440"
-            internaldate_el = r.find("INTERNALDATE")
-            internaldate    = (internaldate_el.text or "") if internaldate_el is not None else ""
-            local_time      = (internaldate_el.get("localTime", "") if internaldate_el is not None else "")
-            if internaldate.startswith(today) or local_time.startswith(today):
+            if all_uids:
                 uids.append(int(uid))
-        log.info(f"Сообщений за {today}: {len(uids)}")
+            else:
+                # INTERNALDATE text: "20260525T051440Z"  localTime attr: "20260525T081440"
+                internaldate_el = r.find("INTERNALDATE")
+                internaldate    = (internaldate_el.text or "") if internaldate_el is not None else ""
+                local_time      = (internaldate_el.get("localTime", "") if internaldate_el is not None else "")
+                if internaldate.startswith(today) or local_time.startswith(today):
+                    uids.append(int(uid))
+        label = "всего в папке" if all_uids else f"за {today}"
+        log.info(f"Сообщений {label}: {len(uids)}")
         if limit:
             uids = uids[:limit]
             log.info(f"Лимит: {limit}")
@@ -1111,6 +1117,10 @@ def main():
                     help="Фильтр по дате для --reparse (YYYY-MM-DD): --date 2026-05-27")
     ap.add_argument("--fill-raw-body", action="store_true",
                     help="Заполнить raw_body для всех записей без него (одна сессия в почте)")
+    ap.add_argument("--all-uids", action="store_true",
+                    help="Обработать ВСЕ письма в папке (не только сегодняшние)")
+    ap.add_argument("--truncate", action="store_true",
+                    help="Очистить таблицу vessel_dpr перед обработкой (использовать с --all-uids)")
     args = ap.parse_args()
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -1152,6 +1162,17 @@ def main():
         from supabase import create_client
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+        # ── --truncate: очищаем таблицу перед полным перегоном ──
+        if getattr(args, "truncate", False):
+            log.info("─── TRUNCATE: удаляем все записи vessel_dpr ───")
+            try:
+                # Supabase не поддерживает DELETE без фильтра — используем neq id=0
+                sb.table("vessel_dpr").delete().neq("id", 0).execute()
+                log.info("  ✓ Таблица vessel_dpr очищена")
+            except Exception as e:
+                log.error(f"  ✗ Ошибка очистки: {e}")
+                sys.exit(1)
+
     session_id, cookies, last_seq = get_or_create_session()
     ximss = XIMSSSession(session_id, cookies, last_seq)
     ximss.open_folder()
@@ -1175,7 +1196,7 @@ def main():
         uids = [int(u.strip()) for u in args.uids.split(",") if u.strip()]
         log.info(f"Режим --uids: обрабатываем {uids}")
     else:
-        uids = ximss.get_today_uids(limit=args.limit)
+        uids = ximss.get_today_uids(limit=args.limit, all_uids=getattr(args, "all_uids", False))
     if not uids:
         log.info("Новых писем нет")
         return

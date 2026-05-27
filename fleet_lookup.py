@@ -147,17 +147,22 @@ _ALIASES: dict[str, str] = {
     "светломор 3": "светломор-3",
     # Распространённые email-паттерны sh.XXX@morspas.ru
     # Добавляйте сюда по мере появления новых судов
-    "k martyshkin":   "капитан мартышкин",
-    "k.martyshkin":   "капитан мартышкин",
-    "k beklemishev":  "капитан беклемишев",
-    "k.beklemishev":  "капитан беклемишев",
-    "lazurit":        "лазурит",
-    "svetlomor 3":    "светломор-3",
-    "epron":          "эпрон",
-    "otto shmidt":    "отто шмидт",
-    "otto.shmidt":    "отто шмидт",
-    "neftegaz 55":    "нефтегаз-55",
-    "yasny":          "ясный",
+    "k martyshkin":       "капитан мартышкин",
+    "k.martyshkin":       "капитан мартышкин",
+    "k beklemishev":      "капитан беклемишев",
+    "k.beklemishev":      "капитан беклемишев",
+    "merkuriy":           "меркурий",
+    "s zaborshchikov":    "спасатель заборщиков",
+    "s.zaborshchikov":    "спасатель заборщиков",
+    "zaborshchikov":      "спасатель заборщиков",
+    "zaborshikov":        "спасатель заборщиков",
+    "lazurit":            "лазурит",
+    "svetlomor 3":        "светломор-3",
+    "epron":              "эпрон",
+    "otto shmidt":        "отто шмидт",
+    "otto.shmidt":        "отто шмидт",
+    "neftegaz 55":        "нефтегаз-55",
+    "yasny":              "ясный",
 }
 
 
