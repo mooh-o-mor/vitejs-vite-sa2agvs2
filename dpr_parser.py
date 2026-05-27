@@ -140,15 +140,20 @@ _BRANCH_MAP: list[tuple[str, re.Pattern]] = [
 # Формат B: "1  Текст" (Каспийский филиал — два пробела вместо точки)
 # Формат C: "1.Название" (без пробела — DOC-шаблоны)
 # Формат D: "П.1Текст"  (Беклемишев — номер сразу за значением, без разделителя)
+# Много-веточный regex для захвата номеров полей.
+# При split() с несколькими группами возвращает None для несматченных групп —
+# обработчик в extract_fields() пропускает None.
 _FIELD_LINE_RE = re.compile(
-    r"^\s*(?:[Пп]\.?\s*)?(\d{1,2})"
-    r"(?:"
-    r"[.)](?!\d)\s*"    # "1. Текст" или "1) Текст" — НЕ "27.05.26" (цифра после точки)
+    r"^\s*[Пп]\.?\s*(\d{1,2})(?=\S)"            # 1: П.N → любой не-пробел после
     r"|"
-    r"\s{2,}"            # "1  Текст" (Каспий)
+    r"^\s*(\d{1,2})[.)](?!\d)\s*"                # 2: N. или N) — НЕ дата
     r"|"
-    r"(?=[А-ЯЁа-яёA-Za-z])"  # "1Текст" (Беклемишев) — только буква сразу за номером
-    r")",
+    r"^\s*(\d{1,2})\s{2,}"                       # 3: N + два пробела (Каспий)
+    r"|"
+    r"^\s*(\d{1,2})(?=[А-ЯЁа-яёA-Za-z])"         # 4: N сразу + буква
+    r"|"
+    r"^\s*(\d{1,2})(?=/[А-ЯЁа-яёA-Za-z])"        # 5: "12/нет" — слеш + буква (НЕ дата 12/05)
+    ,
     re.MULTILINE,
 )
 
@@ -272,16 +277,27 @@ def extract_fields(body: str, dpr_type: str = "МОРЕ") -> dict[str, str]:
     chunks = _FIELD_LINE_RE.split(text)
 
     # Собираем упорядоченный список (num, value) для пост-фильтрации
+    # Split с 5 группами: [pre, g1..g5, val, g1..g5, val, ...]
+    # Находим первый не-None среди g1..g5 — это номер поля
+    N_GROUPS = 5
     ordered_candidates: list[tuple[str, str]] = []
     i = 1
-    while i + 1 < len(chunks):
-        num = chunks[i].strip()
-        if num.isdigit():
-            num = str(int(num))  # "01" → "1"
-        val = _clean_value(chunks[i + 1]) if i + 1 < len(chunks) else ""
+    while i + N_GROUPS < len(chunks):
+        # Ищем не-None номер среди N групп
+        num = None
+        for j in range(N_GROUPS):
+            g = chunks[i + j]
+            if g is not None:
+                num = g.strip()
+                break
+        if num is None or not num.isdigit():
+            i += N_GROUPS + 1
+            continue
+        num = str(int(num))  # "01" → "1"
+        val = _clean_value(chunks[i + N_GROUPS])  # значение после N групп
         if num and val:
             ordered_candidates.append((num, val))
-        i += 2
+        i += N_GROUPS + 1
 
     # ── Пост-фильтрация ──
     # Двухпроходный алгоритм:
