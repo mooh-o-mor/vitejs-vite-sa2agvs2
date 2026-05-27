@@ -380,6 +380,16 @@ class XIMSSSession:
         r = root.find(f".//folderReport[@folder='{FOLDER_ID}'][@mode='init']")
         if r is not None:
             log.info(f"Папка !ДИСП: {r.get('messages','?')} писем, {r.get('unseen','?')} непрочитанных")
+        else:
+            # Папка не открылась с первой попытки (накопленные ответы сессии).
+            # Повторяем open_folder ещё раз.
+            log.debug("  open_folder: init report не получен, повтор...")
+            root2 = self.call(xml)
+            r2 = root2.find(f".//folderReport[@folder='{FOLDER_ID}'][@mode='init']")
+            if r2 is not None:
+                log.info(f"Папка !ДИСП (retry): {r2.get('messages','?')} писем, {r2.get('unseen','?')} непрочитанных")
+            else:
+                log.warning("  open_folder: папка не открылась после retry")
 
     def get_today_uids(self, limit=0, all_uids=False):
         """Возвращает UID сообщений за сегодня (по INTERNALDATE), игнорируя флаг Seen.
@@ -461,6 +471,36 @@ class XIMSSSession:
         except Exception as e:
             log.debug(f"  download_raw error: {e}")
         return None
+
+    def read_embedded_eml_text(self, uid) -> str:
+        """
+        Пытается прочитать текст из вложенного .eml (message/rfc822) через XIMSS.
+        Использует partID-путь "02-01" (часть 2 → вложенный .eml, часть 1 → текст).
+        Работает для "Fwd:" писем с вложением .eml (подтверждено для Ростов Великий).
+        Возвращает текст тела или ''.
+        """
+        for part_id in ("02-01", "03-01", "02-01-01"):
+            try:
+                xml = f"""<XIMSS>
+  <folderRead mode="text" folder="{FOLDER_ID}" UID="{uid}" partID="{part_id}"
+              totalSizeLimit="-1" id="24"/>
+</XIMSS>"""
+                root = self.call(xml)
+                resp = root.find('.//response[@id="24"]')
+                if resp is not None and resp.get("errorText"):
+                    continue
+                email_el = root.find(".//EMail")
+                if email_el is None:
+                    continue
+                for mime in email_el.findall(".//MIME"):
+                    text = (mime.text or "").strip()
+                    if text and not text.startswith("<") and not text.startswith("<!"):
+                        if len(text) > 50:
+                            log.info(f"  Embedded .eml text (partID={part_id}): {len(text)} chars")
+                            return text
+            except Exception as e:
+                log.debug(f"  read_embedded_eml_text partID={part_id}: {e}")
+        return ""
 
     def mark_seen(self, uid):
         self.call(f"""<XIMSS>
@@ -1088,6 +1128,13 @@ def fill_raw_body(sb, ximss: "XIMSSSession") -> "XIMSSSession":
             except Exception as e:
                 log.warning(f"  UID {uid}: ошибка raw MSG: {e}")
 
+        # Fallback: вложенный .eml через XIMSS partID
+        if not raw_text.strip() or not extract_fields(raw_text, ""):
+            emb_body = ximss.read_embedded_eml_text(uid)
+            if emb_body:
+                raw_text = emb_body
+                log.info(f"  UID {uid}: текст из embedded .eml ({len(raw_text)} символов)")
+
         if not raw_text.strip():
             log.warning(f"  UID {uid}: пустой текст — пропускаем")
             skipped += len(uid_rows)
@@ -1243,6 +1290,12 @@ def main():
                     log.warning(f"  Raw download failed: {e}")
             else:
                 log.debug(f"  Raw download пропущен (поля найдены в теле)")
+
+            # Fallback: вложенный .eml через XIMSS partID (Ростов Великий и др. "Fwd:" письма)
+            if not raw_msg and not body_fields:
+                emb_body = ximss.read_embedded_eml_text(uid)
+                if emb_body:
+                    body = emb_body
 
             record = parse_to_vessel_dpr(subject, sender, body, uid, raw_msg,
                                          email_date=email_date)
