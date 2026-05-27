@@ -82,7 +82,7 @@ _TYPE_KW: list[tuple[str, re.Pattern]] = [
 
 # Начало подписи — здесь обрезаем тело
 _SIGNATURE_RE = re.compile(
-    r"^(с\s+уважени|best\s+regards|км\s+[а-яё]|капитан\s+[а-яё]|master\b|\bkm\s+\w"
+    r"^(с\s+уважени|best\s+regards|спкм\s+[а-яё]|км\s+[а-яё]|капитан\s+[а-яё]|master\b|\bkm\s+\w"
     r"|тел[.:\s]|моб[.:\s]|mobile[.:\s]|vsat[.:\s]|inm[- ]c:|mmsi:|e[-\s]?mail:)",
     re.I | re.MULTILINE,
 )
@@ -104,6 +104,8 @@ _SIGNATURE_VALUE_STOP_PATTERNS: list[re.Pattern] = [
     re.compile(r'\+7\s*[\(\d]', re.IGNORECASE),
     re.compile(r'морская\s+спасательная\s+служба', re.IGNORECASE),
     re.compile(r'marine\s+rescue\s+service', re.IGNORECASE),
+    re.compile(r'спкм\s+[а-яёa-z]', re.IGNORECASE),
+    re.compile(r'(?:=\s*)?\bкм\s+[А-ЯЁа-яёA-Za-z]', re.IGNORECASE),
 ]
 
 # Координатный паттерн (поддерживаем все реальные форматы)
@@ -153,6 +155,8 @@ _FIELD_LINE_RE = re.compile(
     r"^\s*(\d{1,2})(?=[А-ЯЁа-яёA-Za-z])"         # 4: N сразу + буква
     r"|"
     r"^\s*(\d{1,2})(?=/[А-ЯЁа-яёA-Za-z])"        # 5: "12/нет" — слеш + буква (НЕ дата 12/05)
+    r"|"
+    r"^\s*(\d{1,2})[.](?=\d{1,3}\s*/)"           # 6: "6.1/240", "3.26/05/2026", "10.12/0" — N.digit/
     ,
     re.MULTILINE,
 )
@@ -263,7 +267,10 @@ def extract_fields(body: str, dpr_type: str = "МОРЕ") -> dict[str, str]:
     # Разбиваем склеенные поля на одной строке:
     # Только поля 1–14 — не трогаем даты (26.05), причалы (44.), координаты
     # Исключаем "/" перед полем — "НЕТ/ 1./" это список внутри поля, не новое поле
-    text = re.sub(r"([^\d/;])\s+((?:[1-9]|1[0-4])\s*[.)](?!\d))", r"\1\n\2", text)
+    text = re.sub(
+        r"([^\d/;])\s+((?:[1-9]|1[0-4])\s*[.)](?!\d)|(?:[1-9]|1[0-4])[.](?=\d{1,3}\s*/))",
+        r"\1\n\2", text,
+    )
 
     # Убираем маркеры цитирования email (>>>>> в начале строк)
     text = re.sub(r"^[> \t]*>+\s*", "", text, flags=re.MULTILINE)
@@ -280,7 +287,7 @@ def extract_fields(body: str, dpr_type: str = "МОРЕ") -> dict[str, str]:
     # Собираем упорядоченный список (num, value) для пост-фильтрации
     # Split с 5 группами: [pre, g1..g5, val, g1..g5, val, ...]
     # Находим первый не-None среди g1..g5 — это номер поля
-    N_GROUPS = 5
+    N_GROUPS = 6
     ordered_candidates: list[tuple[str, str]] = []
     i = 1
     while i + N_GROUPS < len(chunks):
@@ -827,6 +834,8 @@ _SUPPLY_MAX = 99_999.99  # numeric(7,2) в Supabase — максимум
 def _safe_float(s: str) -> Optional[float]:
     """Безопасное преобразование строки в float (None при ошибке или >_SUPPLY_MAX)."""
     try:
+        # Убираем пробелы и хвостовые десятичные разделители (напр. "29,3." → "29,3")
+        s = s.strip().rstrip(".,")
         v = float(s.replace(" ", "").replace(",", "."))
         # Значения ≥ 100 000 явно некорректны (overflow numeric(7,2)) — возвращаем None
         if abs(v) >= 100_000:
@@ -882,10 +891,13 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
     # water: В, V, Вода
     # ignore: Продукты, НЕТ, Нет, -
 
+    # Порядок важен: специфичные паттерны ДО bare м/m,
+    # иначе bare м «съест» начало «м-гдг», «m10» и т.п. при lookahead (?![letter])
     OIL_LABELS = (
-        r"м(?:асло)?|m|м[-\s]?гдг|m[-\s]?gdg|м[-\s]?вдг|m[-\s]?vdg"
-        r"|мгд|мвдг|мг|m10|m14|tpl|трl"
+        r"масло|м[-\s]?гдг|m[-\s]?gdg|м[-\s]?вдг|m[-\s]?vdg"
+        r"|мгдг|мвдг|мгд|мвдг|мг|m10|m14|tpl|трl|дм|мдг"
         r"|м[12]|m[12]"
+        r"|м|m"  # bare м/m — последними, после всех специфичных
     )
 
     # Разбиваем на сегменты: по " / ", " ; ", или по границе новой метки
@@ -893,12 +905,32 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
     raw = re.sub(r"(ДТ|ТТ|М|В)\s*:", r"\1 ", raw, flags=re.I)
     raw = re.sub(rf"({OIL_LABELS})\s*:", r"\1 ", raw, flags=re.I)
 
+    # Вставляем " / " перед метками запасов, у которых нет разделителя перед ними.
+    # Обрабатывает два случая:
+    #   1) Склеенный формат: "ДТ10,64тМ75,5кгВ9,7" → "ДТ10,64т / М75,5кг / В9,7"
+    #   2) Разделённый пробелами: "ДТ 31,7т  М - В 10,4" → "ДТ 31,7т / М - / В 10,4"
+    # Lookbehind исключает заглавные буквы (А-ЯЁA-Z), чтобы "ДТ MGO" не разбивалось:
+    # "Т" в конце "ДТ" — заглавная, поэтому инъекция перед "MGO" не срабатывает.
+    # Строчные единицы (т, кг, г, л) и цифры, скобки, тире — допустимые предшественники.
+    _FUEL_WATER_PAT = r"(?:ДТ|IFO|DT|ТТ|TT|MGO|ПВ|PV|[ВB](?:ода|ater)?|Water)"
+    # Двойной lookbehind (оба case-sensitive — без re.I!):
+    #   (?<=[^\s/;])     — предшествует не-разделитель
+    #   (?<![А-ЯЁA-Z])  — предшествует НЕ заглавная буква
+    # Второй lookbehind гарантирует, что "ДТ MGO" не разбивается ("Т" заглавная → стоп).
+    # Lookahead для меток — с inline (?i:...) для поддержки любого регистра.
+    raw = re.sub(
+        rf"(?<=[^\s/;])(?<![А-ЯЁA-Z])\s*(?=(?i:(?:{_FUEL_WATER_PAT}|{OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])))",
+        " / ",
+        raw,  # без re.I: нужна case-sensitive семантика для lookbehind
+    )
+
     tokens = re.split(r"\s*/\s*|\s*;\s*", raw)
 
     # Аккумуляторы для масла
     oil_amt_total = 0.0
     oil_cons_total = 0.0
-    oil_has_data = False
+    oil_has_data = False   # поле масла упомянуто
+    oil_has_value = False  # есть хотя бы одно число или явный прочерк (=0)
 
     for token in tokens:
         token = token.strip()
@@ -909,16 +941,16 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         supply_family = ""  # "fuel_dt", "fuel_tt", "oil", "water"
 
         # ДТ / IFO
-        if re.match(r"^(ДТ|DT|IFO)\b", token, re.I):
+        if re.match(r"^(ДТ|DT|IFO)(?![А-ЯЁа-яёA-Za-z])", token, re.I):
             supply_family = "fuel_dt"
         # ТТ / MGO
-        elif re.match(r"^(ТТ|TT|MGO)\b", token, re.I):
+        elif re.match(r"^(ТТ|TT|MGO)(?![А-ЯЁа-яёA-Za-z])", token, re.I):
             supply_family = "fuel_tt"
-        # Вода
-        elif re.match(r"^(В|V|Вода|Water)\b", token, re.I):
+        # Вода (В, V, Вода, Water, латинская B, ПВ/PV = пресная вода)
+        elif re.match(r"^(В|V|Вода|Water|B|ПВ|PV)(?![А-ЯЁа-яёA-Za-z])", token, re.I):
             supply_family = "water"
         # Масло (все виды)
-        elif re.match(rf"^({OIL_LABELS})\b", token, re.I):
+        elif re.match(rf"^({OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])", token, re.I):
             supply_family = "oil"
         # Голые числа без метки — пропускаем
         elif re.match(r"^\d", token):
@@ -928,22 +960,32 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
             continue
 
         # ── Убираем метку и единицы измерения ──
-        # Убираем лидирующую метку
-        # ВАЖНО: \b после группы предотвращает совпадение bare "m" с "M10"/"M14"
-        # (иначе Python выбирает |m| раньше |m10| при левосторонней проверке альтернатив)
+        # Убираем лидирующую метку.
+        # Используем (?![letter]) вместо \b: это позволяет убрать "ДТ" из "ДТ10,64т"
+        # и "М" из "М75,5кг" даже когда метка стоит прямо перед цифрой.
+        # OIL_LABELS уже упорядочены: специфичные паттерны (m10, м-гдг, …) идут
+        # раньше bare м/m, поэтому "М10 50" снимет "М10", а не "М".
         cleaned = token
         cleaned = re.sub(r"^(ДТ|DT|IFO|ТТ|TT|MGO)\s*[:-]?\s*", "", cleaned, flags=re.I)
-        cleaned = re.sub(rf"^({OIL_LABELS})\b\s*[:-]?\s*", "", cleaned, flags=re.I)
-        cleaned = re.sub(r"^(В|V|Вода|Water)\s*[:-]?\s*", "", cleaned, flags=re.I)
+        # Масло: только пробелы (не дефис): "М -" оставит cleaned="-" (явный нуль),
+        # "М-900" оставит cleaned="-900" → числа всё равно найдутся через findall(\d).
+        cleaned = re.sub(rf"^({OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(r"^(В|V|Вода|Water|B|ПВ|PV)\s*[:-]?\s*", "", cleaned, flags=re.I)
         # После снятия основного лейбла убираем:
         # 1) Суб-лейбл масла (марка): "M10 ", "M14 ", "МГД " — чтобы "М M10 223-0" → "223-0"
-        cleaned = re.sub(rf"^({OIL_LABELS})\b\s*[:-]?\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(rf"^({OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])\s*", "", cleaned, flags=re.I)
         # 2) Вязкостная марка: "15w40", "5W30", "10W40" — чтобы "15w40: 5202-0" → "5202-0"
         cleaned = re.sub(r"^\d+[wW]\d+\s*[:-]?\s*", "", cleaned)
         # Убираем единицы измерения: т, т., кг, кг., л, (т), (л), (кг)
         cleaned = re.sub(r"\s*(?:т\.|т|кг\.?|кг|л|г)\b\s*", " ", cleaned, flags=re.I)
         cleaned = re.sub(r"\(\s*(?:т|кг|л)\s*\)", "", cleaned, flags=re.I)
         cleaned = cleaned.strip()
+
+        # Если значение поля масла явный прочерк — это «масло = 0», сохраняем 0.
+        # Для пустого cleaned (без числа) — не трогаем флаг, масло не упомянуто.
+        if supply_family == "oil" and cleaned in ("-", "—", "–"):
+            oil_has_data = True
+            oil_has_value = True  # явный нуль — это валидное значение
 
         if not cleaned or cleaned in ("-", "—", "–"):
             continue
@@ -1012,12 +1054,15 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
             oil_has_data = True
             if amt is not None:
                 oil_amt_total += amt
+                oil_has_value = True
             if cons is not None:
                 oil_cons_total += cons
 
     # ── Суммированное масло ──
-    if oil_has_data:
-        result["oil_amt"] = round(oil_amt_total, 2) if oil_amt_total > 0 else None
+    # oil_amt=0 допустимо, если было явно указано (прочерк или число).
+    # Если «Масло» встречается только в шапке письма без числа — oil_has_value=False → None.
+    if oil_has_value:
+        result["oil_amt"] = round(oil_amt_total, 2)
         result["oil_cons"] = round(oil_cons_total, 2) if oil_cons_total > 0 else None
 
     return result

@@ -69,8 +69,12 @@ def lookup_port(
     sorted_keys = sorted(ports.keys(), key=len, reverse=True)
 
     for chunk in search_order:
+        # Нормализованный вариант: пробелы вокруг "/" убираем
+        # ("санкт-петербург/ причал" → "санкт-петербург/причал")
+        chunk_norm = re.sub(r"\s*/\s*", "/", chunk)
         for key in sorted_keys:
-            if key in chunk:
+            key_norm = re.sub(r"\s*/\s*", "/", key)
+            if key in chunk or key_norm in chunk_norm:
                 return ports[key]
 
     return None, None

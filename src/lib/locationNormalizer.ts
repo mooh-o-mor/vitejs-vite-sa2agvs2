@@ -68,6 +68,9 @@ export function extractLocation(raw: string): string {
   // 8. Убираем повторный "п." / "п " в начале остатка
   s = s.replace(/^[пП]\.?\s+/, "");
 
+  // 8b. Убираем "порт " в начале (оставшееся после 7-го шага)
+  s = s.replace(/^порт\s+/i, "");
+
   // 9. Убираем лишнее в конце, двойные пробелы и двойные запятые
   s = s
     .replace(/[.,\s]+$/, "")
@@ -133,8 +136,11 @@ export function findPortCoords(raw: string): [number, number] | null {
     .sort((a, b) => b.length - a.length);
 
   for (const chunk of searchOrder) {
+    // Нормализованный вариант: пробелы вокруг "/" убираем ("санкт-петербург/ причал" → "санкт-петербург/причал")
+    const chunkNorm = chunk.replace(/\s*\/\s*/g, "/");
     for (const key of sortedKeys) {
-      if (chunk.includes(key)) {
+      const keyNorm = key.replace(/\s*\/\s*/g, "/");
+      if (chunk.includes(key) || chunkNorm.includes(keyNorm)) {
         return PORTS[key];
       }
     }

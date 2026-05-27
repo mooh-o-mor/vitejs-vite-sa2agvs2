@@ -585,22 +585,22 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
                   )}
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                     <tbody>
-                      {Object.entries(vessel.fields_json!)
-                        .filter(([, v]) => v && v.trim())
-                        .sort(([a], [b]) => (parseInt(a) || 999) - (parseInt(b) || 999))
-                        .map(([key, value]) => {
-                          // Нормализация поля 4
-                          const displayValue = key === "4" ? normalizeLocation(value) : value;
-                          return (
-                            <tr key={key} title={fieldNames[key] || undefined}
-                                style={{ cursor: "default" }}>
-                              <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-                                <span style={{ color: T.text2, fontFamily: "monospace", fontSize: 9, marginRight: 6 }}>П.{key}</span>
-                                {displayValue}
-                              </td>
-                            </tr>
-                          );
-                        })}
+                      {Array.from({ length: isPort ? 10 : 14 }, (_, i) => String(i + 1)).map((key) => {
+                        const rawValue = vessel.fields_json![key];
+                        const hasValue = rawValue && rawValue.trim();
+                        const displayValue = hasValue
+                          ? (key === "4" ? normalizeLocation(rawValue) : rawValue)
+                          : null;
+                        return (
+                          <tr key={key} title={fieldNames[key] || undefined}
+                              style={{ cursor: "default" }}>
+                            <td style={{ padding: "4px 4px", borderBottom: `1px solid ${T.border}`, color: hasValue ? T.text : T.text2, fontSize: 11, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                              <span style={{ color: T.text2, fontFamily: "monospace", fontSize: 9, marginRight: 6 }}>П.{key}</span>
+                              {displayValue ?? <em style={{ opacity: 0.5 }}>Нет информации</em>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
