@@ -932,12 +932,44 @@ def reparse_from_db(sb, vessel_filter: str = "", date_filter: str = "") -> None:
 
 # ── Заполнение raw_body из почты ────────────────────────────────────────────
 
-def fill_raw_body(sb, ximss: "XIMSSSession") -> None:
+def fill_raw_body(sb, ximss: "XIMSSSession") -> "XIMSSSession":
     """
     Скачивает текст письма для всех записей vessel_dpr с пустым raw_body.
-    Использует email_uid для точечного запроса — одна сессия, без лишних логинов.
+    Использует email_uid для точечного запроса.
+    При обрыве сессии (SSL EOF / 400) переподключается и продолжает.
+    Возвращает актуальный ximss (может быть новая сессия после переподключения).
     """
+    import requests as _req
     from dpr_parser import extract_fields, extract_all_text_from_msg
+
+    def _reconnect() -> "XIMSSSession":
+        log.warning("  Переподключение: создаём новую сессию...")
+        sid, ck, seq = get_session()           # принудительный логин (не кэш)
+        _save_session_cache(sid, ck, seq)
+        xs = XIMSSSession(sid, ck, seq)
+        xs.open_folder()
+        log.info("  Переподключение: ✓ новая сессия готова")
+        return xs
+
+    def _fetch_text(xs, uid, subject_hint="") -> tuple[str, str, "XIMSSSession"]:
+        """Читает тело письма. При сбое сессии переподключается и пробует ещё раз."""
+        for attempt in range(2):
+            try:
+                subject, sender, _, body = xs.read_message(uid)
+                return subject, body, xs
+            except (_req.exceptions.SSLError, _req.exceptions.ConnectionError) as e:
+                if attempt == 0:
+                    log.warning(f"  UID {uid}: обрыв соединения ({type(e).__name__}), переподключаемся...")
+                    xs = _reconnect()
+                else:
+                    raise
+            except _req.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 400 and attempt == 0:
+                    log.warning(f"  UID {uid}: 400 (сбой seq), переподключаемся...")
+                    xs = _reconnect()
+                else:
+                    raise
+        return "", "", xs   # не достижимо
 
     # Все записи без raw_body
     res = sb.table("vessel_dpr").select("email_uid,vessel_name,report_date,dpr_type") \
@@ -947,7 +979,7 @@ def fill_raw_body(sb, ximss: "XIMSSSession") -> None:
     rows = res.data or []
     if not rows:
         print("Все записи уже имеют raw_body — ничего не нужно делать.")
-        return
+        return ximss
 
     # Группируем по email_uid (один UID может дать несколько записей — разные dpr_type)
     uid_map: dict[int, list[dict]] = {}
@@ -961,10 +993,11 @@ def fill_raw_body(sb, ximss: "XIMSSSession") -> None:
     for uid, uid_rows in uid_map.items():
         names = ", ".join(r["vessel_name"] for r in uid_rows)
         log.info(f"  UID {uid}: {names}")
+
         try:
-            subject, sender, _, body = ximss.read_message(uid)
+            subject, body, ximss = _fetch_text(ximss, uid)
         except Exception as e:
-            log.warning(f"  UID {uid}: ошибка read_message: {e}")
+            log.warning(f"  UID {uid}: не удалось прочитать: {e}")
             failed += len(uid_rows)
             continue
 
@@ -1003,6 +1036,7 @@ def fill_raw_body(sb, ximss: "XIMSSSession") -> None:
             failed += len(uid_rows)
 
     print(f"\nЗаполнение raw_body завершено: {updated} обновлено, {skipped} пропущено, {failed} ошибок")
+    return ximss
 
 
 # ── Точка входа ──────────────────────────────────────────────────────────────
@@ -1051,7 +1085,7 @@ def main():
         session_id, cookies, last_seq = get_or_create_session()
         ximss = XIMSSSession(session_id, cookies, last_seq)
         ximss.open_folder()
-        fill_raw_body(sb, ximss)
+        ximss = fill_raw_body(sb, ximss)   # может вернуть новый ximss после переподключения
         _save_session_cache(session_id, cookies, ximss.seq)
         return
 
