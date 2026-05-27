@@ -159,6 +159,12 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [specUrl, setSpecUrl] = useState<string | null>(null);
   const [imo, setImo] = useState<string>("");
+  const [prevAmts, setPrevAmts] = useState<{
+    fuel_dt_amt: number | null;
+    fuel_tt_amt: number | null;
+    oil_amt: number | null;
+    water_amt: number | null;
+  } | null>(null);
 
   const [weather, setWeather] = useState<{
     current: WeatherCurrent;
@@ -194,6 +200,24 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
     };
     fetchData();
   }, [nameWithoutPrefix]);
+
+  /* Загрузка предыдущей ДПР для расчёта расхода */
+  useEffect(() => {
+    if (dataSource !== "vessels") return;
+    setPrevAmts(null);
+    const fetchPrev = async () => {
+      const { data } = await supabase
+        .from("vessel_dpr")
+        .select("fuel_dt_amt, fuel_tt_amt, oil_amt, water_amt")
+        .eq("vessel_name", vessel.vessel_name)
+        .lt("report_date", vessel.report_date)
+        .order("report_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setPrevAmts(data ?? null);
+    };
+    fetchPrev();
+  }, [vessel.vessel_name, vessel.report_date, dataSource]);
 
   /* Загрузка погоды */
   useEffect(() => {
@@ -378,6 +402,21 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
               const vr = vessel as VesselDprMapRow;
               const hasSupplies = vr.fuel_dt_amt != null || vr.fuel_tt_amt != null || vr.oil_amt != null || vr.water_amt != null;
               if (!hasSupplies) return null;
+
+              const calcCons = (curr: number | null, prev: number | null): { text: string; received: boolean } => {
+                if (curr === null || prev === null) return { text: "—", received: false };
+                const delta = prev - curr;
+                if (delta < 0) return { text: `+${(-delta).toFixed(2)}`, received: true }; // получено
+                return { text: delta.toFixed(2), received: false }; // израсходовано
+              };
+
+              const rows: [string, number | null, number | null][] = [
+                ["ДТ",    vr.fuel_dt_amt, prevAmts?.fuel_dt_amt ?? null],
+                ["ТТ",    vr.fuel_tt_amt, prevAmts?.fuel_tt_amt ?? null],
+                ["Масло", vr.oil_amt,     prevAmts?.oil_amt ?? null],
+                ["Вода",  vr.water_amt,   prevAmts?.water_amt ?? null],
+              ];
+
               return (
                 <div style={{ marginTop: 6 }}>
                   <div style={{ fontSize: 10, color: T.text2, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "monospace", marginBottom: 4 }}>Запасы</div>
@@ -390,18 +429,16 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
                       </tr>
                     </thead>
                     <tbody>
-                      {[
-                        ["ДТ", vr.fuel_dt_amt, vr.fuel_dt_cons],
-                        ["ТТ", vr.fuel_tt_amt, vr.fuel_tt_cons],
-                        ["Масло", vr.oil_amt, vr.oil_cons],
-                        ["Вода", vr.water_amt, vr.water_cons],
-                      ].filter(([, amt, cons]) => amt != null || cons != null).map(([label, amt, cons]) => (
-                        <tr key={label as string}>
-                          <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontFamily: "monospace", fontSize: 10 }}>{label as string}</td>
-                          <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace", textAlign: "right" }}>{amt != null ? amt : "—"}</td>
-                          <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: "#c07800", fontFamily: "monospace", textAlign: "right" }}>{cons != null ? cons : "—"}</td>
-                        </tr>
-                      ))}
+                      {rows.filter(([, amt]) => amt != null).map(([label, amt, prevAmt]) => {
+                        const cons = calcCons(amt, prevAmt);
+                        return (
+                          <tr key={label}>
+                            <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.text, fontFamily: "monospace", fontSize: 10 }}>{label}</td>
+                            <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: T.accent, fontWeight: 600, fontFamily: "monospace", textAlign: "right" }}>{amt != null ? amt : "—"}</td>
+                            <td style={{ padding: "3px 4px", borderBottom: `1px solid ${T.border}`, color: cons.received ? "#1565C0" : "#c07800", fontFamily: "monospace", textAlign: "right" }}>{cons.text}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

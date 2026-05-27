@@ -91,7 +91,7 @@ const fuelCell = [dtAmt, ttHasAmt ? ttAmtRaw : ""].filter(Boolean).join("\n") ||
 const dtCons = formatSupplyCons(v.supplies, "ДТ");
 const ttConsRaw = formatSupplyCons(v.supplies, "Мазут") || formatSupplyCons(v.supplies, "ТТ");
 const consCell = [dtCons, ttHasAmt ? ttConsRaw : ""].filter(Boolean).join("\n") || "";
-    
+
     aoa.push([
       { v: i + 1, t: "n", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "546E7A" } } } },
       { v: formattedType, t: "s", s: { fill: rowFill, alignment: { horizontal: "center", ...wrap }, border: baseBorder, font: { sz: 10, color: { rgb: "1A2A3A" }, bold: true } } },

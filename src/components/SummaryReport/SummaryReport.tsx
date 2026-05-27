@@ -16,7 +16,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   const [vessels, setVessels] = useState<DprRow[]>([]);
   const [specMap, setSpecMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
-  
+
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterBranches, setFilterBranches] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
@@ -59,7 +59,7 @@ export function SummaryReport({ isAdmin: _isAdmin, canView }: { isAdmin: boolean
   }
 
   const updateField = useCallback((vesselName: string, field: string, newValue: string) => {
-    setVessels(prev => prev.map(v => 
+    setVessels(prev => prev.map(v =>
       v.vessel_name === vesselName ? { ...v, [field]: newValue } : v
     ));
   }, []);

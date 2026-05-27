@@ -55,7 +55,7 @@ log = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(__file__))
 try:
     from dpr_parser import (
-        detect_report_type, extract_fields, extract_fields_doc_form,
+        detect_report_type, extract_fields, extract_fields_doc_form, is_doc_form_text,
         extract_vessel_name, parse_date_from_field3, build_coord_raw,
         parse_coords, detect_branch,
         extract_all_text_from_msg, extract_msg_time,
@@ -1016,9 +1016,10 @@ def reparse_from_db(sb, vessel_filter: str = "", date_filter: str = "") -> None:
                 except Exception:
                     pass
 
-        # Пробуем стандартный парсер, затем doc-form
+        # Автодетект формата по тексту; при ошибке — fallback на второй вариант
+        auto_form = is_doc_form_text(raw_body)
         record = None
-        for is_form in (False, True):
+        for is_form in ([auto_form, not auto_form] if auto_form else [False, True]):
             record = parse_to_vessel_dpr(subject, sender, raw_body, uid,
                                          is_doc_form=is_form,
                                          email_date=reparse_email_date)

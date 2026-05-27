@@ -377,6 +377,21 @@ def extract_fields(body: str, dpr_type: str = "МОРЕ") -> dict[str, str]:
     return result
 
 
+def is_doc_form_text(text: str) -> bool:
+    """
+    Определяет, является ли текст форматом «таблица Word» (doc form),
+    где каждая строка содержит лейбл и значение с повторным номером поля:
+        "1.Название судна1.  Спасатель Заборщиков"
+    Признаки: слово "ФОРМА" в первых строках ИЛИ ≥2 строк с двойным номером поля.
+    """
+    head = text[:300]
+    if re.search(r"(?i)\bФОРМА\b", head):
+        return True
+    # Строка: начинается с N. (без пробела или с пробелом), потом текст, потом снова N. пробел
+    double_num = re.compile(r"^\s*(\d{1,2})[.)]\S.*\1[.]\s{2,}", re.MULTILINE)
+    return len(double_num.findall(text)) >= 2
+
+
 def extract_fields_doc_form(text: str, dpr_type: str = "МОРЕ") -> dict[str, str]:
     """
     Парсер для формата таблицы Word .doc: каждая строка объединяет
@@ -1013,18 +1028,16 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         if nums_clean:
             amt = nums_clean[0]
 
-        # Расход: после тире/дефиса
-        dash_m = re.search(r"[-–—]\s*(\d[\d\s]*[\d,.]*)", cleaned)
-        if dash_m:
-            cons_val = _safe_float(dash_m.group(1))
+        # Расход: последнее число после тире/дефиса
+        # Формат "ТИП [МАРКА] - ОСТАТОК ед - РАСХОД ед" → берём последний match,
+        # чтобы "ДТ MGO - 409,3 -1,5" дало расход 1,5, а не 409,3
+        dash_matches = re.findall(r"[-–—]\s*(\d[\d\s]*[\d,.]*)", cleaned)
+        if dash_matches:
+            cons_val = _safe_float(dash_matches[-1])
             if cons_val is not None:
                 cons = cons_val
         elif len(nums_clean) > 1:
             cons = nums_clean[1]
-
-        # Нормализация: если после дефиса "OO" → 0
-        if dash_m and re.match(r"^OO$", dash_m.group(1).strip(), re.I):
-            cons = 0.0
 
         # ── Конвертация кг→т ──
         # Для топлива (ДТ, ТТ) и воды: >2000 остаток или >50 расход → кг
@@ -1315,6 +1328,11 @@ def build_coord_raw(fields: dict[str, str], rtype: str) -> str:
             f4 = re.split(r"\s*/\s*\d{2}[:.]?\d{2}", f4)[0].strip()
         if not f4:
             return ""
+        # Убираем "порт " в начале (капитаны пишут "Порт Владивосток / Причал 44")
+        f4 = re.sub(r"(?i)^порт\s+", "", f4)
+        # Заменяем " / " как разделитель на ", " (но не трогаем "/число" — типа "270/03")
+        f4 = re.sub(r"\s+/\s+(?!\d)", ", ", f4)
+        f4 = f4.strip().rstrip(",")
         # Добавляем тип электропитания из п.7
         f7 = fields.get("7", "").strip().upper()
         if "СЭП" in f7:
