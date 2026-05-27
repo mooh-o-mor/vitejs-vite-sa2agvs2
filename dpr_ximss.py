@@ -287,17 +287,18 @@ def _download_attachment_via_webmail(driver, uid: int, download_dir: str) -> Opt
         target_btn = None
         for btn in buttons:
             text = (btn.text or "").strip().lower()
-            if text.endswith((".doc", ".docx")) or ".doc" in text:
+            if (text.endswith((".doc", ".docx", ".eml")) or
+                    ".doc" in text or text.endswith(".eml")):
                 target_btn = btn
                 log.info(f"  Webmail: кнопка вложения {btn.text.strip()!r}")
                 break
 
-        # Фолбэк: любая кнопка с .doc в тексте
+        # Фолбэк: любая кнопка с .doc или .eml в тексте
         if not target_btn:
             all_btns = driver.find_elements(By.TAG_NAME, "button")
             for btn in all_btns:
                 text = (btn.text or "").strip().lower()
-                if ".doc" in text:
+                if ".doc" in text or ".eml" in text:
                     target_btn = btn
                     log.info(f"  Webmail (fallback): кнопка {btn.text.strip()!r}")
                     break
@@ -327,7 +328,7 @@ def _download_attachment_via_webmail(driver, uid: int, download_dir: str) -> Opt
         for fname in os.listdir(download_dir):
             fp = os.path.join(download_dir, fname)
             mtime = os.path.getmtime(fp)
-            if time.time() - mtime < 30 and fname.lower().endswith((".doc", ".docx")):
+            if time.time() - mtime < 30 and fname.lower().endswith((".doc", ".docx", ".eml")):
                 candidates.append((mtime, fp))
         if candidates:
             candidates.sort(reverse=True)
@@ -1102,6 +1103,10 @@ def main():
                 elif fname_lower.endswith(".doc"):
                     from dpr_parser import read_doc_attachment
                     att_text, is_form = read_doc_attachment(file_data)
+                elif fname_lower.endswith(".eml"):
+                    from dpr_parser import _read_eml_from_bytes
+                    att_text = _read_eml_from_bytes(file_data)
+                    log.info(f"  UID {uid}: .eml вложение → RFC-822 текст {len(att_text)} символов")
                 else:
                     from dpr_parser import _read_text_attachment
                     att_text = _read_text_attachment(file_data)

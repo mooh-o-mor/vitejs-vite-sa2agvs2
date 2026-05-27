@@ -21,6 +21,7 @@ dpr_parser.py — Парсер ежедневных диспетчерских �
 from __future__ import annotations
 
 import argparse
+import email as _email_lib
 import io
 import json
 import logging
@@ -687,10 +688,41 @@ def _read_text_attachment(data: bytes) -> str:
         pass
     return ""
 
+def _read_eml_from_bytes(data: bytes) -> str:
+    """
+    Извлекает текст из RFC-822 .eml файла (пересланное письмо).
+    Обходит все MIME-части, собирает text/plain.
+    """
+    try:
+        msg = _email_lib.message_from_bytes(data)
+        parts: list[str] = []
+
+        def _walk(part) -> None:
+            ct = part.get_content_type()
+            if ct == "text/plain":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_param("charset") or "utf-8"
+                    try:
+                        parts.append(payload.decode(charset, errors="replace"))
+                    except (LookupError, UnicodeDecodeError):
+                        parts.append(payload.decode("utf-8", errors="replace"))
+            elif part.is_multipart():
+                for sub in part.get_payload():
+                    if hasattr(sub, "get_content_type"):
+                        _walk(sub)
+
+        _walk(msg)
+        return "\n\n".join(t for t in parts if t.strip())
+    except Exception as e:
+        log.debug(f"_read_eml_from_bytes error: {e}")
+        return ""
+
+
 def extract_all_text_from_msg(raw_msg: bytes, subject: str = "") -> tuple[str, str, bool]:
     """
     Извлекает текст ДПР из MSG-файла (CFB/OLE).
-    Приоритет: вложения (.docx/.doc/.dat/.txt) → тело письма.
+    Приоритет: вложения (.docx/.doc/.dat/.txt/.eml) → тело письма.
     Возвращает (текст, тип_ДПР, is_doc_form).
     """
     text = ""
@@ -716,6 +748,13 @@ def extract_all_text_from_msg(raw_msg: bytes, subject: str = "") -> tuple[str, s
             t = _read_text_attachment(data)
             if t.strip():
                 log.info(f"CFB вложение text: {fname}")
+                text, is_form = t, False
+                break
+        elif fname_lower.endswith(".eml"):
+            # RFC-822 пересланное письмо (.eml) — парсим Python email
+            t = _read_eml_from_bytes(data)
+            if t.strip():
+                log.info(f"CFB вложение .eml (RFC-822): {fname}")
                 text, is_form = t, False
                 break
         else:
