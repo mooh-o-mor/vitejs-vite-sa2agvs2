@@ -388,7 +388,7 @@ class XIMSSSession:
         today = date.today().strftime("%Y%m%d")
         xml = f"""<XIMSS>
   <folderBrowse folder="{FOLDER_ID}" id="11">
-    <index from="0" till="999"/>
+    <index from="0" till="499"/>
   </folderBrowse>
 </XIMSS>"""
         root = self.call(xml)
@@ -603,6 +603,18 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
 
     # ── Разрешение канонического имени и типа из fleet.xlsx ──
     fleet_info = resolve_vessel(raw_vessel_name, fields) if raw_vessel_name else None
+
+    # Если поле 1 дало нераспознанное имя — пробуем email sh.*@morspas.ru
+    # (защита от писем вида "1. На борт прибыли члены экипажа...")
+    if not fleet_info and raw_vessel_name and sender:
+        em_m = re.search(r"sh\.([^@]+)@morspas\.ru", sender, re.I)
+        if em_m:
+            email_name = _clean_name(em_m.group(1).replace(".", " ").replace("_", " "))
+            fi_email = resolve_vessel(email_name, fields) if email_name else None
+            if fi_email:
+                log.info(f"  Имя из email: {raw_vessel_name!r} → {email_name!r} → {fi_email.name!r}")
+                raw_vessel_name = email_name
+                fleet_info = fi_email
 
     # Если email-адрес дал что-то нераспознанное (напр. "s zaborshchikov"),
     # пробуем извлечь из темы письма напрямую
