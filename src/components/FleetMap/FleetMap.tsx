@@ -12,12 +12,14 @@ import { mkIcon, mkPieIcon } from "./mapIcons";
 import { Sidebar } from "./Sidebar";
 import { VesselPopup } from "./VesselPopup";
 
-function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
+function cls(stat: string | null | undefined): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
   const s = stat.toUpperCase();
   if (s.includes("АСГ")) return "asg";
-  if (s.includes("АСД")) return "asd";
-  if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
+  if (s.includes("АСД") || s.includes("КОНТР") || s.includes("ДОГО") ||
+      s.includes("ЧАРТ") || s.includes("БУКСИР") ||
+      /\bТ\/Ч\b/.test(s) || /\bТЧ\b/.test(s)) return "asd";
+  if (s.includes("РЕМ") || s.includes("ВОССТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
 }
 
@@ -444,9 +446,12 @@ mapRef.current.addEventListener("touchend", (e) => {
   }, [vessels]);
 
   const allStatuses = useMemo(() => {
-    if (dataSource === "branches") return ["Все", "АСГ", "АСД", "РЕМ"];
-    const types = new Set(vessels.map(v => v.status).filter(Boolean));
-    return ["Все", ...Array.from(types).sort()];
+    const seen = new Set(vessels.map(v => cls(v.status)).filter(c => c !== "oth"));
+    const labels: string[] = [];
+    if (seen.has("asg")) labels.push("АСГ");
+    if (seen.has("asd")) labels.push("АСД");
+    if (seen.has("rem")) labels.push("Ремонт");
+    return ["Все", ...labels];
   }, [vessels, dataSource]);
 
   const filtered = useMemo(() => {
@@ -455,9 +460,7 @@ mapRef.current.addEventListener("touchend", (e) => {
       const branchOk = filterBranch === "Все" || v.branch === filterBranch;
       const statusOk = filterStatus === "Все"
         ? true
-        : dataSource === "branches"
-          ? cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem")
-          : v.status === filterStatus;
+        : cls(v.status) === (filterStatus === "АСГ" ? "asg" : filterStatus === "АСД" ? "asd" : "rem");
       return typeOk && branchOk && statusOk;
     });
   }, [vessels, filterType, filterBranch, filterStatus, getVesselType, dataSource]);

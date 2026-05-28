@@ -11,12 +11,14 @@ interface Props {
   isMobile?: boolean;
 }
 
-function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
+function cls(stat: string | null | undefined): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
   const s = stat.toUpperCase();
-  if (s.startsWith("АСГ")) return "asg";
-  if (s.startsWith("АСД")) return "asd";
-  if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
+  if (s.includes("АСГ")) return "asg";
+  if (s.includes("АСД") || s.includes("КОНТР") || s.includes("ДОГО") ||
+      s.includes("ЧАРТ") || s.includes("БУКСИР") ||
+      /\bТ\/Ч\b/.test(s) || /\bТЧ\b/.test(s)) return "asd";
+  if (s.includes("РЕМ") || s.includes("ВОССТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
 }
 
