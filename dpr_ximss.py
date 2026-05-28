@@ -1248,9 +1248,22 @@ def run_collection(sb, args):
     """Одна итерация сбора почты из XIMSS → vessel_dpr."""
     import datetime as _dt
 
-    session_id, cookies, last_seq = get_or_create_session()
-    ximss = XIMSSSession(session_id, cookies, last_seq)
-    ximss.open_folder()
+    # При SSL EOF сразу после логина — повторяем сессию (до 3 раз)
+    for attempt in range(3):
+        session_id, cookies, last_seq = get_or_create_session()
+        ximss = XIMSSSession(session_id, cookies, last_seq)
+        try:
+            ximss.open_folder()
+            break  # успешно открыли папку
+        except Exception as e:
+            err = str(e).lower()
+            if attempt < 2 and any(k in err for k in ("ssl", "eof", "connection", "max retries")):
+                log.warning(f"open_folder попытка {attempt+1} не удалась ({e}), повтор через 15 сек...")
+                time.sleep(15)
+                # Сбрасываем кеш сессии чтобы получить свежую
+                _save_session_cache("", {}, 0)
+                continue
+            raise
 
     # ── Перечень активных судов (за последние 90 дней) ──
     active_vessel_count = 0
