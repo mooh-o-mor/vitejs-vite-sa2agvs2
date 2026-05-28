@@ -483,12 +483,10 @@ mapRef.current.addEventListener("touchend", (e) => {
     const getVesselMarkerStatus = (v: DprRow): "asg" | "asd" | "rem" | "oth" | "yellow" | "red" | "gray" => {
       if (dataSource !== "vessels") return cls(v.status);
       const vr = v as VesselDprMapRow;
-      if (isToday(v.report_date)) {
-        return vr.parse_ok ? cls(v.status) : "yellow";
-      }
-      // Ремонт — цвет маркера определяется статусом, не фактом отправки ДПР
-      if (cls(v.status) === "rem") return "rem";
-      return mskHour >= 8 ? "red" : "gray";
+      // Сегодняшняя ДПР во вложении (не распарсена) — жёлтый
+      if (isToday(v.report_date) && vr.parse_ok === false) return "yellow";
+      // Во всех остальных случаях — цвет статуса
+      return cls(v.status);
     };
 
     filtered.forEach((v) => {
