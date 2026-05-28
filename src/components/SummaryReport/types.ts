@@ -19,17 +19,19 @@ export interface DprRow {
 // ── Статусы ──
 export function statusCls(stat: string): "asg" | "asd" | "rem" | "oth" {
   const s = (stat || "").toUpperCase();
-  if (s.startsWith("АСГ")) return "asg";
-  if (s.startsWith("АСД")) return "asd";
-  if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
+  if (s.includes("АСГ")) return "asg";
+  if (s.includes("АСД") || s.includes("КОНТР") || s.includes("ДОГО") ||
+      s.includes("ЧАРТ") || s.includes("БУКСИР") ||
+      /\bТ\/Ч\b/.test(s) || /\bТЧ\b/.test(s)) return "asd";
+  if (s.includes("РЕМ") || s.includes("ВОССТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
 }
 
 export function shortStatus(stat: string): string {
-  const s = (stat || "").toUpperCase();
-  if (s.startsWith("АСГ")) return "АСГ";
-  if (s.startsWith("АСД")) return "АСД";
-  if (s.startsWith("РЕМ")) return "РЕМ";
+  const c = statusCls(stat);
+  if (c === "asg") return "АСГ";
+  if (c === "asd") return "АСД";
+  if (c === "rem") return "Ремонт";
   return stat;
 }
 
