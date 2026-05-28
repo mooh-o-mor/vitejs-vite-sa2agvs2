@@ -349,7 +349,8 @@ mapRef.current.addEventListener("touchend", (e) => {
     vessel_name: v.vessel_name,
     branch: v.branch,
     report_date: v.report_date,
-    status: v.status ?? v.dpr_type,   // поле 2: АСГ/АСД/РЕМ; fallback → МОРЕ/ПОРТ
+    status: v.status_norm || v.status || v.dpr_type,  // нормализованный → сырой → тип ДПР
+    status_norm: v.status_norm ?? null,
     coord_raw: v.coord_raw ?? "",
     lat: v.lat,
     lng: v.lng,

@@ -100,9 +100,11 @@ export interface VesselDprRow {
   port_status: string | null;
   // Общее
   crew: string | null;
+  status_norm: string | null;
 }
 
 export interface VesselDprMapRow extends DprRow {
+  status_norm: string | null;
   msg_time: string | null;
   parse_ok: boolean | null;
   dpr_type: string | null;

@@ -449,7 +449,7 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
             })()}
 
             {/* ── vessel_dpr: МОРЕ — курс, скорость, мили, ETA ── */}
-            {dataSource === "vessels" && vessel.status === "МОРЕ" && (() => {
+            {dataSource === "vessels" && (vessel as VesselDprMapRow).dpr_type === "МОРЕ" && (() => {
               const vr = vessel as VesselDprMapRow;
               const hasNav = vr.course != null || vr.speed_current != null || vr.distance_day != null || vr.eta_place;
               if (!hasNav) return null;
@@ -487,7 +487,7 @@ export function VesselPopup({ vessel, vesselType, canView, dataSource, onClose }
             })()}
 
             {/* ── vessel_dpr: ПОРТ — питание, статус ── */}
-            {dataSource === "vessels" && vessel.status === "ПОРТ" && (() => {
+            {dataSource === "vessels" && (vessel as VesselDprMapRow).dpr_type === "ПОРТ" && (() => {
               const vr = vessel as VesselDprMapRow;
               const hasPort = vr.power_source || vr.port_status;
               if (!hasPort) return null;

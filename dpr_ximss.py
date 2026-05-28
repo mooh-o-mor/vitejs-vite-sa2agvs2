@@ -562,6 +562,21 @@ _BRANCH_FROM_XLSX: dict[str, str] = {
 }
 
 
+# ── Нормализация статуса ─────────────────────────────────────────────────────
+
+def normalize_status(raw: str) -> str:
+    """АСГ / АСД / Ремонт / '' из сырой строки П.2"""
+    s = (raw or "").upper()
+    if "АСГ" in s:
+        return "АСГ"
+    if ("АСД" in s or "КОНТР" in s or "ДОГО" in s or "ЧАРТ" in s or
+            "БУКСИР" in s or re.search(r"\bТ/Ч\b|\bТЧ\b", s)):
+        return "АСД"
+    if "РЕМ" in s or "ВОССТ" in s or "ОСВИДЕТ" in s:
+        return "Ремонт"
+    return ""
+
+
 # ── Парсинг → vessel_dpr ─────────────────────────────────────────────────────
 
 VESSEL_TYPE_PREFIXES = {
@@ -849,11 +864,18 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
         for k in ("fuel_dt_amt", "fuel_tt_amt", "oil_amt", "water_amt")
     )
     if not _supplies_has_data:
-        for fn in ("10", "8", "9", "11", "12", "13", "14"):
+        for fn in ("6", "10", "8", "9", "11", "12", "13", "14"):
             fv = fields.get(fn, "").strip()
-            if fv and re.search(r"\b(?:ДТ|IFO|DT|ТТ|MGO|TT|Масло|[МM]\d*[- ]?(?:ГДГ|ВДГ|Г)\b)\s*[:–—-]", fv, re.I):
+            if not fv:
+                continue
+            # Убираем строки с ветром/курсом ("5/270", "3/180") перед парсингом
+            fv_clean = "\n".join(
+                ln for ln in fv.splitlines()
+                if not re.match(r"^\s*\d+\s*/\s*\d+\s*$", ln)
+            ).strip()
+            if fv_clean and re.search(r"\b(?:ДТ|IFO|DT|ТТ|MGO|TT|Масло|[МM]\d*[- ]?(?:ГДГ|ВДГ|Г)\b)\s*[:–—-]", fv_clean, re.I):
                 # Нашли запасы в другом поле — парсим
-                fake_fields = {"5": fv}
+                fake_fields = {"5": fv_clean}
                 supplies = parse_supplies_numeric(fake_fields)
                 log.info(f"  Запасы из П.{fn}")
                 break
@@ -881,6 +903,7 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
         "report_time":   report_time or None,
         "msg_time":      msg_time,
         "status":        status_raw or None,
+        "status_norm":   normalize_status(status_raw),
         "coord_raw":     coord_raw or None,
         "lat":           lat,
         "lng":           lng,
