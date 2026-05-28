@@ -1390,13 +1390,8 @@ def run_collection(sb, args):
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Итог: {ok} записано, {skip} пропущено, {fail} ошибок")
 
-    # Сохраняем кеш сессии и закрываем браузер
-    if not args.dry_run:
-        _save_session_cache(session_id, cookies, ximss.seq)
-    try: _driver.quit()
-    except Exception: pass
-
     # ── Webmail fallback ──
+    # Важно: _driver должен быть жив здесь, т.к. ximss.read_message использует его
     if webmail_uids and sb and not args.dry_run:
         log.info(f"\n─── Webmail fallback для {len(webmail_uids)} писем ───")
         session_id2, cookies2, last_seq2, driver = get_session(keep_driver=True)
@@ -1456,6 +1451,12 @@ def run_collection(sb, args):
 
         driver.quit()
         log.info("Webmail fallback завершён")
+
+    # Сохраняем кеш сессии и закрываем главный браузер
+    if not args.dry_run:
+        _save_session_cache(session_id, cookies, ximss.seq)
+    try: _driver.quit()
+    except Exception: pass
 
     # ── Условие остановки ──
     if sb and not args.dry_run and active_vessel_count > 0:
