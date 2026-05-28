@@ -919,6 +919,18 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
 # ── Запись в Supabase ────────────────────────────────────────────────────────
 
 def upsert_vessel_dpr(sb, record):
+    # Защита: если vessel_name содержит латиницу — пробуем ещё раз перевести в русское
+    name = record.get("vessel_name", "")
+    if name and re.search(r"[a-zA-Z]", name):
+        canonical = get_canonical_name(name)
+        if canonical != name:
+            log.info(f"  upsert: корректирую имя {name!r} → {canonical!r}")
+            record = dict(record)
+            record["vessel_name"] = canonical
+            if _HAS_FLEET_LOOKUP:
+                fi = resolve_vessel(canonical)
+                if fi and fi.branch and not record.get("branch"):
+                    record["branch"] = _BRANCH_FROM_XLSX.get(fi.branch, fi.branch)
     try:
         sb.table("vessel_dpr").upsert(
             record, on_conflict="vessel_name,dpr_type,report_date"
