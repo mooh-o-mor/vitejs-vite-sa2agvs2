@@ -1181,6 +1181,8 @@ def main():
                     help="Обработать ВСЕ письма в папке (не только сегодняшние)")
     ap.add_argument("--truncate", action="store_true",
                     help="Очистить таблицу vessel_dpr перед обработкой (использовать с --all-uids)")
+    ap.add_argument("--daemon",   action="store_true",
+                    help="Daemon mode: опрос dpr_settings.run_requested каждые 60 сек")
     args = ap.parse_args()
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -1226,26 +1228,38 @@ def main():
         if getattr(args, "truncate", False):
             log.info("─── TRUNCATE: удаляем все записи vessel_dpr ───")
             try:
-                # Supabase не поддерживает DELETE без фильтра — используем neq id=0
                 sb.table("vessel_dpr").delete().neq("id", 0).execute()
                 log.info("  ✓ Таблица vessel_dpr очищена")
             except Exception as e:
                 log.error(f"  ✗ Ошибка очистки: {e}")
                 sys.exit(1)
 
+    # ── Режим --daemon ──
+    if args.daemon:
+        if not sb:
+            sys.exit("--daemon требует SUPABASE_KEY")
+        run_daemon(sb, args)
+        return
+
+    run_collection(sb, args)
+
+
+def run_collection(sb, args):
+    """Одна итерация сбора почты из XIMSS → vessel_dpr."""
+    import datetime as _dt
+
     session_id, cookies, last_seq = get_or_create_session()
     ximss = XIMSSSession(session_id, cookies, last_seq)
     ximss.open_folder()
 
-    # ── Задача 4: перечень активных судов (за последние 90 дней) ──
+    # ── Перечень активных судов (за последние 90 дней) ──
     active_vessel_count = 0
     if sb and not args.dry_run:
         try:
             res = sb.table("vessel_dpr") \
                 .select("vessel_name", count="exact") \
-                .gte("report_date", (date.today() - __import__("datetime").timedelta(days=90)).isoformat()) \
+                .gte("report_date", (date.today() - _dt.timedelta(days=90)).isoformat()) \
                 .execute()
-            # Distinct by vessel_name
             names = set(r["vessel_name"] for r in (res.data or []))
             active_vessel_count = len(names)
             log.info(f"Активных судов (≤90 дней): {active_vessel_count}")
@@ -1262,7 +1276,7 @@ def main():
         return
 
     ok = fail = skip = 0
-    webmail_uids: list[int] = []  # UID для webmail-фолбэка
+    webmail_uids: list[int] = []
     for uid in uids:
         log.info(f"─── UID {uid} ───")
         try:
@@ -1272,8 +1286,6 @@ def main():
             log.info(f"  Тема: {subject!r}")
             log.info(f"  Дата письма: {date_str!r} → {email_date}")
 
-            # Скачиваем сырое сообщение ТОЛЬКО если нужно:
-            # тело пустое / нет полей / есть намёк на вложение
             body_fields = extract_fields(body, "") if body.strip() else {}
             attachment_hint = any(
                 kw in body[:400].lower()
@@ -1292,7 +1304,6 @@ def main():
             else:
                 log.debug(f"  Raw download пропущен (поля найдены в теле)")
 
-            # Fallback: вложенный .eml через XIMSS partID (Ростов Великий и др. "Fwd:" письма)
             if not raw_msg and not body_fields:
                 emb_body = ximss.read_embedded_eml_text(uid)
                 if emb_body:
@@ -1306,7 +1317,6 @@ def main():
                     ximss.mark_seen(uid)
                 continue
 
-            # Запоминаем UID для webmail-фолбэка если parse_ok=False (вложение)
             if record.get("parse_ok") is False and not args.dry_run:
                 webmail_uids.append(uid)
 
@@ -1322,7 +1332,6 @@ def main():
         except Exception as e:
             err_str = str(e)
             log.error(f"  Ошибка UID {uid}: {e}")
-            # Если сессия умерла (sequence error / 400 / SSL EOF) — переподключаемся
             if any(kw in err_str.lower() for kw in (
                 "sequence error", "ssl", "eof", "connection", "timed out", "max retries"
             )) or "400 client error" in err_str.lower():
@@ -1340,7 +1349,7 @@ def main():
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Итог: {ok} записано, {skip} пропущено, {fail} ошибок")
 
-    # ── Webmail fallback: для писем с parse_ok=False (вложения) ──
+    # ── Webmail fallback ──
     if webmail_uids and sb and not args.dry_run:
         log.info(f"\n─── Webmail fallback для {len(webmail_uids)} писем ───")
         session_id2, cookies2, last_seq2, driver = get_session(keep_driver=True)
@@ -1353,17 +1362,12 @@ def main():
             if filepath is None:
                 log.warning(f"  UID {uid}: не удалось скачать")
                 continue
-
-            # Читаем и парсим скачанный файл
             try:
                 with open(filepath, "rb") as fh:
                     file_data = fh.read()
-
-                # Определяем формат и извлекаем текст
                 fname_lower = os.path.basename(filepath).lower()
                 att_text = ""
                 is_form = False
-
                 if fname_lower.endswith(".docx"):
                     from dpr_parser import _read_docx_from_bytes
                     att_text = _read_docx_from_bytes(file_data)
@@ -1383,8 +1387,6 @@ def main():
                     continue
 
                 log.info(f"  UID {uid}: извлечено {len(att_text)} символов из {os.path.basename(filepath)}")
-
-                # Повторный парсинг с извлечённым текстом
                 subject, sender, date_str2, _body = ximss.read_message(uid)
                 email_date2 = _parse_email_date(date_str2)
                 record2 = parse_to_vessel_dpr(subject, sender, att_text, uid, raw_msg=None,
@@ -1397,11 +1399,9 @@ def main():
                         log.warning(f"  UID {uid}: не удалось обновить в БД")
                 else:
                     log.warning(f"  UID {uid}: после webmail parse_ok всё ещё False")
-
             except Exception as e:
                 log.error(f"  UID {uid}: ошибка обработки файла: {e}")
             finally:
-                # Удаляем скачанный файл
                 try:
                     os.remove(filepath)
                 except Exception:
@@ -1410,11 +1410,11 @@ def main():
         driver.quit()
         log.info("Webmail fallback завершён")
 
-    # ── Обновляем кеш сессии с финальным seq (чтобы следующий запуск не перепутал номер) ──
+    # ── Кеш сессии ──
     if not args.dry_run:
         _save_session_cache(session_id, cookies, ximss.seq)
 
-    # ── Задача 5: условие остановки ──
+    # ── Условие остановки ──
     if sb and not args.dry_run and active_vessel_count > 0:
         try:
             res = sb.table("vessel_dpr") \
@@ -1425,9 +1425,48 @@ def main():
             reported_today = res.count if res.count is not None else len(res.data or [])
             log.info(f"Отчитались сегодня (parse_ok=true): {reported_today} из {active_vessel_count}")
             if reported_today >= active_vessel_count:
-                log.info(f"Все {active_vessel_count} судов отчитались, завершаю.")
+                log.info(f"Все {active_vessel_count} судов отчитались.")
         except Exception as e:
             log.warning(f"Ошибка проверки условия остановки: {e}")
+
+
+def run_daemon(sb, args):
+    """Вечный цикл: раз в минуту проверяем dpr_settings.run_requested."""
+    log.info("Daemon mode запущен. Опрос Supabase каждые 60 сек.")
+    import argparse as _ap
+    # Аргументы для run_collection в daemon-режиме (без dry-run / uids)
+    coll_args = _ap.Namespace(
+        dry_run=False, limit=0, uids="", all_uids=False,
+        verbose=args.verbose, truncate=False, daemon=False,
+    )
+    while True:
+        try:
+            row = sb.table("dpr_settings").select("run_requested").eq("id", 1).maybe_single().execute()
+            if row.data and row.data.get("run_requested"):
+                # Сбрасываем флаг и ставим статус "running"
+                sb.table("dpr_settings").update({
+                    "run_requested": False,
+                    "status": "running",
+                }).eq("id", 1).execute()
+                log.info("Флаг run_requested=True — запускаю сбор почты")
+                try:
+                    run_collection(sb, coll_args)
+                    sb.table("dpr_settings").update({
+                        "status": "done",
+                        "last_run_at": datetime.now(timezone.utc).isoformat(),
+                        "last_run_msg": "OK",
+                    }).eq("id", 1).execute()
+                    log.info("Сбор завершён — статус: done")
+                except Exception as e:
+                    log.error(f"Ошибка сбора: {e}")
+                    sb.table("dpr_settings").update({
+                        "status": "error",
+                        "last_run_at": datetime.now(timezone.utc).isoformat(),
+                        "last_run_msg": str(e)[:300],
+                    }).eq("id", 1).execute()
+        except Exception as e:
+            log.warning(f"Ошибка опроса Supabase: {e}")
+        time.sleep(60)
 
 
 if __name__ == "__main__":

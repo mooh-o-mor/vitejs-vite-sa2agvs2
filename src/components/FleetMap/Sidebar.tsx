@@ -2,6 +2,7 @@ import { T } from "../../lib/types";
 import { CLR } from "./mapIcons";
 import { FilterControls } from "./FilterControls";
 import { VesselListItem } from "./VesselListItem";
+import { DprTriggerButton } from "./DprTriggerButton";
 import type { DprRow } from "../../lib/parseDpr";
 import { getFleetType } from "../../lib/utils";
 
@@ -35,6 +36,7 @@ interface Props {
   sidebarOpen: boolean;
   dataSource: "branches" | "vessels";
   onDataSourceChange: (ds: "branches" | "vessels") => void;
+  isAdmin: boolean;
 }
 
 const fmtDateRu = (d: string) => {
@@ -72,6 +74,7 @@ export function Sidebar({
   sidebarOpen,
   dataSource,
   onDataSourceChange,
+  isAdmin,
 }: Props) {
   const showSidebar = isMobile ? sidebarOpen : true;
 
@@ -165,6 +168,11 @@ export function Sidebar({
         </div>
         {noPos > 0 && <div style={{ fontSize: 9, color: "#c07800", marginTop: 6 }}>⚠ без позиции: {noPos}</div>}
         {uploadMsg && <div style={{ fontSize: isMobile ? 10 : 11, color: uploading ? T.text2 : T.accent, marginTop: 6 }}>{uploadMsg}</div>}
+        {isAdmin && dataSource === "vessels" && (
+          <div style={{ marginTop: 8 }}>
+            <DprTriggerButton />
+          </div>
+        )}
       </div>
 
       <div style={{ padding, borderBottom: `1px solid ${T.border}` }}>

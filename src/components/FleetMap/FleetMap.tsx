@@ -700,6 +700,7 @@ mapRef.current.addEventListener("touchend", (e) => {
             setSelDate("");
             setFilterStatus("Все");
           }}
+          isAdmin={isAdmin}
         />
       )}
 
