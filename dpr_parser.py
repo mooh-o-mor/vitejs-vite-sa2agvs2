@@ -82,14 +82,17 @@ _TYPE_KW: list[tuple[str, re.Pattern]] = [
 
 # Начало подписи — здесь обрезаем тело
 _SIGNATURE_RE = re.compile(
-    r"^(с\s+уважени|best\s+regards|спкм\s+[а-яё]|км\s+[а-яё]|капитан\s+[а-яё]|master\b|\bkm\s+\w"
-    r"|тел[.:\s]|моб[.:\s]|mobile[.:\s]|vsat[.:\s]|inm[- ]c:|mmsi:|e[-\s]?mail:)",
+    r"^(с\s+уважени|c\s+уважени|best\s+regards|спкм\s+[а-яё]|км[-\s]+[а-яё]|капитан\s+[а-яё]|master\b|\bkm\s+\w"
+    r"|тел[.:\s]|моб[.:\s]|mobile[.:\s]|vsat[.:\s]|inm[- ]c:|mmsi:|e[-\s]?mail:|_{3,})",
     re.I | re.MULTILINE,
 )
 
 # Шаблоны для обрезки подписи внутри ЗНАЧЕНИЯ поля
 _SIGNATURE_VALUE_STOP_PATTERNS: list[re.Pattern] = [
     re.compile(r'с\s+уважением', re.IGNORECASE),
+    re.compile(r'c\s+уважени', re.IGNORECASE),   # латинская C
+    re.compile(r'_{3,}'),                          # горизонтальная черта ___
+    re.compile(r'км[-\s]+[А-ЯЁа-яёA-Za-z]', re.IGNORECASE),  # КМ-Копылов
     re.compile(r'best\s+regards', re.IGNORECASE),
     re.compile(r'brgds', re.IGNORECASE),
     re.compile(r'с\s+уваж\.?', re.IGNORECASE),
@@ -857,9 +860,10 @@ def _safe_float(s: str) -> Optional[float]:
         # Убираем пробелы и хвостовые десятичные разделители (напр. "29,3." → "29,3")
         s = s.strip().rstrip(".,")
         v = float(s.replace(" ", "").replace(",", "."))
-        # Значения ≥ 100 000 явно некорректны (overflow numeric(7,2)) — возвращаем None
-        if abs(v) >= 100_000:
-            log.warning(f"  _safe_float: значение {v} превышает лимит колонки — игнорируем")
+        # Значения ≥ 1 000 000 явно некорректны — возвращаем None
+        # Значения 2000..999999 могут быть кг (конвертируются в т блоком выше)
+        if abs(v) >= 1_000_000:
+            log.warning(f"  _safe_float: значение {v} превышает лимит — игнорируем")
             return None
         return v
     except (ValueError, AttributeError):
