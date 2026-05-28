@@ -1022,6 +1022,15 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
             if v is not None:
                 nums_clean.append(v)
 
+        # Fallback: два числа слиплись без тире-разделителя, напр. "28,040,3" = "28,04"+"0,3"
+        # Используем regex-backtracking: r'^(\d+,\d+)(\d+,\d+)$'
+        if not nums_clean and ',' in cleaned:
+            m2 = re.match(r'^(\d+,\d+)(\d+,\d+)$', cleaned)
+            if m2:
+                v1, v2 = _safe_float(m2.group(1)), _safe_float(m2.group(2))
+                if v1 is not None and v2 is not None and v2 <= v1:
+                    nums_clean = [v1, v2]
+
         amt: Optional[float] = None
         cons: Optional[float] = None
 
