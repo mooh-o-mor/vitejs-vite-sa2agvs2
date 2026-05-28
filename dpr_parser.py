@@ -405,6 +405,7 @@ def extract_fields_doc_form(text: str, dpr_type: str = "МОРЕ") -> dict[str, 
     max_field = 10 if dpr_type == "ПОРТ" else 14
 
     result: dict[str, str] = {}
+    last_num: Optional[str] = None
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -412,6 +413,9 @@ def extract_fields_doc_form(text: str, dpr_type: str = "МОРЕ") -> dict[str, 
         # Все вхождения "N. " где после идёт заглавная буква (рус/лат) или цифра
         matches = list(re.finditer(r"(\d{1,2})\.\s+(?=[А-ЯA-Z\dА-я])", line))
         if not matches:
+            # Строка без номера поля — продолжение предыдущего (многострочная ячейка)
+            if last_num and last_num in result:
+                result[last_num] += " " + line
             continue
         # Последнее вхождение — колонка значения
         last = matches[-1]
@@ -425,6 +429,7 @@ def extract_fields_doc_form(text: str, dpr_type: str = "МОРЕ") -> dict[str, 
         val = re.sub(r"[\r\n]+\s*", " ", val).strip()
         if num not in result and val:
             result[num] = val
+            last_num = num
 
     # ── Обрезка подписей в значениях полей ──
     result = {k: strip_signature_from_value(v) for k, v in result.items()}
@@ -946,6 +951,7 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
     oil_cons_total = 0.0
     oil_has_data = False   # поле масла упомянуто
     oil_has_value = False  # есть хотя бы одно число или явный прочерк (=0)
+    last_family: str = ""  # последний обработанный тип запаса (для "осиротевших" чисел)
 
     for token in tokens:
         token = token.strip()
@@ -967,9 +973,21 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         # Масло (все виды)
         elif re.match(rf"^({OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])", token, re.I):
             supply_family = "oil"
-        # Голые числа без метки — пропускаем
+        # Голые числа без метки — расход предыдущего типа запаса (напр. "В 34 / 1")
         elif re.match(r"^\d", token):
-            # Может быть продолжением предыдущего сегмента после переноса
+            if last_family:
+                cons_val = _safe_float(token)
+                if cons_val is not None:
+                    if last_family == "fuel_dt" and result.get("fuel_dt_cons") is None:
+                        result["fuel_dt_cons"] = round(cons_val, 2)
+                    elif last_family == "fuel_tt" and result.get("fuel_tt_cons") is None:
+                        result["fuel_tt_cons"] = round(cons_val, 2)
+                    elif last_family == "water" and result.get("water_cons") is None:
+                        if cons_val > 50:
+                            cons_val = round(cons_val / 1000, 2)
+                        result["water_cons"] = round(cons_val, 2)
+                    elif last_family == "oil":
+                        oil_cons_total += cons_val
             continue
         else:
             continue
@@ -1079,6 +1097,8 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
                 oil_has_value = True
             if cons is not None:
                 oil_cons_total += cons
+
+        last_family = supply_family  # для обработки следующего осиротевшего числа
 
     # ── Суммированное масло ──
     # oil_amt=0 допустимо, если было явно указано (прочерк или число).
