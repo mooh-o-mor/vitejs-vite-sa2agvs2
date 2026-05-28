@@ -273,8 +273,10 @@ const wreckIcon = L.divIcon({
     iconCreateFunction: (cluster: any) => {
       const children = cluster.getAllChildMarkers();
       const counts = { asg: 0, asd: 0, rem: 0, oth: 0 };
+      const toKey = (s: string): keyof typeof counts =>
+        s === "asg" ? "asg" : s === "asd" ? "asd" : s === "rem" ? "rem" : "oth";
       children.forEach((m: any) => {
-        if (m.options._status) counts[m.options._status as keyof typeof counts]++;
+        counts[toKey(m.options._status || "oth")]++;
       });
       return mkPieIcon(counts, children.length);
     },
