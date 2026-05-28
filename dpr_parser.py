@@ -199,6 +199,9 @@ def detect_report_type(subject: str, body_head: str) -> str:
     for rtype, pat in _TYPE_KW:
         if pat.search(body_head):
             return rtype
+    # Эвристика: БЭП/СЭП (береговое питание) → однозначно ПОРТ
+    if re.search(r'\bБЭП\b|\bСЭП\b', body_head, re.I):
+        return "ПОРТ"
     return "МОРЕ"
 
 

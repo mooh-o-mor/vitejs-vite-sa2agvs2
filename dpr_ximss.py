@@ -679,7 +679,7 @@ def parse_to_vessel_dpr(subject, sender, body, uid, raw_msg=None, is_doc_form=Fa
 
     # ── Тип ДПР ──
     if not dpr_type:
-        dpr_type = detect_report_type(subject, body[:400])
+        dpr_type = detect_report_type(subject, body[:600])
 
     # Пропускаем не-ДПР типы (ОТХОД, ПРИХОД, НЕПРЕДВИДЕННЫЕ, etc.)
     if dpr_type not in ("МОРЕ", "ПОРТ"):
