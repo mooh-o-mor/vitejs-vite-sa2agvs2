@@ -482,8 +482,6 @@ mapRef.current.addEventListener("touchend", (e) => {
       if (isToday(v.report_date)) {
         return vr.parse_ok ? cls(v.status) : "yellow";
       }
-      // Ремонт — не обязан слать ДПР, всегда серый
-      if (cls(v.status) === "rem") return "gray";
       return mskHour >= 8 ? "red" : "gray";
     };
 
