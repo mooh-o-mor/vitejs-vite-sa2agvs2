@@ -15,8 +15,8 @@ import { VesselPopup } from "./VesselPopup";
 function cls(stat: string): "asg" | "asd" | "rem" | "oth" {
   if (!stat) return "oth";
   const s = stat.toUpperCase();
-  if (s.startsWith("АСГ")) return "asg";
-  if (s.startsWith("АСД")) return "asd";
+  if (s.includes("АСГ")) return "asg";
+  if (s.includes("АСД")) return "asd";
   if (s.startsWith("РЕМ") || s.includes("РЕМОНТ") || s.includes("ОСВИДЕТ")) return "rem";
   return "oth";
 }

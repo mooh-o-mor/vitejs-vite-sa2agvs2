@@ -973,6 +973,24 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         # Масло (все виды)
         elif re.match(rf"^({OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])", token, re.I):
             supply_family = "oil"
+        # Токен "- 0,1 тн" — расход предыдущего типа (после \n→/ разбиения поля Вода)
+        elif re.match(r"^[-–—]\s*\d", token):
+            if last_family:
+                m_dash = re.match(r"^[-–—]\s*(\d[\d\s]*[\d,.]*)", token)
+                if m_dash:
+                    cons_val = _safe_float(m_dash.group(1))
+                    if cons_val is not None:
+                        if last_family == "fuel_dt" and result.get("fuel_dt_cons") is None:
+                            result["fuel_dt_cons"] = round(cons_val, 2)
+                        elif last_family == "fuel_tt" and result.get("fuel_tt_cons") is None:
+                            result["fuel_tt_cons"] = round(cons_val, 2)
+                        elif last_family == "water" and result.get("water_cons") is None:
+                            if cons_val > 50:
+                                cons_val = round(cons_val / 1000, 2)
+                            result["water_cons"] = round(cons_val, 2)
+                        elif last_family == "oil":
+                            oil_cons_total += cons_val
+            continue
         # Голые числа без метки — расход предыдущего типа запаса (напр. "В 34 / 1")
         elif re.match(r"^\d", token):
             if last_family:
@@ -1003,7 +1021,7 @@ def parse_supplies_numeric(fields: dict[str, str]) -> dict[str, Optional[float]]
         # Масло: только пробелы (не дефис): "М -" оставит cleaned="-" (явный нуль),
         # "М-900" оставит cleaned="-900" → числа всё равно найдутся через findall(\d).
         cleaned = re.sub(rf"^({OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])\s*", "", cleaned, flags=re.I)
-        cleaned = re.sub(r"^(В|V|Вода|Water|B|ПВ|PV)\s*[:-]?\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(r"^(Вода|В|Water|V|ПВ|PV|B)\s*[-:–—]?\s*", "", cleaned, flags=re.I)
         # После снятия основного лейбла убираем:
         # 1) Суб-лейбл масла (марка): "M10 ", "M14 ", "МГД " — чтобы "М M10 223-0" → "223-0"
         cleaned = re.sub(rf"^({OIL_LABELS})(?![А-ЯЁа-яёA-Za-z])\s*", "", cleaned, flags=re.I)
