@@ -345,11 +345,41 @@ def _download_attachment_via_webmail(driver, uid: int, download_dir: str) -> Opt
 
 # ── XIMSS API ────────────────────────────────────────────────────────────────
 
+def _call_via_driver(driver, url: str, xml: str) -> str:
+    """Выполняет XIMSS POST через браузерный fetch — использует TLS-сессию браузера.
+    Это обходит проблему 'unknown session', когда сервер привязывает XIMSS-сессию
+    к TLS-соединению браузера и отклоняет запросы из Python requests."""
+    result = driver.execute_async_script("""
+        var url = arguments[0], body = arguments[1], done = arguments[2];
+        fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'text/xml'},
+            body: body,
+            credentials: 'include'
+        }).then(function(r) {
+            return r.text().then(function(t) {
+                done({ok: r.ok, status: r.status, text: t});
+            });
+        }).catch(function(e) {
+            done({ok: false, status: 0, text: String(e)});
+        });
+    """, url, xml)
+    if not result or not result.get('ok'):
+        status = (result or {}).get('status', 0)
+        text   = (result or {}).get('text', '')[:300]
+        log.error(f"  ← {status} {text}")
+        raise requests.exceptions.HTTPError(
+            f"{status} Server Error: {text}"
+        )
+    return result['text']
+
+
 class XIMSSSession:
-    def __init__(self, session_id, cookies, start_seq):
+    def __init__(self, session_id, cookies, start_seq, driver=None):
         self.cookies = cookies
         self.seq     = start_seq   # next call will use start_seq + 1
         self.url     = f"{BASE}/Session/{session_id}/sync"
+        self.driver  = driver      # если задан — запросы через браузерный fetch
 
     def call(self, xml):
         self.seq += 1
@@ -359,14 +389,20 @@ class XIMSSSession:
         # treats the request as sequence-0 and raises "XIMSS request sequence error".
         if "<XIMSS>" in xml:
             xml = xml.replace("<XIMSS>", f'<XIMSS reqSeq="{seq}">', 1)
-        r = requests.post(f"{self.url}?reqSeq={seq}", data=xml,
-                          cookies=self.cookies, headers={"Content-Type": "text/xml"},
-                          verify=False, timeout=90)
-        log.debug(f"  → reqSeq={seq}  HTTP {r.status_code}")
-        if not r.ok:
-            log.error(f"  ← {r.status_code} {r.text[:300]}")
-        r.raise_for_status()
-        return ET.fromstring(r.text)
+        url = f"{self.url}?reqSeq={seq}"
+        if self.driver:
+            log.debug(f"  → reqSeq={seq}  (browser fetch)")
+            text = _call_via_driver(self.driver, url, xml)
+        else:
+            r = requests.post(url, data=xml,
+                              cookies=self.cookies, headers={"Content-Type": "text/xml"},
+                              verify=False, timeout=90)
+            log.debug(f"  → reqSeq={seq}  HTTP {r.status_code}")
+            if not r.ok:
+                log.error(f"  ← {r.status_code} {r.text[:300]}")
+            r.raise_for_status()
+            text = r.text
+        return ET.fromstring(text)
 
     def open_folder(self):
         xml = f"""<XIMSS>
@@ -1248,22 +1284,11 @@ def run_collection(sb, args):
     """Одна итерация сбора почты из XIMSS → vessel_dpr."""
     import datetime as _dt
 
-    # При SSL EOF сразу после логина — повторяем сессию (до 3 раз)
-    for attempt in range(3):
-        session_id, cookies, last_seq = get_or_create_session()
-        ximss = XIMSSSession(session_id, cookies, last_seq)
-        try:
-            ximss.open_folder()
-            break  # успешно открыли папку
-        except Exception as e:
-            err = str(e).lower()
-            if attempt < 2 and any(k in err for k in ("ssl", "eof", "connection", "max retries")):
-                log.warning(f"open_folder попытка {attempt+1} не удалась ({e}), повтор через 15 сек...")
-                time.sleep(15)
-                # Сбрасываем кеш сессии чтобы получить свежую
-                _save_session_cache("", {}, 0)
-                continue
-            raise
+    session_id, cookies, last_seq, _driver = get_session(keep_driver=True)
+    _save_session_cache(session_id, cookies, last_seq)
+    _driver.set_script_timeout(120)
+    ximss = XIMSSSession(session_id, cookies, last_seq, driver=_driver)
+    ximss.open_folder()
 
     # ── Перечень активных судов (за последние 90 дней) ──
     active_vessel_count = 0
@@ -1350,9 +1375,12 @@ def run_collection(sb, args):
             )) or "400 client error" in err_str.lower():
                 log.info("  Переподключение к XIMSS...")
                 try:
-                    session_id, cookies, last_seq = get_session()
+                    try: _driver.quit()
+                    except Exception: pass
+                    session_id, cookies, last_seq, _driver = get_session(keep_driver=True)
+                    _driver.set_script_timeout(120)
                     _save_session_cache(session_id, cookies, last_seq)
-                    ximss = XIMSSSession(session_id, cookies, last_seq)
+                    ximss = XIMSSSession(session_id, cookies, last_seq, driver=_driver)
                     ximss.open_folder()
                     log.info("  Переподключение успешно — продолжаем")
                 except Exception as reauth_e:
@@ -1361,6 +1389,12 @@ def run_collection(sb, args):
             fail += 1
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Итог: {ok} записано, {skip} пропущено, {fail} ошибок")
+
+    # Сохраняем кеш сессии и закрываем браузер
+    if not args.dry_run:
+        _save_session_cache(session_id, cookies, ximss.seq)
+    try: _driver.quit()
+    except Exception: pass
 
     # ── Webmail fallback ──
     if webmail_uids and sb and not args.dry_run:
@@ -1422,10 +1456,6 @@ def run_collection(sb, args):
 
         driver.quit()
         log.info("Webmail fallback завершён")
-
-    # ── Кеш сессии ──
-    if not args.dry_run:
-        _save_session_cache(session_id, cookies, ximss.seq)
 
     # ── Условие остановки ──
     if sb and not args.dry_run and active_vessel_count > 0:
