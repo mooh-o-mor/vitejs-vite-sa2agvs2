@@ -476,8 +476,6 @@ mapRef.current.addEventListener("touchend", (e) => {
     const bounds: L.LatLng[] = [];
 
     // Для vessel_dpr: цвет маркера зависит от parse_ok и времени суток
-    const now = new Date();
-    const mskHour = (now.getUTCHours() + 3) % 24;
     const isToday = (d: string) => d === new Date().toISOString().slice(0, 10);
 
     const getVesselMarkerStatus = (v: DprRow): "asg" | "asd" | "rem" | "oth" | "yellow" | "red" | "gray" => {
