@@ -108,7 +108,18 @@ def get_session(keep_driver=False):
              "download.directory_upgrade": True}
     opts.add_experimental_option("prefs", prefs)
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+    # Используем кэш chromedriver без онлайн-проверки версии
+    import glob as _glob
+    _cached = sorted(_glob.glob(
+        os.path.join(os.path.expanduser("~"), ".wdm", "drivers", "chromedriver", "win64", "*", "chromedriver.exe")
+    ))
+    if _cached:
+        _driver_path = _cached[-1]
+        log.info(f"chromedriver из кэша: {_driver_path}")
+    else:
+        log.info("Скачиваем chromedriver...")
+        _driver_path = ChromeDriverManager().install()
+    driver = webdriver.Chrome(service=Service(_driver_path), options=opts)
     driver.get(f"{BASE}/?Skin=cg-web#/login")
     time.sleep(3)
     WebDriverWait(driver, 15).until(
@@ -1323,7 +1334,23 @@ def run_collection(sb, args):
     _save_session_cache(session_id, cookies, last_seq)
     _driver.set_script_timeout(120)
     ximss = XIMSSSession(session_id, cookies, last_seq, driver=_driver)
-    ximss.open_folder()
+
+    # open_folder с retry: при 400/SSL — пересоздаём сессию и пробуем ещё раз
+    for _attempt in range(3):
+        try:
+            ximss.open_folder()
+            break
+        except Exception as of_err:
+            log.warning(f"  open_folder попытка {_attempt+1}/3: {of_err}")
+            if _attempt == 2:
+                raise
+            try: _driver.quit()
+            except Exception: pass
+            time.sleep(3)
+            session_id, cookies, last_seq, _driver = get_session(keep_driver=True)
+            _save_session_cache(session_id, cookies, last_seq)
+            _driver.set_script_timeout(120)
+            ximss = XIMSSSession(session_id, cookies, last_seq, driver=_driver)
 
     # ── Перечень активных судов (за последние 90 дней) ──
     active_vessel_count = 0
