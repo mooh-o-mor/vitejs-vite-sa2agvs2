@@ -117,7 +117,7 @@ _COORD_RE = re.compile(
     r"""
     (?P<lat_d>\d{1,3})[-°ºᵒ\s]
     (?P<lat_m>\d{1,2}(?:[,.]\d+)?)['’ʼ°]?\s*
-    (?P<lat_h>[NS\u043d\u0441Nn])[/\s,]+
+    (?P<lat_h>[NS\u043d\u0441Nn])[/\s,]*
     (?P<lon_d>\d{2,3})[-°ºᵒ\s]
     (?P<lon_m>\d{1,2}(?:[,.]\d+)?)['’ʼ°]?\s*
     (?P<lon_h>[EW\u0435w\u0415W])

@@ -163,6 +163,7 @@ _ALIASES: dict[str, str] = {
     "otto.shmidt":        "отто шмидт",
     "neftegaz 55":        "нефтегаз-55",
     "yasny":              "ясный",
+    "bay":                "бэй",
 }
 
 

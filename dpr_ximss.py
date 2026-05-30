@@ -122,6 +122,38 @@ def get_session(keep_driver=False):
     driver = webdriver.Chrome(service=Service(_driver_path), options=opts)
     driver.get(f"{BASE}/?Skin=cg-web#/login")
     time.sleep(3)
+    # Перехватчики XHR/fetch/WebSocket — ставим ДО логина
+    driver.execute_script("""
+        window._cgSessions = [];
+        var _orig_open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            if (typeof url === 'string' && url.indexOf('/Session/') !== -1)
+                window._cgSessions.push(url);
+            return _orig_open.apply(this, arguments);
+        };
+        var _orig_fetch = window.fetch;
+        if (_orig_fetch) {
+            window.fetch = function(url, opts) {
+                if (typeof url === 'string' && url.indexOf('/Session/') !== -1)
+                    window._cgSessions.push(url);
+                return _orig_fetch.apply(this, arguments);
+            };
+        }
+        var _origWS = window.WebSocket;
+        if (_origWS) {
+            window.WebSocket = function(url, protocols) {
+                if (typeof url === 'string' && url.indexOf('/Session/') !== -1)
+                    window._cgSessions.push(url);
+                var ws = protocols ? new _origWS(url, protocols) : new _origWS(url);
+                return ws;
+            };
+            window.WebSocket.prototype = _origWS.prototype;
+            window.WebSocket.CONNECTING = _origWS.CONNECTING;
+            window.WebSocket.OPEN = _origWS.OPEN;
+            window.WebSocket.CLOSING = _origWS.CLOSING;
+            window.WebSocket.CLOSED = _origWS.CLOSED;
+        }
+    """)
     WebDriverWait(driver, 15).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, "[data-test-id='login-input-username-field']"))
     ).send_keys(LOGIN + Keys.RETURN)
@@ -130,10 +162,25 @@ def get_session(keep_driver=False):
         EC.presence_of_element_located((By.CSS_SELECTOR, "[data-test-id='login-input-password-field']"))
     ).send_keys(PASSWORD + Keys.RETURN)
 
-    # Ждём появления /Session/ в сетевых логах (до 20 сек)
+    # Ждём, пока страница уйдёт с #/login (подтверждение что логин прошёл)
+    try:
+        WebDriverWait(driver, 30).until(
+            lambda d: "#/login" not in d.current_url
+        )
+        log.info(f"  Логин успешен, URL: {driver.current_url[:100]}")
+    except Exception:
+        page_src = driver.page_source[:800] if driver.page_source else ""
+        log.warning(f"  Страница не ушла с #/login за 30 сек — возможно неверные данные")
+        log.warning(f"  Page source: {page_src[:300]}")
+        if not keep_driver:
+            driver.quit()
+        raise RuntimeError("Логин не прошёл: страница осталась на /login после 30 сек")
+
+    # Ждём появления /Session/ — CDP-логи + JS-перехватчик XHR/fetch (до 35 сек)
     session_id, max_seq = None, 0
-    for attempt in range(20):
+    for attempt in range(35):
         time.sleep(1)
+        # Способ 1: CDP performance logs
         raw_logs = driver.get_log("performance")
         for entry in raw_logs:
             try:
@@ -142,14 +189,41 @@ def get_session(keep_driver=False):
                     url = msg["params"]["request"].get("url", "")
                     if "/Session/" in url and not session_id:
                         session_id = url.split("/Session/")[1].split("/")[0]
+                        log.debug(f"  Session via CDP at attempt {attempt+1}")
                     if "reqSeq=" in url and session_id:
                         seq_val = int(url.split("reqSeq=")[1].split("&")[0])
                         max_seq = max(max_seq, seq_val)
             except Exception:
                 pass
+        # Способ 2: JS XHR/fetch interceptor
+        if not session_id:
+            try:
+                captured = driver.execute_script("return window._cgSessions || [];")
+                for url in captured:
+                    url = str(url)
+                    if "/Session/" in url and not session_id:
+                        session_id = url.split("/Session/")[1].split("/")[0]
+                        log.info(f"  Session via JS-interceptor at attempt {attempt+1}")
+                    if "reqSeq=" in url and session_id:
+                        try:
+                            seq_val = int(url.split("reqSeq=")[1].split("&")[0])
+                            max_seq = max(max_seq, seq_val)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
         if session_id:
             log.debug(f"  Session found after {attempt+1}s")
             break
+        # Диагностика на attempt 5 и 20
+        if attempt in (4, 19):
+            try:
+                pg_url = driver.current_url
+                js_cap = driver.execute_script("return window._cgSessions || [];")
+                log.info(f"  [DIAG {attempt+1}s] page={pg_url[:80]} js_captured={js_cap[:3]}")
+                log.info(f"  [DIAG {attempt+1}s] cdp_events_batch={len(raw_logs)}")
+            except Exception:
+                pass
     # Если так и не нашли — читаем полный лог ещё раз
     logs = driver.get_log("performance") if not session_id else []
 
@@ -186,6 +260,27 @@ def get_session(keep_driver=False):
                 seq_val = int(m.group(1))
                 max_seq = max(max_seq, seq_val)
                 log.debug(f"  [SEQ  ] WS reqSeq={seq_val}")
+
+    # Fallback: JS performance.getEntriesByType (работает когда CDP-логи пусты)
+    if not session_id:
+        try:
+            urls = driver.execute_script(
+                "return performance.getEntriesByType('resource').map(function(e){return e.name;})"
+            )
+            for url in (urls or []):
+                url = str(url)
+                if "/Session/" in url and not session_id:
+                    session_id = url.split("/Session/")[1].split("/")[0]
+                if "reqSeq=" in url and session_id:
+                    try:
+                        seq_val = int(url.split("reqSeq=")[1].split("&")[0])
+                        max_seq = max(max_seq, seq_val)
+                    except Exception:
+                        pass
+            if session_id:
+                log.info(f"  Session найден через JS performance API")
+        except Exception as e:
+            log.debug(f"  JS performance fallback: {e}")
 
     if not session_id:
         raise RuntimeError("Не удалось получить session ID")
@@ -278,6 +373,38 @@ def get_or_create_session() -> tuple:
     return session_id, cookies, max_seq
 
 
+def _start_driver_with_cookies(cookies: dict):
+    """
+    Запускает браузер и вставляет готовые куки — без логина через форму.
+    Нужен только для скачивания вложений через webmail.
+    """
+    opts = webdriver.ChromeOptions()
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--headless")
+    download_dir = os.path.join(os.getcwd(), "downloads")
+    os.makedirs(download_dir, exist_ok=True)
+    prefs = {"download.default_directory": download_dir,
+             "download.prompt_for_download": False,
+             "download.directory_upgrade": True}
+    opts.add_experimental_option("prefs", prefs)
+    import glob as _glob
+    _cached = sorted(_glob.glob(
+        os.path.join(os.path.expanduser("~"), ".wdm", "drivers", "chromedriver", "win64", "*", "chromedriver.exe")
+    ))
+    _driver_path = _cached[-1] if _cached else ChromeDriverManager().install()
+    driver = webdriver.Chrome(service=Service(_driver_path), options=opts)
+    # Устанавливаем домен для кук
+    driver.get(BASE)
+    for name, value in cookies.items():
+        try:
+            driver.add_cookie({"name": name, "value": value, "domain": BASE.split("//")[-1]})
+        except Exception:
+            pass
+    log.info("Браузер запущен с кешированными куками (без логина)")
+    return driver
+
+
 # ── Webmail fallback для сообщений с вложениями ─────────────────────────────
 
 def _download_attachment_via_webmail(driver, uid: int, download_dir: str) -> Optional[str]:
@@ -290,10 +417,16 @@ def _download_attachment_via_webmail(driver, uid: int, download_dir: str) -> Opt
         #   #/mail/{FOLDER_ID}/view/{UID}
         msg_url = f"{BASE}/?Skin=cg-web#/mail/{FOLDER_ID}/view/{uid}"
         driver.get(msg_url)
-        time.sleep(4)
+        time.sleep(8)  # SPA рендерится медленно
 
-        # Ищем кнопку вложения. CommuniGate webmail рендерит вложения
-        # как <button> внутри контейнера с классом _attachments_
+        log.info(f"  Webmail URL после навигации: {driver.current_url[:100]}")
+        all_page_btns = driver.find_elements(By.TAG_NAME, "button")
+        log.info(f"  Webmail: всего кнопок на странице: {len(all_page_btns)}")
+        if all_page_btns:
+            sample = [b.text.strip()[:40] for b in all_page_btns[:5] if b.text.strip()]
+            log.info(f"  Webmail: первые кнопки: {sample}")
+
+        # Ищем кнопку вложения — пробуем несколько селекторов
         buttons = driver.find_elements(By.CSS_SELECTOR, "[class*='_attachments_'] button")
         target_btn = None
         for btn in buttons:
@@ -387,6 +520,7 @@ def _call_via_driver(driver, url: str, xml: str) -> str:
 
 class XIMSSSession:
     def __init__(self, session_id, cookies, start_seq, driver=None):
+        self.session_id = session_id
         self.cookies = cookies
         self.seq     = start_seq   # next call will use start_seq + 1
         self.url     = f"{BASE}/Session/{session_id}/sync"
@@ -507,16 +641,424 @@ class XIMSSSession:
 </XIMSS>"""
         try:
             root = self.call(xml_src)
+            raw_xml = ET.tostring(root, encoding="unicode")
+            # Выводим по 400 символов за раз чтобы увидеть структуру MIME
+            for i in range(0, min(len(raw_xml), 3000), 400):
+                log.info(f"  XML[{i}]: {raw_xml[i:i+400]}")
             email_el = root.find(".//EMail")
             if email_el is None:
+                log.info(f"  download_raw UID {uid}: нет элемента EMail в ответе")
                 return None
             # В ряде писем XIMSS возвращает сырой RFC-822 источник в text() элемента EMail
             email_text = (email_el.text or "").strip()
+            log.info(f"  download_raw UID {uid}: EMail text={len(email_text)} chars")
             if len(email_text) > 500:
                 log.info(f"  Raw MSG (mode=source, {len(email_text)} chars)")
                 return email_text.encode("utf-8", errors="replace")
         except Exception as e:
-            log.debug(f"  download_raw error: {e}")
+            log.info(f"  download_raw error UID {uid}: {e}")
+        return None
+
+    def _read_part_source(self, uid: int, part_id: str) -> Optional[bytes]:
+        """
+        Читает MIME-часть в режиме mode="source" — CommuniGate возвращает
+        raw MIME entity (заголовки + base64 тело) в text-содержимом <folderMessage>.
+        """
+        import base64 as _b64, email as _email_mod
+        try:
+            xml = f"""<XIMSS>
+  <folderRead mode="source" folder="{FOLDER_ID}" UID="{uid}" partID="{part_id}"
+              totalSizeLimit="-1" id="26"/>
+</XIMSS>"""
+            root = self.call(xml)
+            resp = root.find('.//response[@id="26"]')
+            if resp is not None and resp.get("errorText"):
+                log.debug(f"  source partID={part_id}: {resp.get('errorText')}")
+                return None
+            # Ищем текстовое содержимое в folderMessage
+            fm = root.find(".//folderMessage")
+            if fm is None:
+                return None
+            # Диагностика: дамп полного XML-ответа
+            full_xml = ET.tostring(root, encoding="unicode")
+            log.info(f"  source partID={part_id}: XML {len(full_xml)} chars")
+            for i in range(0, min(len(full_xml), 2000), 400):
+                log.info(f"  src[{i}]: {full_xml[i:i+400]}")
+            raw_text = fm.text or ""
+            # Также ищем в дочерних MIME-элементах
+            if not raw_text.strip():
+                for m in fm.iter():
+                    if m.text and len(m.text.strip()) > 100:
+                        raw_text = m.text
+                        log.info(f"  source: найден текст в {m.tag} ({len(raw_text)} chars)")
+                        break
+            if not raw_text.strip():
+                log.info(f"  source partID={part_id}: пустой ответ (XML size={len(full_xml)})")
+                return None
+            log.info(f"  source partID={part_id}: {len(raw_text)} символов — парсим MIME")
+            # Парсим как MIME entity (заголовки + base64 тело)
+            try:
+                msg = _email_mod.message_from_string(raw_text)
+                payload = msg.get_payload(decode=True)
+                if payload and len(payload) > 100:
+                    log.info(f"  source: декодировано {len(payload)} байт")
+                    return payload
+            except Exception as e:
+                log.debug(f"  source MIME parse: {e}")
+            # Fallback: ищем base64-блок напрямую
+            lines = raw_text.splitlines()
+            b64_lines = [l for l in lines if l.strip() and all(c in
+                'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\r\n ' for c in l)]
+            if len(b64_lines) > 5:
+                try:
+                    data = _b64.b64decode("".join(b64_lines))
+                    if len(data) > 100:
+                        log.info(f"  source base64 fallback: {len(data)} байт")
+                        return data
+                except Exception:
+                    pass
+        except Exception as e:
+            log.debug(f"  _read_part_source partID={part_id}: {e}")
+        return None
+
+    def _download_part_http(self, uid: int, part_id: str) -> Optional[bytes]:
+        """
+        Скачивает бинарное вложение через HTTP (не через XIMSS XML API).
+        Пробует:
+          1. Несколько URL-паттернов CommuniGate Pro (requests.get)
+          2. Браузерный fetch (использует TLS-сессию браузера)
+          3. Прямую навигацию браузера по URL (файл → download_dir)
+        """
+        import base64 as _b64
+
+        url_patterns = [
+            f"{BASE}/Session/{self.session_id}/MIME/{uid}.{part_id}?folder={FOLDER_ID}",
+            f"{BASE}/Session/{self.session_id}/download/{FOLDER_ID}/{uid}/{part_id}",
+            f"{BASE}/Session/{self.session_id}/file?folder={FOLDER_ID}&uid={uid}&part={part_id}",
+            f"{BASE}/Session/{self.session_id}/download?folder={FOLDER_ID}&uid={uid}&part={part_id}",
+            f"{BASE}/Session/{self.session_id}/MIME/{uid}.{part_id}",
+            f"{BASE}/download?folder={FOLDER_ID}&uid={uid}&part={part_id}",
+        ]
+
+        # ── 1. Прямые HTTP-запросы через requests ──
+        for url in url_patterns:
+            try:
+                r = requests.get(url, cookies=self.cookies, verify=False, timeout=30,
+                                 allow_redirects=True)
+                ct = r.headers.get("Content-Type", "")
+                log.info(f"  HTTP GET {url.split('/Session/')[1] if '/Session/' in url else url.split(BASE)[1][:60]}: "
+                         f"{r.status_code} ({len(r.content)} байт, {ct[:40]})")
+                if r.ok and len(r.content) > 500 and "text/html" not in ct:
+                    log.info(f"  HTTP download OK: {len(r.content)} байт ({ct[:40]})")
+                    return r.content
+            except Exception as e:
+                log.debug(f"  HTTP download error: {e}")
+
+        # ── 2. Браузерный fetch (обходит TLS-binding сессии) ──
+        if self.driver:
+            for url in url_patterns:
+                try:
+                    result = self.driver.execute_async_script("""
+                        var url = arguments[0], done = arguments[1];
+                        fetch(url, {credentials: 'include'})
+                          .then(function(r) {
+                            if (!r.ok) { done(null); return; }
+                            r.arrayBuffer().then(function(buf) {
+                                var b = new Uint8Array(buf), s = '';
+                                for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+                                done(btoa(s));
+                            });
+                          }).catch(function() { done(null); });
+                    """, url)
+                    if result:
+                        raw = _b64.b64decode(result)
+                        if len(raw) > 500:
+                            log.info(f"  Browser fetch {url.split('/Session/')[1][:50]}: {len(raw)} байт")
+                            return raw
+                except Exception as e:
+                    log.debug(f"  Browser fetch error: {e}")
+
+        # ── 3. Прямая навигация браузера (скачивание в download_dir) ──
+        if self.driver:
+            for i, url in enumerate(url_patterns[:4]):
+                try:
+                    raw = self._download_via_browser_nav(url, uid, part_id)
+                    if raw:
+                        log.info(f"  Browser nav [{i}] {url.split('/Session/')[1][:50]}: {len(raw)} байт")
+                        return raw
+                except Exception as e:
+                    log.debug(f"  Browser nav [{i}] error: {e}")
+
+        return None
+
+    def _download_via_browser_nav(self, url: str, uid: int, part_id: str) -> Optional[bytes]:
+        """
+        Переходит по URL в Selenium-браузере и забирает скачанный файл из download_dir.
+        Работает даже когда fetch не проходит — CommuniGate видит нативную навигацию браузера.
+        """
+        if not self.driver:
+            return None
+        import time as _time
+        download_dir = os.path.join(os.getcwd(), "downloads")
+        os.makedirs(download_dir, exist_ok=True)
+
+        # Снимок ДО навигации
+        before = set(os.listdir(download_dir))
+
+        self.driver.get(url)
+        _time.sleep(5)
+
+        # Новые файлы
+        after = set(os.listdir(download_dir))
+        new_files = after - before
+        for fname in sorted(new_files, key=lambda f: os.path.getmtime(os.path.join(download_dir, f)), reverse=True):
+            fp = os.path.join(download_dir, fname)
+            if os.path.getsize(fp) > 100:
+                with open(fp, "rb") as f:
+                    data = f.read()
+                try:
+                    os.remove(fp)
+                except Exception:
+                    pass
+                return data
+
+        # Файл мог перезаписать существующий (если имя совпало) — ищем по времени
+        now = _time.time()
+        candidates = []
+        for fname in os.listdir(download_dir):
+            fp = os.path.join(download_dir, fname)
+            if now - os.path.getmtime(fp) < 15 and os.path.getsize(fp) > 100:
+                candidates.append((os.path.getmtime(fp), fp))
+        if candidates:
+            candidates.sort(reverse=True)
+            with open(candidates[0][1], "rb") as f:
+                data = f.read()
+            try:
+                os.remove(candidates[0][1])
+            except Exception:
+                pass
+            return data
+
+        return None
+
+    def read_attachment_text(self, uid) -> tuple:
+        """
+        Скачивает .doc/.docx вложение.
+        Сначала пробует XIMSS partID (работает для текста/base64).
+        Если XIMSS возвращает только метаданные (self-closing MIME) — скачивает через HTTP.
+        Возвращает (text, is_doc_form) или ("", False).
+        """
+        import base64 as _b64
+
+        def _parse_bytes(raw: bytes, part_id: str) -> tuple:
+            if raw[:4] == b'\xd0\xcf\x11\xe0':
+                from dpr_parser import read_doc_attachment
+                t, f = read_doc_attachment(raw)
+                if t.strip():
+                    log.info(f"  .doc (OLE) partID={part_id}: {len(t)} символов")
+                    return t, f
+            if raw[:2] == b'PK':
+                from dpr_parser import _read_docx_from_bytes
+                t = _read_docx_from_bytes(raw)
+                if t.strip():
+                    log.info(f"  .docx (ZIP) partID={part_id}: {len(t)} символов")
+                    return t, False
+            return "", False
+
+        for part_id in ("02", "03", "04"):
+            try:
+                xml = f"""<XIMSS>
+  <folderRead mode="text" folder="{FOLDER_ID}" UID="{uid}" partID="{part_id}"
+              totalSizeLimit="-1" id="25"/>
+</XIMSS>"""
+                root = self.call(xml)
+                resp = root.find('.//response[@id="25"]')
+                if resp is not None and resp.get("errorText"):
+                    log.debug(f"  attachment partID={part_id}: {resp.get('errorText')}")
+                    continue
+
+                # Ищем MIME-элемент для этого partID
+                mime_el = root.find(f".//MIME[@partID='{part_id}']")
+                if mime_el is None:
+                    continue
+
+                mime_text = mime_el.text or ""
+                if mime_text.strip():
+                    # Есть контент — пробуем как base64 или latin-1
+                    log.info(f"  XIMSS partID={part_id}: {len(mime_text)} символов")
+                    raw = None
+                    try:
+                        raw = _b64.b64decode(mime_text.strip(), validate=True)
+                    except Exception:
+                        try:
+                            raw = mime_text.encode("latin-1", errors="replace")
+                        except Exception:
+                            pass
+                    if raw:
+                        t, f = _parse_bytes(raw, part_id)
+                        if t:
+                            return t, f
+                    # Проверяем как plain text с полями ДПР
+                    if not mime_text.startswith("<"):
+                        from dpr_parser import extract_fields
+                        if extract_fields(mime_text, ""):
+                            log.info(f"  Текст ДПР via partID={part_id}")
+                            return mime_text, False
+                else:
+                    # Self-closing MIME — бинарное вложение
+                    mime_type = mime_el.get("type", "")
+                    subtype   = mime_el.get("subtype", "")
+                    fname     = mime_el.get("Disposition-filename", mime_el.get("Type-name", ""))
+                    is_office = (mime_type == "application" and (
+                        "word" in subtype or "excel" in subtype or "openxmlformats" in subtype
+                    ))
+                    log.debug(f"  MIME partID={part_id} self-closing: type={mime_type}/{subtype} file={fname!r}")
+                    if not is_office:
+                        continue
+
+                    # Вариант 1: mode="source" с partID — возвращает raw MIME entity с base64 телом
+                    raw = self._read_part_source(uid, part_id)
+                    if raw:
+                        t, f = _parse_bytes(raw, part_id)
+                        if t:
+                            return t, f
+                    # Вариант 2: HTTP-скачивание (быстрые URL-паттерны, без долгих ожиданий)
+                    import base64 as _b64_http
+                    for url in [
+                        f"{BASE}/Session/{self.session_id}/MIME/{uid}.{part_id}?folder={FOLDER_ID}",
+                        f"{BASE}/Session/{self.session_id}/download/{FOLDER_ID}/{uid}/{part_id}",
+                    ]:
+                        try:
+                            r = requests.get(url, cookies=self.cookies, verify=False, timeout=15, allow_redirects=True)
+                            ct = r.headers.get("Content-Type", "")
+                            if r.ok and len(r.content) > 500 and "text/html" not in ct:
+                                log.info(f"  HTTP download OK: {len(r.content)} байт ({ct[:40]})")
+                                t, f = _parse_bytes(r.content, part_id)
+                                if t:
+                                    return t, f
+                        except Exception:
+                            pass
+                    # Вариант 3: SPA — загружаем страницу письма, кликаем вложение, забираем файл
+                    raw = self._download_attachment_via_spa(uid)
+                    if raw:
+                        t, f = _parse_bytes(raw, part_id)
+                        if t:
+                            return t, f
+            except Exception as e:
+                log.debug(f"  read_attachment_text partID={part_id}: {e}")
+
+        return "", False
+
+    def _download_attachment_via_spa(self, uid: int) -> Optional[bytes]:
+        """
+        Открывает СВЕЖИЙ браузер, логинится в CommuniGate SPA, находит
+        .doc/.docx вложение на странице письма и скачивает его.
+        """
+        if not LOGIN or not PASSWORD:
+            log.warning("  SPA: нет LOGIN/PASSWORD для перелогина")
+            return None
+        import time as _time, glob as _glob
+        download_dir = os.path.join(os.getcwd(), "downloads")
+        os.makedirs(download_dir, exist_ok=True)
+
+        log.info("  SPA: открываем свежий браузер для вложения...")
+        opts = webdriver.ChromeOptions()
+        opts.add_argument("--no-sandbox")
+        opts.add_argument("--disable-dev-shm-usage")
+        opts.add_argument("--headless")
+        prefs = {"download.default_directory": download_dir,
+                 "download.prompt_for_download": False,
+                 "download.directory_upgrade": True}
+        opts.add_experimental_option("prefs", prefs)
+        _cached = sorted(_glob.glob(
+            os.path.join(os.path.expanduser("~"), ".wdm", "drivers", "chromedriver", "win64", "*", "chromedriver.exe")
+        ))
+        _driver_path = _cached[-1] if _cached else ChromeDriverManager().install()
+        drv = webdriver.Chrome(service=Service(_driver_path), options=opts)
+
+        try:
+            # Логин через SPA форму
+            drv.get(f"{BASE}/?Skin=cg-web#/login")
+            _time.sleep(3)
+            WebDriverWait(drv, 15).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "[data-test-id='login-input-username-field']"))
+            ).send_keys(LOGIN + Keys.RETURN)
+            _time.sleep(2)
+            WebDriverWait(drv, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "[data-test-id='login-input-password-field']"))
+            ).send_keys(PASSWORD + Keys.RETURN)
+            WebDriverWait(drv, 30).until(lambda d: "#/login" not in d.current_url)
+            log.info("  SPA: логин успешен")
+
+            # Открываем письмо
+            msg_url = f"{BASE}/?Skin=cg-web#/mail/{FOLDER_ID}/view/{uid}"
+            drv.get(msg_url)
+            _time.sleep(10)
+
+            # Прокрутка вниз
+            drv.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            _time.sleep(2)
+
+            before = set(os.listdir(download_dir))
+
+            # Ищем и кликаем элемент с .doc/.docx
+            clicked = drv.execute_script("""
+                var all = document.querySelectorAll('*');
+                for (var i = 0; i < all.length; i++) {
+                    var text = all[i].textContent || '';
+                    if (/[.]doc[x]?\\b/i.test(text) && text.length < 200 && all[i].children.length === 0) {
+                        var el = all[i];
+                        for (var d = 0; d < 5 && el; d++) {
+                            if (el.tagName === 'A' || el.tagName === 'BUTTON') {
+                                try { el.click(); } catch(e) {}
+                                return text.trim().substring(0, 100);
+                            }
+                            el = el.parentElement;
+                        }
+                        try { all[i].click(); } catch(e) {}
+                        return text.trim().substring(0, 100);
+                    }
+                }
+                return null;
+            """)
+
+            if clicked:
+                log.info(f"  SPA: кликнули {clicked!r}, ждём...")
+                _time.sleep(5)
+                after = set(os.listdir(download_dir))
+                for fname in after - before:
+                    fp = os.path.join(download_dir, fname)
+                    if os.path.getsize(fp) > 100:
+                        with open(fp, "rb") as f:
+                            data = f.read()
+                        try: os.remove(fp)
+                        except Exception: pass
+                        log.info(f"  SPA: скачан {fname} ({len(data)} байт)")
+                        return data
+                # По времени модификации
+                now = _time.time()
+                cand = []
+                for fname in os.listdir(download_dir):
+                    fp = os.path.join(download_dir, fname)
+                    if now - os.path.getmtime(fp) < 30 and os.path.getsize(fp) > 100:
+                        cand.append((os.path.getmtime(fp), fp))
+                if cand:
+                    cand.sort(reverse=True)
+                    with open(cand[0][1], "rb") as f:
+                        data = f.read()
+                    try: os.remove(cand[0][1])
+                    except Exception: pass
+                    log.info(f"  SPA: найден {os.path.basename(cand[0][1])} ({len(data)} байт)")
+                    return data
+                log.warning(f"  SPA: кликнули но файл не появился")
+            else:
+                log.info(f"  SPA: вложение не найдено в DOM")
+        except Exception as e:
+            log.error(f"  SPA: ошибка: {e}")
+        finally:
+            try: drv.quit()
+            except Exception: pass
+
         return None
 
     def read_embedded_eml_text(self, uid) -> str:
@@ -1309,12 +1851,17 @@ def main():
         # ── --truncate: очищаем таблицу перед полным перегоном ──
         if getattr(args, "truncate", False):
             log.info("─── TRUNCATE: удаляем все записи vessel_dpr ───")
-            try:
-                sb.table("vessel_dpr").delete().neq("id", 0).execute()
-                log.info("  ✓ Таблица vessel_dpr очищена")
-            except Exception as e:
-                log.error(f"  ✗ Ошибка очистки: {e}")
-                sys.exit(1)
+            for _t in range(5):
+                try:
+                    sb.table("vessel_dpr").delete().neq("id", 0).execute()
+                    log.info("  ✓ Таблица vessel_dpr очищена")
+                    break
+                except Exception as e:
+                    log.warning(f"  Попытка {_t+1}/5: {e}")
+                    if _t == 4:
+                        log.error("  ✗ Не удалось очистить таблицу — прерываемся")
+                        sys.exit(1)
+                    time.sleep(5)
 
     # ── Режим --daemon ──
     if args.daemon:
@@ -1330,9 +1877,19 @@ def run_collection(sb, args):
     """Одна итерация сбора почты из XIMSS → vessel_dpr."""
     import datetime as _dt
 
-    session_id, cookies, last_seq, _driver = get_session(keep_driver=True)
-    _save_session_cache(session_id, cookies, last_seq)
-    _driver.set_script_timeout(120)
+    # Используем кешированную сессию если она живая — Selenium-логин только при необходимости
+    cached = _load_session_cache()
+    if cached and _test_cached_session(*cached):
+        session_id, cookies, last_seq = cached
+        last_seq += 1000
+        log.info("✓ Кешированная сессия активна — Selenium-логин пропускаем")
+        _driver = None  # откроем без логина когда понадобится для вложений
+    else:
+        log.info("Кеш сессии отсутствует или истёк — логинимся через Selenium")
+        session_id, cookies, last_seq, _driver = get_session(keep_driver=True)
+        _save_session_cache(session_id, cookies, last_seq)
+        _driver.set_script_timeout(120)
+
     ximss = XIMSSSession(session_id, cookies, last_seq, driver=_driver)
 
     # open_folder с retry: при 400/SSL — пересоздаём сессию и пробуем ещё раз
@@ -1344,13 +1901,13 @@ def run_collection(sb, args):
             log.warning(f"  open_folder попытка {_attempt+1}/3: {of_err}")
             if _attempt == 2:
                 raise
-            try: _driver.quit()
-            except Exception: pass
+            if _driver:
+                try: _driver.quit()
+                except Exception: pass
+                _driver = None
             time.sleep(3)
-            session_id, cookies, last_seq, _driver = get_session(keep_driver=True)
-            _save_session_cache(session_id, cookies, last_seq)
-            _driver.set_script_timeout(120)
-            ximss = XIMSSSession(session_id, cookies, last_seq, driver=_driver)
+            session_id, cookies, last_seq = get_or_create_session()
+            ximss = XIMSSSession(session_id, cookies, last_seq)
 
     # ── Перечень активных судов (за последние 90 дней) ──
     active_vessel_count = 0
@@ -1435,14 +1992,14 @@ def run_collection(sb, args):
             if any(kw in err_str.lower() for kw in (
                 "sequence error", "ssl", "eof", "connection", "timed out", "max retries"
             )) or "400 client error" in err_str.lower():
-                log.info("  Переподключение к XIMSS...")
+                log.info("  Переподключение к XIMSS (через кеш)...")
                 try:
-                    try: _driver.quit()
-                    except Exception: pass
-                    session_id, cookies, last_seq, _driver = get_session(keep_driver=True)
-                    _driver.set_script_timeout(120)
-                    _save_session_cache(session_id, cookies, last_seq)
-                    ximss = XIMSSSession(session_id, cookies, last_seq, driver=_driver)
+                    if _driver:
+                        try: _driver.quit()
+                        except Exception: pass
+                        _driver = None
+                    session_id, cookies, last_seq = get_or_create_session()
+                    ximss = XIMSSSession(session_id, cookies, last_seq)
                     ximss.open_folder()
                     log.info("  Переподключение успешно — продолжаем")
                 except Exception as reauth_e:
@@ -1452,67 +2009,31 @@ def run_collection(sb, args):
 
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Итог: {ok} записано, {skip} пропущено, {fail} ошибок")
 
-    # ── Webmail fallback ──
-    # Важно: _driver должен быть жив здесь, т.к. ximss.read_message использует его
+    # ── XIMSS attachment fallback (вместо webmail) ──
     if webmail_uids and sb and not args.dry_run:
-        log.info(f"\n─── Webmail fallback для {len(webmail_uids)} писем ───")
-        session_id2, cookies2, last_seq2, driver = get_session(keep_driver=True)
-        download_dir = os.path.join(os.getcwd(), "downloads")
-        os.makedirs(download_dir, exist_ok=True)
-
+        log.info(f"\n─── XIMSS attachment fallback для {len(webmail_uids)} писем ───")
         for uid in webmail_uids:
-            log.info(f"  UID {uid}: пробуем скачать вложение...")
-            filepath = _download_attachment_via_webmail(driver, uid, download_dir)
-            if filepath is None:
-                log.warning(f"  UID {uid}: не удалось скачать")
-                continue
+            log.info(f"  UID {uid}: читаем вложение через XIMSS partID...")
             try:
-                with open(filepath, "rb") as fh:
-                    file_data = fh.read()
-                fname_lower = os.path.basename(filepath).lower()
-                att_text = ""
-                is_form = False
-                if fname_lower.endswith(".docx"):
-                    from dpr_parser import _read_docx_from_bytes
-                    att_text = _read_docx_from_bytes(file_data)
-                elif fname_lower.endswith(".doc"):
-                    from dpr_parser import read_doc_attachment
-                    att_text, is_form = read_doc_attachment(file_data)
-                elif fname_lower.endswith(".eml"):
-                    from dpr_parser import _read_eml_from_bytes
-                    att_text = _read_eml_from_bytes(file_data)
-                    log.info(f"  UID {uid}: .eml вложение → RFC-822 текст {len(att_text)} символов")
-                else:
-                    from dpr_parser import _read_text_attachment
-                    att_text = _read_text_attachment(file_data)
-
+                att_text, is_form = ximss.read_attachment_text(uid)
                 if not att_text.strip():
-                    log.warning(f"  UID {uid}: не удалось извлечь текст из {os.path.basename(filepath)}")
+                    log.warning(f"  UID {uid}: вложение не прочитано через XIMSS")
                     continue
-
-                log.info(f"  UID {uid}: извлечено {len(att_text)} символов из {os.path.basename(filepath)}")
                 subject, sender, date_str2, _body = ximss.read_message(uid)
                 email_date2 = _parse_email_date(date_str2)
                 record2 = parse_to_vessel_dpr(subject, sender, att_text, uid, raw_msg=None,
                                               is_doc_form=is_form, email_date=email_date2)
                 if record2 and record2.get("parse_ok"):
                     if upsert_vessel_dpr(sb, record2):
-                        log.info(f"  UID {uid}: ✓ обновлён через webmail")
+                        log.info(f"  UID {uid}: ✓ обновлён через XIMSS partID")
                         ok += 1
                     else:
                         log.warning(f"  UID {uid}: не удалось обновить в БД")
                 else:
-                    log.warning(f"  UID {uid}: после webmail parse_ok всё ещё False")
+                    log.warning(f"  UID {uid}: после XIMSS parse_ok всё ещё False")
             except Exception as e:
-                log.error(f"  UID {uid}: ошибка обработки файла: {e}")
-            finally:
-                try:
-                    os.remove(filepath)
-                except Exception:
-                    pass
-
-        driver.quit()
-        log.info("Webmail fallback завершён")
+                log.error(f"  UID {uid}: ошибка XIMSS attachment: {e}")
+        log.info("XIMSS attachment fallback завершён")
 
     # Сохраняем кеш сессии и закрываем главный браузер
     if not args.dry_run:
