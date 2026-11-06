@@ -139,11 +139,21 @@ export function findPortCoords(raw: string): [number, number] | null {
   const sortedKeys = (Object.keys(PORTS) as (keyof typeof PORTS)[])
     .sort((a, b) => b.length - a.length);
 
+  // Нормализация для сравнения:
+  //  - пробелы вокруг "/" убираем ("санкт-петербург/ причал" → "санкт-петербург/причал")
+  //  - "пр." → "причал", пробел после "№" убираем ("пр. № 44" = "пр.№ 44" = "причал №44")
+  //  - двойные пробелы схлопываем
+  const norm = (x: string) => x
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/(^|[\s,/])пр\.\s*/g, "$1причал ")
+    .replace(/№\s*/g, "№")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
   for (const chunk of searchOrder) {
-    // Нормализованный вариант: пробелы вокруг "/" убираем ("санкт-петербург/ причал" → "санкт-петербург/причал")
-    const chunkNorm = chunk.replace(/\s*\/\s*/g, "/");
+    const chunkNorm = norm(chunk);
     for (const key of sortedKeys) {
-      const keyNorm = key.replace(/\s*\/\s*/g, "/");
+      const keyNorm = norm(key);
       if (chunk.includes(key) || chunkNorm.includes(keyNorm)) {
         return PORTS[key];
       }
